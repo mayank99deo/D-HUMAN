@@ -1,26 +1,180 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Brand: white pack, black ink. True black and white only; greys carry hierarchy. */
+@theme {
+  --color-ink: #000000;
+  --color-paper: #ffffff;
+  --color-graphite: #8c8c8c; /* secondary text on ink, 6.2:1 */
+  --color-smoke: #5c5c5c; /* secondary text on paper, 6.7:1 */
+  --color-rule: #d4d4d4; /* hairlines on paper */
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
+  /* Scale follows the classic 14 / 18 / 21 / 24 / 36 / 48 / 72 progression, fluid between steps. */
+  --text-display: clamp(2.75rem, 1.35rem + 6vw, 7rem);
+  --text-display--line-height: 1;
+  --text-title: clamp(2.25rem, 1.6rem + 2.6vw, 4.5rem);
+  --text-title--line-height: 1;
+  --text-lead: clamp(1.3125rem, 1.1rem + 0.9vw, 2.25rem);
+  --text-lead--line-height: 1.15;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Archivo's width axis echoes the extended stance of the wordmark. */
+@utility wide {
+  font-variation-settings: "wdth" 125;
+}
+@utility semiwide {
+  font-variation-settings: "wdth" 112;
+}
+/* The hero headline: still wide, but eased off the extremes so it reads at a glance. */
+@utility headline {
+  font-variation-settings: "wdth" 118;
+  font-weight: 760;
+  letter-spacing: -0.01em;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    background: var(--color-ink);
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  body {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (min-width: 640px) {
+    body {
+      font-size: 1.125rem;
+    }
+  }
+  ::selection {
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Sections printed on the white pack. */
+.paper {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  color-scheme: light;
+}
+.paper ::selection {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+@layer components {
+  .field {
+    width: 100%;
+    border: 1px solid rgb(255 255 255 / 0.4);
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding-inline: 1rem;
+    font-size: 1rem;
+    border-radius: 0;
+    transition: border-color 150ms;
+  }
+  .field::placeholder {
+    color: var(--color-graphite);
+  }
+  .field:hover {
+    border-color: rgb(255 255 255 / 0.7);
+  }
+  .field:focus-visible {
+    border-color: var(--color-paper);
+    outline-offset: 2px;
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-paper);
+    border-style: dashed;
+  }
+
+  /* The cut top-left corner borrows the notch from the D in the wordmark. */
+  .button-primary {
+    --cut: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 1.5rem;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-weight: 650;
+    font-size: 1rem;
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut));
+    transition: background-color 150ms;
+    cursor: pointer;
+  }
+  .button-primary:hover {
+    background: #d9d9d9;
+  }
+  /* clip-path hides an outer ring, so the focus ring is drawn inside. */
+  .button-primary:focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: -5px;
+  }
+  .button-primary:disabled {
+    cursor: progress;
+    background: #bfbfbf;
+  }
+
+  .link-quiet {
+    color: var(--color-graphite);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .link-quiet:hover {
+    color: var(--color-paper);
+  }
+
+  .choice {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding-inline: 0.875rem;
+    border: 1px solid rgb(255 255 255 / 0.35);
+    font-size: 0.9375rem;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color 120ms,
+      color 120ms,
+      border-color 120ms;
+  }
+  .choice:hover {
+    border-color: var(--color-paper);
+  }
+  .choice:has(:checked) {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    border-color: var(--color-paper);
+  }
+  .choice:has(:focus-visible) {
+    outline: 2px solid var(--color-paper);
+    outline-offset: 2px;
+  }
+
+  /* Errors stay monochrome, so they are marked with a glyph, not only a colour. */
+  .error-mark::before {
+    content: "! ";
+    font-weight: 800;
+  }
 }
