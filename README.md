@@ -42,16 +42,20 @@ If you skip `setup`, the tab and header row are created on the first signup, jus
 ## 2. Connect Resend
 
 1. Create an API key at resend.com and set it as `RESEND_API_KEY`.
-2. Verify your sending domain (e.g. `dhuman.fit`) under **Domains**, then set `RESEND_FROM`, for example `D-Human <hello@dhuman.fit>`.
-   Until a domain is verified, Resend only delivers from `onboarding@resend.dev` to the email address on your Resend account. That is fine for testing, but not for real signups.
+2. `dhuman.fit` is verified in Resend, so the welcome email sends from `D-Human <hello@dhuman.fit>` by default. Set `RESEND_FROM` only to use a different address on that domain.
+   Recommended: add a DMARC record (`TXT` on `_dmarc.dhuman.fit` with `v=DMARC1; p=none;`) to help the email reach inboxes rather than spam.
 3. Optional: create a segment (e.g. "Waitlist") and set `RESEND_SEGMENT_ID`. Every new signup joins it.
 4. Optional: set `RESEND_REPLY_TO` so replies to the welcome email reach you. The email then invites replies.
+
+**Welcome email design:** the template lives in `lib/waitlist/welcome-email.ts`. While `npm run dev` is running, open `/api/email-preview` to see it in the browser (production builds return 404 there). Its links and images use the site's public address (see `lib/site-url.ts`), so they appear in real emails once that address serves the deployed site.
 
 **Emailing the waitlist later:** in Resend, open **Broadcasts**, pick the segment (or all contacts), write the email and send. Resend adds unsubscribe links and honors them. Check resend.com/pricing for the free tier's current daily and monthly limits before a big send.
 
 ## 3. Deploy
 
-Any Node host works. On Vercel: import the repo, add the variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the live URL), and deploy. Share previews use `app/opengraph-image.png`.
+Any Node host works. On Vercel: import the repo, add the variables from `.env.example`, and deploy. Share previews use `app/opengraph-image.png`.
+
+The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise from Vercel's production domain. The site is live at d-human.vercel.app. To serve it at `dhuman.fit`, add the domain under the project's **Settings → Domains** and create the DNS records Vercel shows. Links in share previews and emails then follow automatically, as long as `NEXT_PUBLIC_SITE_URL` is unset or updated to match.
 
 ## Project map
 

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
+import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -13,7 +14,7 @@ const description =
   "Test first. Supplement second. D-Human tests your blood, gut and body, has a doctor review the results, and recommends supplements only where your markers point. Join the waitlist.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://dhuman.fit"),
+  metadataBase: new URL(siteUrl() ?? "http://localhost:3000"),
   title: "D-Human | Your body speaks data",
   description,
   openGraph: {
