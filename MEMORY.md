@@ -53,7 +53,7 @@ Newest first. One entry per change; pushes carry their commit hash.
 - **Performance fix:** mobile Lighthouse Performance went from 39 to 94–95 (blocking time 6,480 ms to 40–60 ms, LCP 6.4 s to 2.9 s). Root cause, found by tracing: synchronous WebGL setup blocking the main thread. The field now renders in a Web Worker on an OffscreenCanvas, starts after load and idle, only near the screen, at 30 fps, with a still frame on software rendering.
 - **Silk threads on the Join buttons** (`components/waitlist/useSilkTether.ts`): near the cursor, 15 rope-physics strands run from the facing edge of the button to the pointer. The button leans up to 10 px toward the cursor and the cursor becomes a grab hand. Moving away or clicking snaps the strands. Off on touch and with reduced motion. Inspired by a "let's collaborate" button the user shared. Verified with real mouse moves in Chrome and on an emulated touch phone.
 - **Project memory:** added `MEMORY.md` and `CLAUDE.md`, which imports it.
-- **Push:** the entries above ship together; commit hash recorded below once pushed.
+- **Push `0c8d079`:** the silk threads, mobile web app pass, worker-rendered field and project memory, shipped together.
 
 ### 2026-10-23
 - **Push `498a4cb`:** branded welcome email (black page, white card, contour band, the four steps, WhatsApp share), the dev-only `/api/email-preview`, the sender on `hello@dhuman.fit`, and `lib/site-url.ts` with Vercel's production domain as fallback. Verified live: email artwork 200, preview 404, Sheets check 403.
