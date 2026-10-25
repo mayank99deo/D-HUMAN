@@ -23,12 +23,12 @@ export function Header() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:h-20 sm:px-8">
-        <a href="#top" className="-m-2 p-2">
+        <a href="#top" className="-mx-2 flex h-11 items-center px-2">
           <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
         </a>
         <a
           href="#join"
-          className="border border-paper px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors hover:bg-paper hover:text-ink"
+          className="inline-flex min-h-11 items-center border border-paper px-4 text-sm font-semibold whitespace-nowrap transition-colors hover:bg-paper hover:text-ink active:bg-paper active:text-ink"
         >
           Join the waitlist
         </a>

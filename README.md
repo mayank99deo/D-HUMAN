@@ -62,7 +62,9 @@ The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise fr
 | Path | What it is |
 | --- | --- |
 | `app/page.tsx` | The page, assembled from `components/site/*` |
-| `components/signal-field/` | The WebGL contour background. It pauses off-screen, lowers resolution on slow devices, and shows a still frame when the visitor prefers reduced motion |
+| `components/signal-field/` | The WebGL contour background. It draws in a Web Worker so the page never waits on the GPU, starts after load, pauses off-screen, lowers resolution on slow devices, and shows a still frame for reduced motion or software rendering |
+| `components/waitlist/useSilkTether.ts` | The silk threads that catch the cursor near the Join buttons (pointer devices only) |
+| `MEMORY.md` | Project memory: current state, decisions, gotchas, open items and a log of every change and push |
 | `components/waitlist/` | The waitlist form and the signup state shared by both forms on the page |
 | `app/api/waitlist/` | Signup and follow-up answer endpoints |
 | `lib/waitlist/` | Validation, Sheets client, Resend emails, signed tokens, rate limit |

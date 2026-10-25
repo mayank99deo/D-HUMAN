@@ -18,6 +18,7 @@ import {
   type SourceValue,
 } from "@/lib/waitlist/options";
 import { setSignup, takeFocus, useSignup } from "./store";
+import { useSilkTether } from "./useSilkTether";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_HINT = "Enter an email address like name@example.com.";
@@ -69,6 +70,7 @@ function JoinForm({ source }: { source: SourceValue }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  useSilkTether(buttonRef);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,6 +130,7 @@ function JoinForm({ source }: { source: SourceValue }) {
           name="email"
           type="email"
           inputMode="email"
+          enterKeyHint="send"
           autoComplete="email"
           placeholder="Your email"
           aria-invalid={error ? true : undefined}
@@ -269,7 +272,7 @@ function Details({ source, email, token }: { source: SourceValue; email: string;
           <button
             type="button"
             onClick={() => setSignup({ phase: "done", email, saved: false }, source)}
-            className="link-quiet text-sm"
+            className="link-quiet -my-2 py-2 text-sm"
           >
             Skip these questions
           </button>

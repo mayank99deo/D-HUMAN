@@ -54,6 +54,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-variant-numeric: tabular-nums;
+    /* Buttons give their own pressed feedback, so skip the grey flash on tap. */
+    -webkit-tap-highlight-color: transparent;
+    /* Stop phones enlarging text on rotation, without blocking pinch zoom. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   @media (min-width: 640px) {
     body {
@@ -95,8 +100,20 @@
   .field::placeholder {
     color: var(--color-graphite);
   }
-  .field:hover {
-    border-color: rgb(255 255 255 / 0.7);
+  /* Hover styles only where a pointer can hover, so they don't stick after a tap. */
+  @media (hover: hover) {
+    .field:hover {
+      border-color: rgb(255 255 255 / 0.7);
+    }
+    .button-primary:hover {
+      background: #d9d9d9;
+    }
+    .link-quiet:hover {
+      color: var(--color-paper);
+    }
+    .choice:hover {
+      border-color: var(--color-paper);
+    }
   }
   .field:focus-visible {
     border-color: var(--color-paper);
@@ -122,8 +139,8 @@
     transition: background-color 150ms;
     cursor: pointer;
   }
-  .button-primary:hover {
-    background: #d9d9d9;
+  .button-primary:active {
+    background: #bfbfbf;
   }
   /* clip-path hides an outer ring, so the focus ring is drawn inside. */
   .button-primary:focus-visible {
@@ -141,14 +158,14 @@
     text-underline-offset: 3px;
     cursor: pointer;
   }
-  .link-quiet:hover {
+  .link-quiet:active {
     color: var(--color-paper);
   }
 
   .choice {
     display: inline-flex;
     align-items: center;
-    min-height: 2.5rem;
+    min-height: 2.75rem; /* 44px: a comfortable thumb target */
     padding-inline: 0.875rem;
     border: 1px solid rgb(255 255 255 / 0.35);
     font-size: 0.9375rem;
@@ -159,7 +176,7 @@
       color 120ms,
       border-color 120ms;
   }
-  .choice:hover {
+  .choice:active {
     border-color: var(--color-paper);
   }
   .choice:has(:checked) {

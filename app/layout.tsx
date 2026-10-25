@@ -29,6 +29,14 @@ export const metadata: Metadata = {
     title: "D-Human | Your body speaks data",
     description,
   },
+  // Home-screen web app on iPhone: own title, black status bar.
+  appleWebApp: {
+    capable: true,
+    title: "D-Human",
+    statusBarStyle: "black",
+  },
+  // Stops iOS turning numbers like "2.2 lakh" or "+91" into phone links.
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
