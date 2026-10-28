@@ -1,0 +1,934 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Archivo";
+      src: url("assets/fonts/archivo-latin-variable.woff2") format("woff2");
+      font-weight: 100 900;
+      font-stretch: 62% 125%;
+      font-style: normal;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      color: #000000;
+      font-family: "Archivo", sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Phone chrome, always on top. */
+    #ph-clock {
+      position: absolute;
+      left: 52px;
+      top: 26px;
+      font-size: 30px;
+      line-height: 34px;
+      font-weight: 650;
+      z-index: 20;
+    }
+    #ph-island {
+      position: absolute;
+      left: 220px;
+      top: 22px;
+      width: 160px;
+      height: 46px;
+      border-radius: 23px;
+      background: #000000;
+      z-index: 20;
+    }
+
+    .scr {
+      position: absolute;
+      inset: 0;
+    }
+    .in {
+      position: absolute;
+      inset: 0;
+    }
+    .mark {
+      position: absolute;
+      left: 40px;
+      top: 104px;
+      height: 24px;
+      width: auto;
+    }
+    .h {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      margin: 0;
+      font-size: 52px;
+      line-height: 1.06;
+      font-weight: 760;
+      font-variation-settings: "wdth" 112;
+      text-wrap: balance;
+    }
+    .p {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.3;
+      color: #5c5c5c;
+    }
+
+    /* Tests. */
+    .trow {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      height: 128px;
+      border-bottom: 2px solid #e6e6e6;
+    }
+    .trow-name {
+      position: absolute;
+      left: 0;
+      top: 24px;
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .trow-sub {
+      position: absolute;
+      left: 0;
+      top: 72px;
+      font-size: 30px;
+      line-height: 1.1;
+      color: #5c5c5c;
+    }
+    .tstat {
+      position: absolute;
+      right: 0;
+      top: 40px;
+      height: 48px;
+      font-size: 30px;
+      line-height: 48px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .tstat-wait {
+      color: #5c5c5c;
+    }
+    .tstat-done {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      border-radius: 4px;
+      background: #000000;
+      color: #ffffff;
+    }
+    .tick {
+      width: 28px;
+      height: 28px;
+    }
+    .tick path {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 3.2;
+      stroke-linecap: square;
+      stroke-dasharray: 21;
+    }
+    .rail {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      height: 12px;
+      background: #e6e6e6;
+    }
+    .rail-fill {
+      position: absolute;
+      inset: 0;
+      background: #000000;
+      transform-origin: 0 50%;
+    }
+
+    /* The notification that brings the report in. */
+    #a-banner {
+      position: absolute;
+      left: 20px;
+      top: 80px;
+      width: 560px;
+      height: 164px;
+      border-radius: 30px;
+      background: #000000;
+      color: #ffffff;
+      z-index: 15;
+    }
+    #a-banner .b-mark {
+      position: absolute;
+      left: 32px;
+      top: 32px;
+      height: 18px;
+      width: auto;
+    }
+    #a-banner .b-time {
+      position: absolute;
+      right: 32px;
+      top: 22px;
+      font-size: 30px;
+      line-height: 36px;
+      color: #8c8c8c;
+    }
+    #a-banner .b-title {
+      position: absolute;
+      left: 32px;
+      top: 66px;
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 750;
+    }
+    #a-banner .b-sub {
+      position: absolute;
+      left: 32px;
+      top: 110px;
+      font-size: 30px;
+      line-height: 1;
+      color: #bdbdbd;
+    }
+
+    /* Marker rows. */
+    .mrow {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      height: 108px;
+    }
+    .mrow-top {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+    .mrow-name {
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 650;
+    }
+    .mrow-status {
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 4px;
+      font-size: 30px;
+      line-height: 44px;
+      font-weight: 650;
+      color: #5c5c5c;
+      white-space: nowrap;
+    }
+    .is-flag {
+      background: #000000;
+      color: #ffffff;
+    }
+    .mrow-swap {
+      position: relative;
+      width: 170px;
+      height: 44px;
+    }
+    .mrow-swap .mrow-status {
+      position: absolute;
+      right: 0;
+      top: 0;
+    }
+    .mrow-bar {
+      position: relative;
+      margin-top: 18px;
+      height: 10px;
+      background: #e6e6e6;
+    }
+    .mrow-band {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 30%;
+      width: 45%;
+      background: #9a9a9a;
+    }
+    .mrow-dot {
+      position: absolute;
+      top: -10px;
+      width: 30px;
+      height: 30px;
+      margin-left: -15px;
+      border-radius: 50%;
+      background: #000000;
+      border: 4px solid #ffffff;
+    }
+    .mrow-ghost {
+      background: #ffffff;
+      border-color: #9a9a9a;
+    }
+    #b-hl {
+      position: absolute;
+      left: 22px;
+      top: 280px;
+      width: 556px;
+      height: 112px;
+      border-radius: 8px;
+      background: #ececec;
+    }
+    #b-stamp {
+      position: absolute;
+      left: 44px;
+      top: 1030px;
+      padding: 10px 16px;
+      border: 4px solid #000000;
+      font-size: 30px;
+      line-height: 1.12;
+      font-weight: 800;
+      font-variation-settings: "wdth" 112;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    /* Vitamin D, read out. */
+    #d-reading {
+      position: absolute;
+      left: 40px;
+      top: 270px;
+      width: 520px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    #d-num {
+      font-size: 156px;
+      line-height: 1;
+      font-weight: 800;
+      font-variation-settings: "wdth" 112;
+    }
+    #d-unit {
+      margin-left: 14px;
+      font-size: 36px;
+      font-weight: 650;
+      color: #5c5c5c;
+    }
+    .range {
+      position: absolute;
+      left: 40px;
+      top: 470px;
+      width: 520px;
+      height: 14px;
+    }
+    .range-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 6px;
+      height: 2px;
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .range-band {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 30%;
+      right: 0;
+      background: #000000;
+    }
+    #d-marker {
+      position: absolute;
+      left: 14%;
+      top: -17px;
+      width: 8px;
+      height: 48px;
+      margin-left: -4px;
+      background: #000000;
+    }
+    .range-label {
+      position: absolute;
+      top: 512px;
+      font-size: 30px;
+      line-height: 1;
+      color: #5c5c5c;
+    }
+    .dl {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      height: 112px;
+      border-top: 2px solid #d4d4d4;
+    }
+    .dt {
+      position: absolute;
+      left: 0;
+      top: 18px;
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 750;
+    }
+    .dd {
+      position: absolute;
+      left: 0;
+      top: 60px;
+      font-size: 32px;
+      line-height: 1;
+      color: #5c5c5c;
+    }
+
+    /* Answers. Fixed positions so each tap lands on its chip. */
+    .chip {
+      position: absolute;
+      height: 78px;
+      border: 3px solid #000000;
+      border-radius: 4px;
+      font-size: 32px;
+      line-height: 72px;
+      font-weight: 600;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #c-btn,
+    #c-morph-label {
+      position: absolute;
+      left: 40px;
+      top: 1056px;
+      width: 520px;
+      height: 96px;
+      font-size: 34px;
+      line-height: 96px;
+      font-weight: 700;
+      text-align: center;
+      color: #ffffff;
+    }
+    #c-btn {
+      background: #000000;
+      clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+    }
+
+    /* The stack. The button's black block grows into this header band. */
+    #c-morph {
+      position: absolute;
+      inset: 0;
+      background: #000000;
+    }
+    .sitem {
+      position: absolute;
+      left: 40px;
+      width: 520px;
+      height: 118px;
+      border-bottom: 2px solid #e6e6e6;
+    }
+    .sitem-name {
+      position: absolute;
+      left: 0;
+      top: 22px;
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .sitem-why {
+      position: absolute;
+      left: 0;
+      top: 68px;
+      font-size: 30px;
+      line-height: 1;
+      color: #5c5c5c;
+    }
+    .check {
+      position: absolute;
+      left: 40px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 32px;
+      line-height: 1;
+    }
+    .check-box {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      background: #000000;
+    }
+    .check-box .tick {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+    }
+
+    /* Retest. */
+    #r-panel {
+      position: absolute;
+      left: 40px;
+      top: 900px;
+      width: 520px;
+      padding: 34px 32px;
+      background: #000000;
+      color: #ffffff;
+      clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+    }
+    #r-panel .rp-title {
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.1;
+      font-weight: 760;
+      font-variation-settings: "wdth" 112;
+      text-wrap: balance;
+    }
+    #r-panel .rp-sub {
+      margin: 14px 0 0;
+      font-size: 30px;
+      line-height: 1.2;
+      color: #8c8c8c;
+    }
+
+    /* The app's tab bar mirrors the page's four steps. */
+    #ph-tabs {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 1180px;
+      height: 116px;
+      background: #ffffff;
+      border-top: 2px solid #e6e6e6;
+      z-index: 19;
+    }
+    .tab {
+      position: absolute;
+      top: 24px;
+      width: 150px;
+      font-size: 30px;
+      line-height: 36px;
+      font-weight: 650;
+      text-align: center;
+      color: #5c5c5c;
+    }
+    #tab-0 {
+      color: #000000;
+    }
+    #ph-tab-bar {
+      position: absolute;
+      left: 35px;
+      top: -2px;
+      width: 80px;
+      height: 6px;
+      background: #000000;
+    }
+    #ph-home {
+      position: absolute;
+      left: 220px;
+      top: 1270px;
+      width: 160px;
+      height: 8px;
+      border-radius: 4px;
+      background: #000000;
+      z-index: 20;
+    }
+
+    /* The iOS "Show Touches" disc. */
+    .touch {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      z-index: 18;
+    }
+    .touch-core {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(128, 128, 128, 0.38);
+      border: 2px solid rgba(0, 0, 0, 0.45);
+    }
+  </style>
+
+  <div id="root" data-composition-id="phone" data-width="600" data-height="1296">
+    <span id="ph-clock" data-layout-ignore>9:41</span>
+    <div id="ph-island" data-layout-ignore></div>
+    <div id="ph-tabs" data-layout-ignore>
+      <span id="ph-tab-bar"></span>
+      <span id="tab-0" class="tab" style="left: 0">Tests</span>
+      <span id="tab-1" class="tab" style="left: 150px">Report</span>
+      <span id="tab-2" class="tab" style="left: 300px">Stack</span>
+      <span id="tab-3" class="tab" style="left: 450px">Retest</span>
+    </div>
+    <span id="ph-home" data-layout-ignore></span>
+
+    <!-- 1. Test: the tests come in, the lab works, the report arrives. -->
+    <div id="a" class="scr clip" data-start="0" data-duration="3.65" data-track-index="1">
+      <div id="a-in" class="in">
+        <img class="mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+        <h3 class="h" style="top: 150px">Your tests</h3>
+        <p class="p" style="top: 218px">Booked for Saturday, at home</p>
+        <div class="trow" style="top: 290px">
+          <span class="trow-name">Blood</span><span class="trow-sub">At home, 7:30 am</span>
+          <span id="a-w1" class="tstat tstat-wait">Booked</span>
+          <span id="a-d1" class="tstat tstat-done"><svg class="tick" viewBox="0 0 24 24"><path id="a-t1" d="M4.5 12.5l5 5L19.5 7"/></svg>Collected</span>
+        </div>
+        <div class="trow" style="top: 418px">
+          <span class="trow-name">Urine</span><span class="trow-sub">Same visit</span>
+          <span id="a-w2" class="tstat tstat-wait">Booked</span>
+          <span id="a-d2" class="tstat tstat-done"><svg class="tick" viewBox="0 0 24 24"><path id="a-t2" d="M4.5 12.5l5 5L19.5 7"/></svg>Collected</span>
+        </div>
+        <div class="trow" style="top: 546px">
+          <span class="trow-name">Gut</span><span class="trow-sub">Home kit, posted back</span>
+          <span id="a-w3" class="tstat tstat-wait">Booked</span>
+          <span id="a-d3" class="tstat tstat-done"><svg class="tick" viewBox="0 0 24 24"><path id="a-t3" d="M4.5 12.5l5 5L19.5 7"/></svg>Received</span>
+        </div>
+        <div class="trow" style="top: 674px">
+          <span class="trow-name">Body</span><span class="trow-sub">Composition scan</span>
+          <span id="a-w4" class="tstat tstat-wait">Booked</span>
+          <span id="a-d4" class="tstat tstat-done"><svg class="tick" viewBox="0 0 24 24"><path id="a-t4" d="M4.5 12.5l5 5L19.5 7"/></svg>Done</span>
+        </div>
+        <p class="h" style="top: 862px; font-size: 36px">At the lab</p>
+        <div class="rail" style="top: 922px"><div id="a-fill" class="rail-fill"></div></div>
+        <p class="p" style="top: 962px">Then a doctor reviews every result</p>
+      </div>
+      <div id="a-banner" data-layout-allow-overlap>
+        <img class="b-mark" src="assets/brand/wordmark-white.svg" alt="D-Human" />
+        <span class="b-time">now</span>
+        <span class="b-title">Your report is in</span>
+        <span class="b-sub">Reviewed by a doctor</span>
+      </div>
+      <div id="a-touch" class="touch clip" data-start="3.3" data-duration="0.4" data-track-index="5" style="left: 250px; top: 112px">
+        <div id="a-touch-core" class="touch-core"></div>
+      </div>
+    </div>
+
+    <!-- 2a. Read: the report, flagged and reviewed. -->
+    <div id="b" class="scr clip" data-start="3.6" data-duration="3.0" data-track-index="2">
+      <div id="b-hl"></div>
+      <div id="b-in" class="in">
+        <img class="mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+        <h3 class="h" style="top: 150px">Your report</h3>
+        <p class="p" style="top: 218px">Sample. Values are illustrative.</p>
+        <div class="mrow" style="top: 290px">
+          <div class="mrow-top"><span class="mrow-name">Vitamin D</span><span id="b-s1" class="mrow-status">Low</span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="b-d1" class="mrow-dot" style="left: 12%"></span></div>
+        </div>
+        <div class="mrow" style="top: 398px">
+          <div class="mrow-top"><span class="mrow-name">Vitamin B12</span><span class="mrow-status">In range</span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="b-d2" class="mrow-dot" style="left: 52%"></span></div>
+        </div>
+        <div class="mrow" style="top: 506px">
+          <div class="mrow-top"><span class="mrow-name">HbA1c</span><span class="mrow-status">In range</span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="b-d3" class="mrow-dot" style="left: 41%"></span></div>
+        </div>
+        <div class="mrow" style="top: 614px">
+          <div class="mrow-top"><span class="mrow-name">Evening cortisol</span><span id="b-s4" class="mrow-status">High</span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="b-d4" class="mrow-dot" style="left: 88%"></span></div>
+        </div>
+        <div class="mrow" style="top: 722px">
+          <div class="mrow-top"><span class="mrow-name">hsCRP</span><span id="b-s5" class="mrow-status">Raised</span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="b-d5" class="mrow-dot" style="left: 84%"></span></div>
+        </div>
+        <div id="b-sum">
+          <p class="h" style="top: 872px; font-size: 40px">3 to act on.</p>
+          <p class="p" style="top: 924px">The rest are in range.</p>
+        </div>
+        <div id="b-stamp">Reviewed<br />by a doctor</div>
+      </div>
+      <div id="b-touch" class="touch clip" data-start="6.0" data-duration="0.4" data-track-index="5" style="left: 250px; top: 286px">
+        <div id="b-touch-core" class="touch-core"></div>
+      </div>
+    </div>
+
+    <!-- 2b. Read: one marker in plain words, the site's sample report. -->
+    <div id="d" class="scr clip" data-start="6.55" data-duration="3.4" data-track-index="2">
+      <div id="d-in" class="in">
+        <p class="p" style="top: 100px">‹ Your report</p>
+        <h3 class="h" style="top: 150px">Vitamin D</h3>
+        <p class="p" style="top: 218px">25-OH, from your blood test</p>
+        <div id="d-reading">
+          <span><span id="d-num">14</span><span id="d-unit">ng/mL</span></span>
+          <span id="d-flag" class="mrow-status is-flag">Low</span>
+        </div>
+        <div class="range">
+          <span class="range-line"></span><span class="range-band"></span><span id="d-marker"></span>
+        </div>
+        <span class="range-label" style="left: 40px">0</span>
+        <span class="range-label" style="left: 113px; transform: translateX(-50%); color: #000000; font-weight: 750">14</span>
+        <span class="range-label" style="left: 196px; transform: translateX(-50%)">30</span>
+        <span class="range-label" style="right: 40px">100</span>
+        <div id="d-r1" class="dl" style="top: 596px"><span class="dt">Finding</span><span class="dd">Below the reference range.</span></div>
+        <div id="d-r2" class="dl" style="top: 708px"><span class="dt">Candidate</span><span class="dd">Vitamin D3, often with K2.</span></div>
+        <div id="d-r3" class="dl" style="top: 820px"><span class="dt">Guardrail</span><span class="dd">Retest at 3–4 months.</span></div>
+        <div id="d-foot" class="dl" style="top: 932px; height: auto; border-top-color: #d4d4d4">
+          <p class="p" style="position: relative; left: 0; margin-top: 20px; font-size: 30px">Every out-of-range marker is reviewed by a doctor before a stack is suggested.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3a. Stack: a few small answers. -->
+    <div id="q" class="scr clip" data-start="9.8" data-duration="1.85" data-track-index="3">
+      <div id="q-in" class="in">
+        <p class="p" style="top: 100px">Before your stack</p>
+        <h3 class="h" style="top: 146px">What do you train for?</h3>
+        <p class="p" style="top: 284px">Pick any that apply</p>
+        <div class="chip" style="left: 40px; top: 350px; width: 180px">Lifting</div>
+        <div id="q-run" class="chip" style="left: 236px; top: 350px; width: 200px">Running</div>
+        <div id="q-hyrox" class="chip" style="left: 40px; top: 444px; width: 164px">Hyrox</div>
+        <div class="chip" style="left: 220px; top: 444px; width: 300px">General health</div>
+        <div class="chip" style="left: 40px; top: 538px; width: 520px">Marathons and endurance</div>
+        <div id="c-btn">Build my stack</div>
+      </div>
+      <div id="q-touch-1" class="touch clip" data-start="10.3" data-duration="0.4" data-track-index="5" style="left: 286px; top: 339px">
+        <div id="q-touch-1-core" class="touch-core"></div>
+      </div>
+      <div id="q-touch-2" class="touch clip" data-start="10.75" data-duration="0.4" data-track-index="5" style="left: 72px; top: 433px">
+        <div id="q-touch-2-core" class="touch-core"></div>
+      </div>
+      <div id="q-touch-3" class="touch clip" data-start="11.2" data-duration="0.4" data-track-index="5" style="left: 250px; top: 1054px">
+        <div id="q-touch-3-core" class="touch-core"></div>
+      </div>
+    </div>
+
+    <!-- 3b. Stack: only what the markers point to, only clean-label brands. -->
+    <div id="c" class="scr clip" data-start="11.25" data-duration="4.6" data-track-index="4">
+      <div id="c-morph"></div>
+      <div id="c-morph-label">Build my stack</div>
+      <div id="c-in" class="in">
+        <div id="c-band" style="position: absolute; inset: 0; color: #ffffff">
+          <img class="mark" src="assets/brand/wordmark-white.svg" alt="D-Human" />
+          <h3 class="h" style="top: 150px; font-size: 56px">Your stack</h3>
+          <p class="p" style="top: 222px; color: #8c8c8c">Matched to your markers</p>
+        </div>
+        <div id="c-i1" class="sitem" style="top: 350px"><span class="sitem-name">Vitamin D3 with K2</span><span class="sitem-why">For low vitamin D</span></div>
+        <div id="c-i2" class="sitem" style="top: 466px"><span class="sitem-name">Magnesium bisglycinate</span><span class="sitem-why">For high evening cortisol</span></div>
+        <div id="c-i3" class="sitem" style="top: 582px"><span class="sitem-name">Omega-3, EPA and DHA</span><span class="sitem-why">For raised hsCRP</span></div>
+        <p id="c-clean" class="h" style="top: 732px; font-size: 34px; font-variation-settings: 'wdth' 100; line-height: 1.15">Every brand clears the clean-label bar</p>
+        <div id="c-k1" class="check" style="top: 826px"><span class="check-box"><svg class="tick" viewBox="0 0 24 24"><path id="c-t1" d="M4.5 12.5l5 5L19.5 7"/></svg></span>Third-party tested</div>
+        <div id="c-k2" class="check" style="top: 884px"><span class="check-box"><svg class="tick" viewBox="0 0 24 24"><path id="c-t2" d="M4.5 12.5l5 5L19.5 7"/></svg></span>Every dose on the label</div>
+        <div id="c-k3" class="check" style="top: 942px"><span class="check-box"><svg class="tick" viewBox="0 0 24 24"><path id="c-t3" d="M4.5 12.5l5 5L19.5 7"/></svg></span>FSSAI licensed</div>
+        <div id="c-k4" class="check" style="top: 1000px"><span class="check-box"><svg class="tick" viewBox="0 0 24 24"><path id="c-t4" d="M4.5 12.5l5 5L19.5 7"/></svg></span>Traceable by batch</div>
+        <p id="c-foot" class="h" style="top: 1082px; font-size: 34px; font-variation-settings: 'wdth' 100">No test result, no pitch.</p>
+      </div>
+    </div>
+
+    <!-- 4. Retest: what moved, and the stack resets. -->
+    <div id="r" class="scr clip" data-start="15.8" data-duration="3.8" data-track-index="2">
+      <div id="r-in" class="in">
+        <img class="mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+        <p class="p" style="top: 150px">3–4 months later</p>
+        <h3 class="h" style="top: 196px">Your retest</h3>
+        <div class="mrow" style="top: 300px">
+          <div class="mrow-top"><span class="mrow-name">Vitamin D</span><span class="mrow-swap"><span id="r-o1" class="mrow-status is-flag">Low</span><span id="r-n1" class="mrow-status">In range</span></span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="r-g1" class="mrow-dot mrow-ghost" style="left: 12%"></span><span id="r-d1" class="mrow-dot" style="left: 42%"></span></div>
+        </div>
+        <div class="mrow" style="top: 420px">
+          <div class="mrow-top"><span class="mrow-name">Evening cortisol</span><span class="mrow-swap"><span id="r-o2" class="mrow-status is-flag">High</span><span id="r-n2" class="mrow-status">In range</span></span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="r-g2" class="mrow-dot mrow-ghost" style="left: 88%"></span><span id="r-d2" class="mrow-dot" style="left: 68%"></span></div>
+        </div>
+        <div class="mrow" style="top: 540px">
+          <div class="mrow-top"><span class="mrow-name">hsCRP</span><span class="mrow-swap"><span class="mrow-status is-flag">Raised</span></span></div>
+          <div class="mrow-bar"><span class="mrow-band"></span><span id="r-g3" class="mrow-dot mrow-ghost" style="left: 84%"></span><span id="r-d3" class="mrow-dot" style="left: 79%"></span></div>
+        </div>
+        <div id="r-sum">
+          <p class="h" style="top: 690px; font-size: 40px">2 of 3 back in range.</p>
+          <p class="p" style="top: 746px">Your next stack follows the new numbers, not the old ones.</p>
+        </div>
+        <div id="r-panel">
+          <p class="rp-title">New results reset the stack</p>
+          <p class="rp-sub">Next retest in 3–4 months</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Back to the first screen, as it was at 0 s, so the loop has no seam. -->
+    <div id="z" class="scr clip" data-start="19.45" data-duration="0.55" data-track-index="1">
+      <div id="z-in" class="in">
+        <img class="mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+        <h3 class="h" style="top: 150px">Your tests</h3>
+        <p class="p" style="top: 218px">Booked for Saturday, at home</p>
+        <div class="trow" style="top: 290px">
+          <span class="trow-name">Blood</span><span class="trow-sub">At home, 7:30 am</span>
+          <span class="tstat tstat-wait">Booked</span>
+        </div>
+        <div class="trow" style="top: 418px">
+          <span class="trow-name">Urine</span><span class="trow-sub">Same visit</span>
+          <span class="tstat tstat-wait">Booked</span>
+        </div>
+        <div class="trow" style="top: 546px">
+          <span class="trow-name">Gut</span><span class="trow-sub">Home kit, posted back</span>
+          <span class="tstat tstat-wait">Booked</span>
+        </div>
+        <div class="trow" style="top: 674px">
+          <span class="trow-name">Body</span><span class="trow-sub">Composition scan</span>
+          <span class="tstat tstat-wait">Booked</span>
+        </div>
+        <p class="h" style="top: 862px; font-size: 36px">At the lab</p>
+        <div class="rail" style="top: 922px"></div>
+        <p class="p" style="top: 962px">Then a doctor reviews every result</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const W = 520;
+      // A touch lands two frames after its disc appears; the target responds on that frame.
+      const TOUCH_DOWN = 2 / 30;
+
+      const blurIn = (target, at, duration = 0.2) =>
+        tl.fromTo(
+          target,
+          { opacity: 0, filter: "blur(8px)" },
+          { opacity: 1, filter: "blur(0px)", duration, ease: "power4.out" },
+          at,
+        );
+      // A second fromTo on the same properties must not apply its start values early.
+      const blurOut = (target, at, duration = 0.15) =>
+        tl.fromTo(
+          target,
+          { opacity: 1, filter: "blur(0px)" },
+          { opacity: 0, filter: "blur(6px)", duration, ease: "power2.in", immediateRender: false },
+          at,
+        );
+      const tap = (core, start) => {
+        tl.fromTo(core, { opacity: 0, scale: 1.12 }, { opacity: 1, scale: 1, duration: TOUCH_DOWN, ease: "power2.out" }, start);
+        tl.fromTo(
+          core,
+          { opacity: 1, scale: 1 },
+          { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.in", immediateRender: false },
+          start + 0.183,
+        );
+        return start + TOUCH_DOWN;
+      };
+      const drawTick = (path, at) =>
+        tl.fromTo(path, { strokeDashoffset: 21 }, { strokeDashoffset: 0, duration: 0.25, ease: "power2.out" }, at);
+
+      // 1. Test. The screen is already up at 0 s, matching the last frame.
+      [
+        ["#a-w1", "#a-d1", "#a-t1", 0.55],
+        ["#a-w2", "#a-d2", "#a-t2", 0.85],
+        ["#a-w3", "#a-d3", "#a-t3", 1.2],
+        ["#a-w4", "#a-d4", "#a-t4", 1.5],
+      ].forEach(([wait, done, tick, at]) => {
+        tl.fromTo(wait, { opacity: 1 }, { opacity: 0, duration: 0.12, ease: "power2.in" }, at);
+        tl.fromTo(done, { opacity: 0, scale: 0.88 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, at + 0.05);
+        drawTick(tick, at + 0.12);
+      });
+      tl.fromTo("#a-fill", { scaleX: 0 }, { scaleX: 1, duration: 0.95, ease: "power1.inOut" }, 1.75);
+      tl.fromTo("#a-banner", { y: -260 }, { y: 0, duration: 0.45, ease: "expo.out" }, 2.75);
+      const tapBanner = tap("#a-touch-core", 3.3);
+      tl.fromTo("#a-banner", { backgroundColor: "#000000" }, { backgroundColor: "#2b2b2b", duration: 0.08, immediateRender: false }, tapBanner);
+      blurOut(["#a-in", "#a-banner"], 3.5);
+
+      // 2a. Read: readings settle, flags invert, the stamp presses.
+      blurIn("#b-in", 3.65);
+      [
+        ["#b-d1", 0.12],
+        ["#b-d2", 0.52],
+        ["#b-d3", 0.41],
+        ["#b-d4", 0.88],
+        ["#b-d5", 0.84],
+      ].forEach(([dot, value], i) => {
+        tl.fromTo(dot, { x: -value * W }, { x: 0, duration: 0.7, ease: "expo.out" }, 3.9 + i * 0.1);
+      });
+      ["#b-s1", "#b-s4", "#b-s5"].forEach((status, i) => {
+        tl.fromTo(
+          status,
+          { backgroundColor: "rgba(0,0,0,0)", color: "#5c5c5c" },
+          { backgroundColor: "#000000", color: "#ffffff", duration: 0.2, ease: "power2.out" },
+          4.8 + i * 0.12,
+        );
+      });
+      blurIn("#b-sum", 5.25);
+      tl.fromTo(
+        "#b-stamp",
+        { opacity: 0, scale: 1.35, rotation: -6 },
+        { opacity: 1, scale: 1, rotation: -6, duration: 0.2, ease: "power4.out" },
+        5.55,
+      );
+      const tapVitD = tap("#b-touch-core", 6.0);
+      tl.fromTo("#b-hl", { opacity: 0 }, { opacity: 1, duration: 0.08 }, tapVitD);
+      blurOut(["#b-in", "#b-hl"], 6.4);
+
+      // 2b. Read: Vitamin D in plain words.
+      blurIn("#d-in", 6.55);
+      tl.fromTo("#d-marker", { x: -0.14 * W }, { x: 0, duration: 0.7, ease: "expo.out" }, 6.8);
+      tl.fromTo("#d-flag", { opacity: 0, scale: 0.88 }, { opacity: 1, scale: 1, duration: 0.25, ease: "back.out(2)" }, 7.35);
+      ["#d-r1", "#d-r2", "#d-r3"].forEach((row, i) => {
+        tl.fromTo(row, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 7.6 + i * 0.25);
+      });
+      blurIn("#d-foot", 8.45);
+      blurOut("#d-in", 9.75);
+
+      // 3a. Stack: two answers, then build.
+      blurIn("#q-in", 9.85);
+      const tapRun = tap("#q-touch-1-core", 10.3);
+      tl.set("#q-run", { backgroundColor: "#000000", color: "#ffffff" }, tapRun);
+      const tapHyrox = tap("#q-touch-2-core", 10.75);
+      tl.set("#q-hyrox", { backgroundColor: "#000000", color: "#ffffff" }, tapHyrox);
+      const tapBuild = tap("#q-touch-3-core", 11.2);
+
+      // 3b. The button's block grows into the header band; the stack lands; the bar is checked.
+      tl.fromTo(
+        "#c-morph",
+        { clipPath: "inset(1056px 40px 144px 40px)" },
+        { clipPath: "inset(0px 0px 966px 0px)", duration: 0.35, ease: "power3.inOut" },
+        tapBuild,
+      );
+      tl.fromTo("#c-morph-label", { opacity: 1 }, { opacity: 0, duration: 0.12, ease: "power2.in" }, tapBuild);
+      blurOut("#q-in", 11.28, 0.18);
+      blurIn("#c-band", 11.55);
+      ["#c-i1", "#c-i2", "#c-i3"].forEach((item, i) => {
+        tl.fromTo(
+          item,
+          { opacity: 0, x: 36, filter: "blur(6px)" },
+          { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.45, ease: "expo.out" },
+          11.7 + i * 0.25,
+        );
+      });
+      blurIn("#c-clean", 12.75);
+      [
+        ["#c-k1", "#c-t1"],
+        ["#c-k2", "#c-t2"],
+        ["#c-k3", "#c-t3"],
+        ["#c-k4", "#c-t4"],
+      ].forEach(([row, tick], i) => {
+        const at = 13.0 + i * 0.25;
+        tl.fromTo(row, { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.35, ease: "expo.out" }, at);
+        drawTick(tick, at + 0.12);
+      });
+      blurIn("#c-foot", 14.2);
+      blurOut(["#c-in", "#c-morph"], 15.65);
+
+      // 4. Retest: the old readings stay as ghosts; the new ones move.
+      blurIn("#r-in", 15.85);
+      ["#r-g1", "#r-g2", "#r-g3"].forEach((ghost) => {
+        tl.fromTo(ghost, { opacity: 0 }, { opacity: 1, duration: 0.2 }, 16.15);
+      });
+      [
+        ["#r-d1", 0.12 - 0.42],
+        ["#r-d2", 0.88 - 0.68],
+        ["#r-d3", 0.84 - 0.79],
+      ].forEach(([dot, shift], i) => {
+        tl.fromTo(dot, { x: shift * W }, { x: 0, duration: 0.9, ease: "power2.inOut" }, 16.35 + i * 0.15);
+      });
+      [
+        ["#r-o1", "#r-n1", 16.95],
+        ["#r-o2", "#r-n2", 17.1],
+      ].forEach(([before, after, at]) => {
+        tl.fromTo(before, { opacity: 1 }, { opacity: 0, duration: 0.15, ease: "power2.in" }, at);
+        tl.fromTo(after, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, at + 0.1);
+      });
+      blurIn("#r-sum", 17.45);
+      tl.fromTo("#r-panel", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 17.8);
+      blurOut("#r-in", 19.4);
+
+      // Back to the start.
+      blurIn("#z-in", 19.5);
+
+      // The clock turns white over the stack's black band.
+      tl.fromTo("#ph-clock", { color: "#000000" }, { color: "#ffffff", duration: 0.15 }, 11.4);
+      tl.fromTo("#ph-clock", { color: "#ffffff" }, { color: "#000000", duration: 0.15, immediateRender: false }, 15.65);
+
+      // The tab bar follows the chapter, in step with each screen change.
+      [
+        [3.6, 0, 1],
+        [9.8, 1, 2],
+        [15.8, 2, 3],
+        [19.45, 3, 0],
+      ].forEach(([at, from, to], i) => {
+        tl.fromTo("#ph-tab-bar", { x: from * 150 }, { x: to * 150, duration: 0.3, ease: "power2.inOut", immediateRender: i === 0 }, at);
+        tl.fromTo(`#tab-${from}`, { color: "#000000" }, { color: "#5c5c5c", duration: 0.2, immediateRender: false }, at);
+        tl.fromTo(`#tab-${to}`, { color: "#5c5c5c" }, { color: "#000000", duration: 0.2, immediateRender: false }, at);
+      });
+
+      window.__timelines["phone"] = tl;
+    })();
+  </script>
+</template>

@@ -63,6 +63,10 @@ The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise fr
 | --- | --- |
 | `app/page.tsx` | The page, assembled from `components/site/*` |
 | `components/signal-field/` | The WebGL contour background. It draws in a Web Worker so the page never waits on the GPU, starts after load, pauses off-screen, lowers resolution on slow devices, and shows a still frame for reduced motion or software rendering |
+| `components/site/VitaminDChart.tsx` | The 76 of 100 chart. Each square is a fixed, seeded person with an illustrative marker panel and the stack it would lead to |
+| `components/site/LoopPhone.tsx` | The "Test first" phone: plays `public/media/loop/how-it-works.mp4` in view, its four steps follow the clip and jump to their chapter, stills for reduced motion and Data Saver |
+| `video/loop/` | The HyperFrames source of that phone clip (600 x 1296, 20 s loop). After editing, render it, then re-encode it into `public/media/loop/` (see `video/loop/REVIEW.md`) |
+| `video/intro/` | The 13 s product intro video (HyperFrames) |
 | `components/waitlist/useSilkTether.ts` | The silk threads that catch the cursor near the Join buttons (pointer devices only) |
 | `MEMORY.md` | Project memory: current state, decisions, gotchas, open items and a log of every change and push |
 | `components/waitlist/` | The waitlist form and the signup state shared by both forms on the page |
@@ -73,4 +77,4 @@ The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise fr
 
 ## Copy rules
 
-The page follows the pitch deck's claims language. It makes no disease claims and says "screening", "markers" and "risk". It uses only sourced numbers (the vitamin D figure is from Tata 1mg Labs, 2023). Plan prices stay off the page until partner pricing is confirmed.
+The page follows the pitch deck's claims language. It makes no disease claims and says "screening", "markers" and "risk". It uses only sourced numbers, attributed without naming lab brands (the vitamin D figure: 2.2 lakh lab tests across 27 Indian cities, 2023). Anything else shown as data, like the people behind the chart's squares and the phone's sample report, is labelled illustrative. Plan prices stay off the page until partner pricing is confirmed.

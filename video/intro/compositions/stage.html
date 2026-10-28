@@ -1,0 +1,653 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Archivo";
+      src: url("assets/fonts/archivo-latin-variable.woff2") format("woff2");
+      font-weight: 100 900;
+      font-stretch: 62% 125%;
+      font-style: normal;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: var(--font-display, "Archivo"), sans-serif;
+      color: var(--color-paper, #ffffff);
+      font-variant-numeric: tabular-nums;
+    }
+    /* Keeps the titles readable where they sit over the field. */
+    #st-scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.82) 34%, rgba(0, 0, 0, 0) 58%);
+    }
+
+    /* Titles: left column, one line set at a time. */
+    .st-title {
+      position: absolute;
+      left: 150px;
+      top: 396px;
+      width: 660px;
+    }
+    .st-title h2 {
+      margin: 0;
+      font-size: 76px;
+      line-height: 1;
+      font-weight: 760;
+      font-variation-settings: "wdth" 118;
+      letter-spacing: -0.01em;
+      /* Even lines: no word left alone on the second line. */
+      text-wrap: balance;
+    }
+
+    /* Marker row, at its phone size; the report shows it at 1.6x. */
+    .mrow {
+      position: relative;
+      width: 380px;
+      height: 92px;
+      color: var(--color-ink, #000000);
+    }
+    .mrow-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+    }
+    .mrow-name {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 650;
+    }
+    .mrow-status {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 4px;
+      font-size: 28px;
+      line-height: 36px;
+      font-weight: 650;
+      color: #5c5c5c;
+    }
+    .mrow-status.is-flag {
+      background: #000000;
+      color: #ffffff;
+    }
+    .mrow-bar {
+      position: relative;
+      margin-top: 16px;
+      height: 8px;
+      background: #e6e6e6;
+    }
+    .mrow-band {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 30%;
+      width: 45%;
+      background: #9a9a9a;
+    }
+    .mrow-dot {
+      position: absolute;
+      top: -7px;
+      width: 22px;
+      height: 22px;
+      margin-left: -11px;
+      border-radius: 50%;
+      background: #000000;
+      border: 3px solid #ffffff;
+    }
+
+    /* The lab report. */
+    #st-sheet {
+      position: absolute;
+      left: 980px;
+      top: 60px;
+      width: 760px;
+      height: 960px;
+      background: var(--color-paper, #ffffff);
+      color: var(--color-ink, #000000);
+      border-radius: 4px;
+    }
+    #st-sheet-mark {
+      position: absolute;
+      left: 76px;
+      top: 56px;
+      height: 22px;
+      width: auto;
+    }
+    #st-sheet-title {
+      position: absolute;
+      left: 76px;
+      top: 94px;
+      margin: 0;
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 760;
+      font-variation-settings: "wdth" 112;
+    }
+    #st-sheet-note {
+      position: absolute;
+      left: 76px;
+      top: 138px;
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.25;
+      color: #5c5c5c;
+    }
+    #st-sheet-rule {
+      position: absolute;
+      left: 76px;
+      right: 76px;
+      top: 186px;
+      height: 2px;
+      background: #000000;
+    }
+    #st-sheet-rows {
+      position: absolute;
+      left: 76px;
+      top: 210px;
+      width: 380px;
+      height: 460px;
+      transform: scale(1.6);
+      transform-origin: 0 0;
+    }
+    #st-stamp {
+      position: absolute;
+      right: 56px;
+      top: 40px;
+      padding: 10px 16px;
+      border: 4px solid #000000;
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 800;
+      font-variation-settings: "wdth" 112;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: #000000;
+    }
+
+    /* The phone: flat, front-on, brand black with a graphite rim. */
+    #st-phone {
+      position: absolute;
+      left: 1262px;
+      top: 56px;
+      width: 468px;
+      height: 968px;
+    }
+    #st-phone-body {
+      position: absolute;
+      inset: 0;
+      border-radius: 66px;
+      background: #000000;
+      border: 3px solid #2e2e2e;
+      box-shadow: 0 0 0 1px #4a4a4a;
+    }
+    #st-screen {
+      position: absolute;
+      left: 14px;
+      top: 14px;
+      width: 440px;
+      height: 940px;
+      border-radius: 52px;
+      overflow: hidden;
+      background: var(--color-paper, #ffffff);
+      color: var(--color-ink, #000000);
+    }
+    #st-island {
+      position: absolute;
+      left: 161px;
+      top: 14px;
+      width: 118px;
+      height: 34px;
+      border-radius: 17px;
+      background: #000000;
+      z-index: 5;
+    }
+    #st-clock {
+      position: absolute;
+      left: 44px;
+      top: 18px;
+      font-size: 24px;
+      line-height: 26px;
+      font-weight: 650;
+      z-index: 5;
+    }
+    .scr {
+      position: absolute;
+      inset: 0;
+    }
+    .scr-inner {
+      position: absolute;
+      inset: 0;
+    }
+    .scr-mark {
+      position: absolute;
+      left: 30px;
+      top: 84px;
+      height: 18px;
+      width: auto;
+    }
+    .scr-h {
+      position: absolute;
+      left: 30px;
+      width: 380px;
+      margin: 0;
+      font-size: 40px;
+      line-height: 1.08;
+      font-weight: 760;
+      font-variation-settings: "wdth" 112;
+    }
+    .scr-p {
+      position: absolute;
+      left: 30px;
+      width: 380px;
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.25;
+      color: #5c5c5c;
+    }
+    .prow {
+      position: absolute;
+      left: 30px;
+      opacity: 0;
+    }
+
+    /* Answers. Fixed positions so each tap lands on its chip. */
+    .chip {
+      position: absolute;
+      height: 58px;
+      border: 2px solid #000000;
+      border-radius: 4px;
+      font-size: 28px;
+      line-height: 54px;
+      font-weight: 600;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #st-q-btn,
+    #st-morph-label {
+      position: absolute;
+      left: 30px;
+      top: 832px;
+      width: 380px;
+      height: 68px;
+      font-size: 28px;
+      line-height: 68px;
+      font-weight: 700;
+      text-align: center;
+      color: #ffffff;
+    }
+    #st-q-btn {
+      background: #000000;
+      clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+    }
+
+    /* The stack. The button's black block grows into this header band. */
+    #st-morph {
+      position: absolute;
+      inset: 0;
+      background: #000000;
+    }
+    .sitem {
+      position: absolute;
+      left: 30px;
+      width: 380px;
+      height: 104px;
+      border-bottom: 1px solid #d4d4d4;
+    }
+    .sitem-name {
+      position: absolute;
+      left: 0;
+      top: 18px;
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .sitem-why {
+      position: absolute;
+      left: 0;
+      top: 58px;
+      font-size: 28px;
+      line-height: 1.2;
+      color: #5c5c5c;
+    }
+
+    /* The iOS "Show Touches" disc (registry touch-indicator spec). */
+    .touch {
+      position: absolute;
+      width: 79px;
+      height: 79px;
+      z-index: 6;
+    }
+    .touch-core {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(0, 0, 0, 0.45);
+    }
+
+    /* The carried rows travel above everything. */
+    .fly {
+      position: absolute;
+      left: 1306px;
+      z-index: 8;
+    }
+  </style>
+
+  <div data-hf-id="hf-308o"
+    id="root"
+    data-composition-id="stage"
+    data-width="1920"
+    data-height="1080"
+    data-composition-variables='[
+      {"id":"title-report","type":"string","label":"Title: report","default":"Your report is\u00a0in"},
+      {"id":"title-pull","type":"string","label":"Title: phone","default":"Your markers, on your phone"},
+      {"id":"title-answers","type":"string","label":"Title: answers","default":"A few small answers"},
+      {"id":"title-stack","type":"string","label":"Title: stack","default":"Only what your markers point to"}
+    ]'
+  >
+    <div data-hf-id="hf-bwwp" id="st-scrim"></div>
+
+    <div data-hf-id="hf-of6v" id="st-t1" class="st-title clip" data-start="0" data-duration="2.25" data-track-index="3" style="width: 800px">
+      <h2 data-hf-id="hf-j8tk" id="st-t1-h" data-var-text="title-report">Your report is&nbsp;in</h2>
+    </div>
+    <div data-hf-id="hf-zsot" id="st-t2" class="st-title clip" data-start="3.3" data-duration="2.15" data-track-index="3">
+      <h2 data-hf-id="hf-7t1y" id="st-t2-h" data-var-text="title-pull">Your markers, on your phone</h2>
+    </div>
+    <div data-hf-id="hf-xgl2" id="st-t3" class="st-title clip" data-start="5.45" data-duration="2" data-track-index="3">
+      <h2 data-hf-id="hf-im9k" id="st-t3-h" data-var-text="title-answers">A few small answers</h2>
+    </div>
+    <div data-hf-id="hf-ugj2" id="st-t4" class="st-title clip" data-start="7.4" data-duration="2.8" data-track-index="3">
+      <h2 data-hf-id="hf-rrma" id="st-t4-h" data-var-text="title-stack">Only what your markers point to</h2>
+    </div>
+
+    <!-- 1. The lab report. -->
+    <div data-hf-id="hf-mh5u" id="st-sheet-clip" class="clip" data-start="0" data-duration="3.4" data-track-index="1">
+      <div data-hf-id="hf-rcam" id="st-sheet">
+        <img data-hf-id="hf-y9wi" id="st-sheet-mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+        <h3 data-hf-id="hf-9kq9" id="st-sheet-title">Your lab results</h3>
+        <p data-hf-id="hf-5g36" id="st-sheet-note">Sample report. Values are illustrative.</p>
+        <div data-hf-id="hf-qmpd" id="st-sheet-rule"></div>
+        <div data-hf-id="hf-fcy0" id="st-sheet-rows">
+          <div data-hf-id="hf-m5sw" id="st-sr-vitd" class="mrow" style="position: absolute; top: 0">
+            <div data-hf-id="hf-1f09" class="mrow-top"><span data-hf-id="hf-60ew" class="mrow-name">Vitamin D</span><span data-hf-id="hf-2zls" id="st-sr-vitd-s" class="mrow-status">Low</span></div>
+            <div data-hf-id="hf-t38v" class="mrow-bar"><span data-hf-id="hf-citu" class="mrow-band"></span><span data-hf-id="hf-xhgp" id="st-sr-vitd-d" class="mrow-dot" style="left: 12%"></span></div>
+          </div>
+          <div data-hf-id="hf-63gb" id="st-sr-b12" class="mrow" style="position: absolute; top: 92px">
+            <div data-hf-id="hf-76rx" class="mrow-top"><span data-hf-id="hf-697t" class="mrow-name">Vitamin B12</span><span data-hf-id="hf-26dz" class="mrow-status">In range</span></div>
+            <div data-hf-id="hf-7zdb" class="mrow-bar"><span data-hf-id="hf-u6ja" class="mrow-band"></span><span data-hf-id="hf-zlb5" id="st-sr-b12-d" class="mrow-dot" style="left: 52%"></span></div>
+          </div>
+          <div data-hf-id="hf-kjy9" id="st-sr-a1c" class="mrow" style="position: absolute; top: 184px">
+            <div data-hf-id="hf-8dp0" class="mrow-top"><span data-hf-id="hf-tbrn" class="mrow-name">HbA1c</span><span data-hf-id="hf-5qzb" class="mrow-status">In range</span></div>
+            <div data-hf-id="hf-7l2a" class="mrow-bar"><span data-hf-id="hf-ukub" class="mrow-band"></span><span data-hf-id="hf-z7lr" id="st-sr-a1c-d" class="mrow-dot" style="left: 41%"></span></div>
+          </div>
+          <div data-hf-id="hf-l610" id="st-sr-cort" class="mrow" style="position: absolute; top: 276px">
+            <div data-hf-id="hf-7zdz" class="mrow-top"><span data-hf-id="hf-idg1" class="mrow-name">Evening cortisol</span><span data-hf-id="hf-jxv1" id="st-sr-cort-s" class="mrow-status">High</span></div>
+            <div data-hf-id="hf-76r9" class="mrow-bar"><span data-hf-id="hf-uz5c" class="mrow-band"></span><span data-hf-id="hf-fcox" id="st-sr-cort-d" class="mrow-dot" style="left: 88%"></span></div>
+          </div>
+          <div data-hf-id="hf-19t1" id="st-sr-crp" class="mrow" style="position: absolute; top: 368px">
+            <div data-hf-id="hf-96b2" class="mrow-top"><span data-hf-id="hf-okqu" class="mrow-name">hsCRP</span><span data-hf-id="hf-ayj2" id="st-sr-crp-s" class="mrow-status">Raised</span></div>
+            <div data-hf-id="hf-9ywg" class="mrow-bar"><span data-hf-id="hf-s705" class="mrow-band"></span><span data-hf-id="hf-yrfo" id="st-sr-crp-d" class="mrow-dot" style="left: 84%"></span></div>
+          </div>
+        </div>
+        <div data-hf-id="hf-fce0" id="st-stamp">Reviewed<br data-hf-id="hf-x5px" />by a doctor</div>
+      </div>
+    </div>
+
+    <!-- 2-5. The phone. -->
+    <div data-hf-id="hf-93ue" id="st-phone-clip" class="clip" data-start="2.3" data-duration="8.4" data-track-index="2">
+      <div data-hf-id="hf-v4nb" id="st-phone">
+        <div data-hf-id="hf-kivo" id="st-phone-body"></div>
+        <div data-hf-id="hf-nfex" id="st-screen">
+          <span data-hf-id="hf-omsr" id="st-clock" data-layout-ignore>9:41</span>
+          <div data-hf-id="hf-sbqq" id="st-island"></div>
+
+          <div data-hf-id="hf-31rh" id="st-scr-list" class="scr clip" data-start="2.3" data-duration="3.2" data-track-index="4">
+            <div data-hf-id="hf-lzxr" id="st-list-in" class="scr-inner">
+              <img data-hf-id="hf-7qg0" class="scr-mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+              <h3 data-hf-id="hf-5ppn" class="scr-h" style="top: 128px">Your markers</h3>
+              <p data-hf-id="hf-wumv" class="scr-p" style="top: 180px">3 to act on, from your lab report</p>
+              <div data-hf-id="hf-tlwf" id="st-pr-1" class="mrow prow" style="top: 270px">
+                <div data-hf-id="hf-8s01" class="mrow-top"><span data-hf-id="hf-hng0" class="mrow-name">Vitamin D</span><span data-hf-id="hf-8ly4" class="mrow-status is-flag">Low</span></div>
+                <div data-hf-id="hf-9klf" class="mrow-bar"><span data-hf-id="hf-slb6" class="mrow-band"></span><span data-hf-id="hf-o2id" class="mrow-dot" style="left: 12%"></span></div>
+              </div>
+              <div data-hf-id="hf-plgn" id="st-pr-2" class="mrow prow" style="top: 378px">
+                <div data-hf-id="hf-9yx4" class="mrow-top"><span data-hf-id="hf-7bb9" class="mrow-name">Evening cortisol</span><span data-hf-id="hf-nlyu" class="mrow-status is-flag">High</span></div>
+                <div data-hf-id="hf-96ae" class="mrow-bar"><span data-hf-id="hf-szm7" class="mrow-band"></span><span data-hf-id="hf-5j5e" class="mrow-dot" style="left: 88%"></span></div>
+              </div>
+              <div data-hf-id="hf-ikq0" id="st-pr-3" class="mrow prow" style="top: 486px">
+                <div data-hf-id="hf-9km3" class="mrow-top"><span data-hf-id="hf-n2mi" class="mrow-name">hsCRP</span><span data-hf-id="hf-brne" class="mrow-status is-flag">Raised</span></div>
+                <div data-hf-id="hf-8rzd" class="mrow-bar"><span data-hf-id="hf-tdx8" class="mrow-band"></span><span data-hf-id="hf-fsti" class="mrow-dot" style="left: 84%"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div data-hf-id="hf-l46l" id="st-scr-q" class="scr clip" data-start="5.28" data-duration="2.17" data-track-index="4">
+            <div data-hf-id="hf-qm9q" id="st-q-in" class="scr-inner">
+              <p data-hf-id="hf-2ub2" class="scr-p" style="top: 96px">Before your stack</p>
+              <h3 data-hf-id="hf-6mbu" class="scr-h" style="top: 134px">What do you train for?</h3>
+              <p data-hf-id="hf-u9iq" class="scr-p" style="top: 232px">Pick any that apply</p>
+              <div data-hf-id="hf-x1t2" id="st-chip-lift" class="chip" style="left: 30px; top: 290px; width: 146px">Lifting</div>
+              <div data-hf-id="hf-4une" id="st-chip-run" class="chip" style="left: 188px; top: 290px; width: 160px">Running</div>
+              <div data-hf-id="hf-h8o8" id="st-chip-hyrox" class="chip" style="left: 30px; top: 360px; width: 124px">Hyrox</div>
+              <div data-hf-id="hf-5lj1" id="st-chip-gen" class="chip" style="left: 164px; top: 360px; width: 246px">General health</div>
+              <div data-hf-id="hf-dsuz" id="st-chip-mar" class="chip" style="left: 30px; top: 430px; width: 380px">Marathons and endurance</div>
+              <div data-hf-id="hf-y89j" id="st-q-btn">Build my stack</div>
+            </div>
+          </div>
+
+          <div data-hf-id="hf-yqtu" id="st-scr-stack" class="scr clip" data-start="6.95" data-duration="3.75" data-track-index="4">
+            <div data-hf-id="hf-ls5d" id="st-morph"></div>
+            <div data-hf-id="hf-98ye" id="st-morph-label">Build my stack</div>
+            <div data-hf-id="hf-k6nx" id="st-stack-in" class="scr-inner">
+              <div data-hf-id="hf-b2yj" id="st-band-copy" style="position: absolute; inset: 0; color: #ffffff">
+                <img data-hf-id="hf-5gzy" class="scr-mark" src="assets/brand/wordmark-white.svg" alt="D-Human" />
+                <h3 data-hf-id="hf-hugw" class="scr-h" style="top: 146px; font-size: 44px">Your stack</h3>
+                <p data-hf-id="hf-hn8m" class="scr-p" style="top: 202px; color: #8c8c8c">Matched to your markers</p>
+              </div>
+              <div data-hf-id="hf-w6zt" id="st-si-1" class="sitem" style="top: 318px">
+                <span data-hf-id="hf-4zy5" class="sitem-name">Vitamin D3 with K2</span><span data-hf-id="hf-um3f" class="sitem-why">For low vitamin D</span>
+              </div>
+              <div data-hf-id="hf-hyks" id="st-si-2" class="sitem" style="top: 422px">
+                <span data-hf-id="hf-apd9" class="sitem-name">Magnesium bisglycinate</span><span data-hf-id="hf-xe4s" class="sitem-why">For high evening cortisol</span>
+              </div>
+              <div data-hf-id="hf-9dcy" id="st-si-3" class="sitem" style="top: 526px">
+                <span data-hf-id="hf-k7ik" class="sitem-name">Omega-3, EPA and DHA</span><span data-hf-id="hf-5f7p" class="sitem-why">For raised hsCRP</span>
+              </div>
+              <div data-hf-id="hf-7lr4" id="st-stack-foot">
+                <p data-hf-id="hf-qbkd" class="scr-h" style="top: 668px; font-size: 30px">No test result, no pitch.</p>
+                <p data-hf-id="hf-vfgw" class="scr-p" style="top: 712px">Retest in 3–4 months</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Touch-downs land 0.067 s after each disc's start. -->
+          <div data-hf-id="hf-so9x" id="st-touch-1" class="touch clip" data-start="5.8" data-duration="0.4" data-track-index="5" style="left: 228.5px; top: 279.5px">
+            <div data-hf-id="hf-t7lg" id="st-touch-1-core" class="touch-core"></div>
+          </div>
+          <div data-hf-id="hf-jojr" id="st-touch-2" class="touch clip" data-start="6.3" data-duration="0.4" data-track-index="5" style="left: 52.5px; top: 349.5px">
+            <div data-hf-id="hf-dsd5" id="st-touch-2-core" class="touch-core"></div>
+          </div>
+          <div data-hf-id="hf-eig2" id="st-touch-3" class="touch clip" data-start="6.9" data-duration="0.4" data-track-index="5" style="left: 180.5px; top: 826.5px">
+            <div data-hf-id="hf-62py" id="st-touch-3-core" class="touch-core"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The three out-of-range rows, carried from the report into the app. -->
+    <div data-hf-id="hf-u2hz" id="st-fly-clip" class="clip" data-start="2.75" data-duration="1" data-track-index="6" data-layout-allow-overlap>
+      <div data-hf-id="hf-prt1" id="st-fly-1" class="mrow fly" style="top: 340px">
+        <div data-hf-id="hf-arj6" class="mrow-top"><span data-hf-id="hf-ggix" class="mrow-name">Vitamin D</span><span data-hf-id="hf-b8yc" class="mrow-status is-flag">Low</span></div>
+        <div data-hf-id="hf-5784" class="mrow-bar"><span data-hf-id="hf-qls1" class="mrow-band"></span><span data-hf-id="hf-wxk9" class="mrow-dot" style="left: 12%"></span></div>
+      </div>
+      <div data-hf-id="hf-m9pb" id="st-fly-2" class="mrow fly" style="top: 448px">
+        <div data-hf-id="hf-ad85" class="mrow-top"><span data-hf-id="hf-8i8c" class="mrow-name">Evening cortisol</span><span data-hf-id="hf-tye2" class="mrow-status is-flag">High</span></div>
+        <div data-hf-id="hf-4sx3" class="mrow-bar"><span data-hf-id="hf-r032" class="mrow-band"></span><span data-hf-id="hf-9ek6" class="mrow-dot" style="left: 88%"></span></div>
+      </div>
+      <div data-hf-id="hf-7nec" id="st-fly-3" class="mrow fly" style="top: 556px">
+        <div data-hf-id="hf-v66f" class="mrow-top"><span data-hf-id="hf-ngxj" class="mrow-name">hsCRP</span><span data-hf-id="hf-y1cu" class="mrow-status is-flag">Raised</span></div>
+        <div data-hf-id="hf-ui5p" class="mrow-bar"><span data-hf-id="hf-wuvm" class="mrow-band"></span><span data-hf-id="hf-4m5m" class="mrow-dot" style="left: 84%"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const ROW_W = 380;
+      const SHEET_SHIFT = -420;
+      // A touch lands two frames after its disc appears (registry touch-indicator spec);
+      // the target responds on that same frame.
+      const TOUCH_DOWN = 2 / 30;
+
+      const blurIn = (target, at, duration = 0.18) =>
+        tl.fromTo(
+          target,
+          { opacity: 0, filter: "blur(8px)" },
+          { opacity: 1, filter: "blur(0px)", duration, ease: "power4.out" },
+          at,
+        );
+      // A second fromTo on the same properties must not apply its start values early.
+      const blurOut = (target, at, duration = 0.15) =>
+        tl.fromTo(
+          target,
+          { opacity: 1, filter: "blur(0px)" },
+          { opacity: 0, filter: "blur(6px)", duration, ease: "power2.in", immediateRender: false },
+          at,
+        );
+
+      // 1. The report: readings settle, the stamp presses, the out-of-range rows flag.
+      blurIn("#st-t1-h", 0.05);
+      [
+        ["#st-sr-vitd-d", 0.12],
+        ["#st-sr-b12-d", 0.52],
+        ["#st-sr-a1c-d", 0.41],
+        ["#st-sr-cort-d", 0.88],
+        ["#st-sr-crp-d", 0.84],
+      ].forEach(([dot, value], i) => {
+        tl.fromTo(dot, { x: -value * ROW_W }, { x: 0, duration: 0.7, ease: "expo.out" }, 0.2 + i * 0.1);
+      });
+      tl.fromTo(
+        "#st-stamp",
+        { opacity: 0, scale: 1.35, rotation: -7 },
+        { opacity: 1, scale: 1, rotation: -7, duration: 0.2, ease: "power4.out" },
+        1.25,
+      );
+      ["#st-sr-vitd-s", "#st-sr-cort-s", "#st-sr-crp-s"].forEach((status, i) => {
+        tl.fromTo(
+          status,
+          { backgroundColor: "rgba(0,0,0,0)", color: "#5c5c5c" },
+          { backgroundColor: "#000000", color: "#ffffff", duration: 0.2, ease: "power2.out" },
+          1.55 + i * 0.12,
+        );
+      });
+      blurOut("#st-t1-h", 2.05);
+
+      // 2. The pull: the sheet makes room, the phone arrives, flagged rows carry across.
+      tl.fromTo("#st-sheet", { x: 0 }, { x: SHEET_SHIFT, duration: 0.45, ease: "power2.inOut" }, 2.2);
+      tl.fromTo(
+        "#st-phone",
+        { x: 760, filter: "blur(14px)" },
+        { x: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" },
+        2.35,
+      );
+      // Report rows (scaled 1.6 on the sheet) and their landing slots in the app.
+      const SHEET_X = 980 + SHEET_SHIFT + 76;
+      const carries = [
+        ["#st-fly-1", "#st-sr-vitd", 270 + 0 * 147.2, 340],
+        ["#st-fly-2", "#st-sr-cort", 270 + 3 * 147.2, 448],
+        ["#st-fly-3", "#st-sr-crp", 270 + 4 * 147.2, 556],
+      ];
+      carries.forEach(([fly, sheetRow, fromY, toY], i) => {
+        const at = 2.8 + i * 0.08;
+        tl.set(sheetRow, { opacity: 0 }, at);
+        tl.fromTo(
+          fly,
+          { x: SHEET_X - 1306, y: fromY - toY, scale: 1.6, transformOrigin: "0 0", opacity: 1 },
+          { x: 0, y: 0, scale: 1, duration: 0.65, ease: "power2.inOut" },
+          at,
+        );
+        // Motion blur peaks mid-move, at the fastest frame.
+        tl.to(
+          fly,
+          { keyframes: { "0%": { filter: "blur(0px)" }, "50%": { filter: "blur(6px)" }, "100%": { filter: "blur(0px)" } }, duration: 0.65, ease: "none" },
+          at,
+        );
+      });
+      tl.fromTo(
+        "#st-sheet",
+        { x: SHEET_SHIFT, opacity: 1, filter: "blur(0px)" },
+        { x: SHEET_SHIFT - 480, opacity: 0, filter: "blur(10px)", duration: 0.45, ease: "power3.in", immediateRender: false },
+        2.9,
+      );
+      // The carried rows become the app's own rows.
+      tl.set(["#st-pr-1", "#st-pr-2", "#st-pr-3"], { opacity: 1 }, 3.65);
+      tl.set(["#st-fly-1", "#st-fly-2", "#st-fly-3"], { opacity: 0 }, 3.65);
+
+      // 3. On the phone.
+      blurIn("#st-t2-h", 3.35);
+      blurOut("#st-t2-h", 5.28);
+
+      // 4. The answers: a blur swap on the white screen, then three taps.
+      blurOut("#st-list-in", 5.28);
+      blurIn("#st-q-in", 5.43, 0.2);
+      blurIn("#st-t3-h", 5.5);
+      // Each disc appears on the glass, dwells, then lifts; it never hovers or travels.
+      const tap = (core, start) => {
+        tl.fromTo(core, { opacity: 0, scale: 1.12 }, { opacity: 1, scale: 1, duration: TOUCH_DOWN, ease: "power2.out" }, start);
+        tl.fromTo(
+          core,
+          { opacity: 1, scale: 1 },
+          { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.in", immediateRender: false },
+          start + 0.183,
+        );
+        return start + TOUCH_DOWN;
+      };
+      const tapRun = tap("#st-touch-1-core", 5.8);
+      tl.set("#st-chip-run", { backgroundColor: "#000000", color: "#ffffff" }, tapRun);
+      const tapHyrox = tap("#st-touch-2-core", 6.3);
+      tl.set("#st-chip-hyrox", { backgroundColor: "#000000", color: "#ffffff" }, tapHyrox);
+      const tapBuild = tap("#st-touch-3-core", 6.9);
+      blurOut("#st-t3-h", 7.27);
+
+      // 5. The stack: the button's black block grows into the header band.
+      tl.fromTo(
+        "#st-morph",
+        { clipPath: "inset(832px 30px 40px 30px)" },
+        { clipPath: "inset(0px 0px 650px 0px)", duration: 0.35, ease: "power3.inOut" },
+        tapBuild,
+      );
+      tl.fromTo("#st-morph-label", { opacity: 1 }, { opacity: 0, duration: 0.12, ease: "power2.in" }, tapBuild);
+      blurOut("#st-q-in", 6.98, 0.18);
+      blurIn("#st-band-copy", 7.25, 0.2);
+      blurIn("#st-t4-h", 7.45);
+      ["#st-si-1", "#st-si-2", "#st-si-3"].forEach((item, i) => {
+        tl.fromTo(
+          item,
+          { opacity: 0, x: 36, filter: "blur(6px)" },
+          { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.45, ease: "expo.out" },
+          7.4 + i * 0.3,
+        );
+      });
+      blurIn("#st-stack-foot", 8.45, 0.2);
+      blurOut("#st-t4-h", 9.95);
+
+      // 6. The screen becomes the world: it grows past the frame into the pack.
+      tl.fromTo(
+        "#st-phone",
+        { x: 0, scale: 1, transformOrigin: "234px 484px" },
+        { x: -536, scale: 4.6, duration: 0.6, ease: "power2.inOut", immediateRender: false },
+        10.0,
+      );
+      tl.fromTo("#st-screen", { borderRadius: 52 }, { borderRadius: 0, duration: 0.6, ease: "power2.inOut" }, 10.0);
+      tl.fromTo(
+        ["#st-stack-in", "#st-morph", "#st-clock", "#st-island"],
+        { opacity: 1 },
+        { opacity: 0, duration: 0.3, ease: "power2.in" },
+        10.0,
+      );
+
+      window.__timelines["stage"] = tl;
+    })();
+  </script>
+</template>

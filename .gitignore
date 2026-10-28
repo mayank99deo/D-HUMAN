@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# hyperframes videos: keep the source, not the cache or rendered files
+/video/**/.hyperframes/
+/video/**/renders/
+/video/**/.thumbnails/

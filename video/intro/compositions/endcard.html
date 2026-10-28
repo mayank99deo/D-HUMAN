@@ -1,0 +1,91 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Archivo";
+      src: url("assets/fonts/archivo-latin-variable.woff2") format("woff2");
+      font-weight: 100 900;
+      font-stretch: 62% 125%;
+      font-style: normal;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: var(--font-display, "Archivo"), sans-serif;
+      color: var(--color-ink, #000000);
+    }
+    /* The white pack the phone's screen grew into. */
+    #ec-ground {
+      position: absolute;
+      inset: 0;
+      background: var(--color-paper, #ffffff);
+    }
+    #ec-mark {
+      position: absolute;
+      left: 680px;
+      top: 424px;
+      width: 560px;
+      height: auto;
+    }
+    #ec-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 516px;
+      margin: 0;
+      text-align: center;
+      font-size: 64px;
+      line-height: 1;
+      font-weight: 760;
+      font-variation-settings: "wdth" 118;
+      letter-spacing: -0.01em;
+    }
+    #ec-cta {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 614px;
+      margin: 0;
+      text-align: center;
+      font-size: 40px;
+      line-height: 1.25;
+      color: #5c5c5c;
+    }
+  </style>
+  <div data-hf-id="hf-5t1u"
+    id="root"
+    data-composition-id="endcard"
+    data-width="1920"
+    data-height="1080"
+    data-composition-variables='[
+      {"id":"end-line","type":"string","label":"End line","default":"For the human"},
+      {"id":"end-cta","type":"string","label":"Call to action","default":"Join the waitlist at dhuman.fit"}
+    ]'
+  >
+    <div data-hf-id="hf-bx2z" id="ec-ground"></div>
+    <img data-hf-id="hf-k50f" id="ec-mark" src="assets/brand/wordmark-black.svg" alt="D-Human" />
+    <h2 data-hf-id="hf-98wv" id="ec-line" data-var-text="end-line">For the human</h2>
+    <p data-hf-id="hf-7wbj" id="ec-cta" data-var-text="end-cta">Join the waitlist at dhuman.fit</p>
+  </div>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      // The wordmark is printed on, left to right, not faded.
+      tl.fromTo(
+        "#ec-mark",
+        { clipPath: "inset(0% 100% 0% 0%)" },
+        { clipPath: "inset(0% 0% 0% 0%)", duration: 0.5, ease: "power3.out" },
+        0.05,
+      );
+      // The line inks in: it appears in light grey, then darkens to the brand's black.
+      tl.fromTo("#ec-line", { opacity: 0 }, { opacity: 1, duration: 0.1, ease: "power2.out" }, 0.3);
+      tl.fromTo("#ec-line", { color: "#d4d4d4" }, { color: "#000000", duration: 0.35, ease: "power2.out" }, 0.35);
+      tl.fromTo(
+        "#ec-cta",
+        { opacity: 0, filter: "blur(8px)" },
+        { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "power4.out" },
+        0.42,
+      );
+      window.__timelines["endcard"] = tl;
+    })();
+  </script>
+</template>

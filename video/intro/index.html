@@ -1,0 +1,100 @@
+<!doctype html>
+<html
+  lang="en"
+  data-resolution="landscape"
+  data-composition-variables='[
+    {"id":"color-ground","type":"color","label":"Ground","default":"#000000"},
+    {"id":"color-paper","type":"color","label":"Paper and screen","default":"#ffffff"},
+    {"id":"color-ink","type":"color","label":"Ink","default":"#000000"},
+    {"id":"font-display","type":"string","label":"Display font","default":"Archivo"}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --color-ground: #000000;
+        --color-paper: #ffffff;
+        --color-ink: #000000;
+        --font-display: "Archivo";
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--color-ground);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-84zm"
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="13"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- The site's contour field: the ground for the report and the phone. -->
+      <div data-hf-id="hf-z0k9"
+        id="field"
+        class="clip"
+        data-composition-id="field"
+        data-composition-src="compositions/field.html"
+        data-start="0"
+        data-duration="10.7"
+        data-track-index="0"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 1"
+      ></div>
+      <!-- One continuous take: report, phone pull, answers, stack, screen grows. -->
+      <div data-hf-id="hf-b3nj"
+        id="stage"
+        class="clip"
+        data-composition-id="stage"
+        data-composition-src="compositions/stage.html"
+        data-start="0"
+        data-duration="10.7"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 2"
+      ></div>
+      <!-- The pack: wordmark, "For the human", the call to action. -->
+      <div data-hf-id="hf-2j3c"
+        id="endcard"
+        class="clip"
+        data-composition-id="endcard"
+        data-composition-src="compositions/endcard.html"
+        data-start="10.55"
+        data-duration="2.45"
+        data-track-index="2"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+        style="z-index: 3"
+      ></div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>

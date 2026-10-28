@@ -13,7 +13,8 @@ export function Hero() {
 
       <div className="mx-auto w-full max-w-[1280px] px-5 sm:px-8">
         <h1 className="headline text-display">
-          <span className="block">Your body</span>
+          {/* The space keeps "body speaks" two words for screen readers and search. */}
+          <span className="block">Your body</span>{" "}
           <span className="block">speaks data.</span>
         </h1>
         <p className="semiwide mt-5 text-lead font-medium sm:mt-7">
@@ -25,7 +26,8 @@ export function Hero() {
           D-Human tests your blood, gut and body, has a doctor review the results, and recommends
           supplements only where your markers point. Then we retest to show what moved.
         </p>
-        <div className="mt-9 max-w-xl">
+        {/* "Join the waitlist" links land here while the closing section is hidden. */}
+        <div id="join" className="mt-9 max-w-xl">
           <WaitlistForm source="hero" />
         </div>
       </div>

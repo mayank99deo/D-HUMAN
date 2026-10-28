@@ -9,7 +9,7 @@ export function Problem() {
             Most people buy supplements blind.
           </h2>
           <p className="mt-8 max-w-[46ch]">
-            When Tata 1mg Labs tested 2.2 lakh people across 27 Indian cities, 76% were deficient in
+            Research across 2.2 lakh lab tests in 27 Indian cities found 76% of people deficient in
             vitamin D. Yet most supplements in India are chosen from ads and influencers, by people who
             have never seen their own number.
           </p>
