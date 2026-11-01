@@ -42,12 +42,13 @@ export async function sendWelcomeEmail(email: string) {
 
 // Adds the signup to Resend Contacts (and a segment, if configured) so launch
 // news can go out from Resend's Broadcasts screen with unsubscribe handled.
-export async function saveContact(email: string) {
+export async function saveContact(email: string, firstName?: string) {
   const r = resend();
   if (!r) return;
   const segmentId = process.env.RESEND_SEGMENT_ID;
   const { error } = await r.contacts.create({
     email,
+    firstName,
     unsubscribed: false,
     ...(segmentId ? { segments: [{ id: segmentId }] } : {}),
   });

@@ -39,5 +39,16 @@ export const detailsSchema = z.object({
     .or(z.literal("").transform(() => undefined)),
 });
 
+// Sent by the Google Form's Apps Script trigger for a new row. The form puts no
+// limit on names, so a long one is cut rather than costing the welcome email.
+export const formSignupSchema = z.object({
+  email,
+  firstName: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value?.slice(0, 60) || undefined),
+});
+
 export type JoinInput = z.infer<typeof joinSchema>;
 export type DetailsInput = z.infer<typeof detailsSchema>;

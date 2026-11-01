@@ -1,6 +1,6 @@
 # D-Human landing page
 
-The waitlist site for D-Human: "Your body speaks data. Hear it. Use it. Own it."
+The waitlist site for D-Human: "Your body speaks data. Hack your health."
 
 Next.js 16 (App Router), Tailwind CSS 4, a hand-written WebGL background, Google Sheets for signups, and Resend for email.
 
@@ -22,6 +22,8 @@ The page works without any keys. Joining the waitlist then shows an error until 
 4. For a new signup, the API returns right away. Afterwards, Resend sends the welcome email and adds the person to Resend Contacts.
 5. The page then asks a few optional questions: plan, training, first name, city, WhatsApp. They go to `/api/waitlist/details` with a signed token, so a visitor can only edit the row they just created.
 
+The Google Form is the second way in. Its answers reach the same `Waitlist` tab through an Apps Script trigger, marked `google-form` in the Source column (website rows say `hero` or `closing`). New people get the same welcome email and Resend contact, through `/api/waitlist/form`. An email already on the list keeps its row and its first Source, and the form only fills cells that are blank, because a form can't prove who is typing.
+
 ## 1. Connect the Google Sheet
 
 1. Create a Google Sheet (any name).
@@ -38,6 +40,15 @@ The page works without any keys. Joining the waitlist then shows an error until 
 If you skip `setup`, the tab and header row are created on the first signup, just without the formatting. Values that would run as spreadsheet formulas, and numbers with leading zeros, are stored as plain text.
 
 > If you edit the script later, deploy a new version (**Manage deployments → Edit → New version**). Otherwise the URL keeps running the old code.
+
+### Add the Google Form
+
+1. Paste the latest [`google-apps-script/Code.gs`](google-apps-script/Code.gs) into the Apps Script editor and save.
+2. Choose **setupForm** in the function menu and click **Run**. Allow every permission it asks for. It builds the form, links it to this Sheet, opens it to anyone with the link and adds the trigger. Running it again keeps the same form.
+3. Copy the share link from the Execution log. The log also says whether the form opened for a signed-out visitor, which matters because its owner can always open it.
+4. Scripts can't set a form's theme, so open the form, click the palette icon (**Customize theme**), upload [`google-apps-script/form-header.jpg`](google-apps-script/form-header.jpg) as the header, and pick the black swatch.
+
+Google also adds a `Form responses` tab with each answer exactly as submitted. The `Waitlist` tab is the list; that tab is the raw record. Questions can be reworded in the form, since answers are matched by question ID. A question you add yourself stays in `Form responses` only. The form needs no new web app deployment, because triggers run the saved code.
 
 ## 2. Connect Resend
 
@@ -70,9 +81,10 @@ The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise fr
 | `components/waitlist/useSilkTether.ts` | The silk threads that catch the cursor near the Join buttons (pointer devices only) |
 | `MEMORY.md` | Project memory: current state, decisions, gotchas, open items and a log of every change and push |
 | `components/waitlist/` | The waitlist form and the signup state shared by both forms on the page |
-| `app/api/waitlist/` | Signup and follow-up answer endpoints |
+| `app/api/waitlist/` | Signup, follow-up answer and Google Form endpoints |
 | `lib/waitlist/` | Validation, Sheets client, Resend emails, signed tokens, rate limit |
-| `google-apps-script/Code.gs` | The Sheets webhook |
+| `google-apps-script/Code.gs` | The Sheets webhook and the Google Form setup |
+| `google-apps-script/form-header.jpg` | The Google Form's theme header (1600 x 400) |
 | `components/brand/paths.ts` | The D-Human wordmark, traced from the logo artwork |
 
 ## Copy rules

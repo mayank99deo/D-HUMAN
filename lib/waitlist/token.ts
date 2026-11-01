@@ -1,5 +1,5 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 // A signup gets a token that lets the same browser add its optional
 // follow-up answers, without letting anyone edit another person's row.
@@ -19,4 +19,13 @@ export function verifyEmailToken(email: string, token: string) {
   const expected = Buffer.from(signEmail(email));
   const received = Buffer.from(token);
   return expected.length === received.length && timingSafeEqual(expected, received);
+}
+
+// For calls from the Apps Script itself. Hashing gives both sides the same
+// length, which timingSafeEqual requires.
+export function verifyWebhookSecret(value: string) {
+  const secret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET;
+  if (!secret) return false;
+  const digest = (text: string) => createHash("sha256").update(text).digest();
+  return timingSafeEqual(digest(value), digest(secret));
 }

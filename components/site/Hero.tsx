@@ -17,11 +17,7 @@ export function Hero() {
           <span className="block">Your body</span>{" "}
           <span className="block">speaks data.</span>
         </h1>
-        <p className="semiwide mt-5 text-lead font-medium sm:mt-7">
-          {/* Each beat stays whole when the line wraps on narrow screens. */}
-          <span className="inline-block">Hear it.</span> <span className="inline-block">Use it.</span>{" "}
-          <span className="inline-block">Own it.</span>
-        </p>
+        <p className="semiwide mt-5 text-lead font-medium sm:mt-7">Hack your health.</p>
         <p className="mt-8 max-w-[48ch] text-graphite sm:mt-10">
           D-Human tests your blood, gut and body, has a doctor review the results, and recommends
           supplements only where your markers point. Then we retest to show what moved.

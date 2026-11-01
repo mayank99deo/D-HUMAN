@@ -90,7 +90,7 @@ export function welcomeEmail({ email, siteUrl, assetUrl = siteUrl, canReply = fa
             </tr>
             <tr>
               <td class="px" style="padding:18px 40px 36px;font:500 18px/26px ${FONT};color:${GRAPHITE}">
-                Your body speaks data.<br><span style="white-space:nowrap;color:${PAPER}">Hear it. Use it. Own it.</span>
+                Your body speaks data.<br><span style="white-space:nowrap;color:${PAPER}">Hack your health.</span>
               </td>
             </tr>
 
@@ -154,7 +154,7 @@ export function welcomeEmail({ email, siteUrl, assetUrl = siteUrl, canReply = fa
 
   const text = [
     "You're on the list.",
-    "Your body speaks data. Hear it. Use it. Own it.",
+    "Your body speaks data. Hack your health.",
     "",
     "Thanks for joining. When early access opens, you'll hear from us first, along with pricing for the Baseline, Core and Complete plans.",
     "",
