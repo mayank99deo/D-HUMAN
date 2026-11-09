@@ -27,6 +27,16 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
   const setReport = (values: Partial<typeof schema.reports.$inferInsert>) =>
     d.update(schema.reports).set(values).where(eq(schema.reports.id, reportId));
 
+  // Seconds spent in each step, logged at the end so slow reads can be traced.
+  const started = Date.now();
+  const times: Record<string, number> = {};
+  let mark = started;
+  const lap = (name: string) => {
+    const now = Date.now();
+    times[name] = +((now - mark) / 1000).toFixed(1);
+    mark = now;
+  };
+
   try {
     const mode = aiMode();
     if (mode === "off") throw new AiUnavailableError();
@@ -35,7 +45,7 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
     const persona = personaFor(profile);
 
     // Look up events while the report is being read; the verdict needs them later.
-    const eventsJob = ensureEvents(profile, persona).catch(() => undefined);
+    const eventsJob = ensureEvents(profile, persona).catch((error) => console.error("[events]", error));
 
     emit({ type: "stage", stage: "reading" });
     await setReport({ status: "reading", stage: "reading", error: null });
@@ -48,6 +58,7 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
 
     const onFound = (name: string) => emit({ type: "marker", name });
     const extracted = mode === "mock" ? await mockExtract(onFound) : await extractReport(files, onFound);
+    lap("extract");
     const x = extracted.data;
     if (!x.is_lab_report || x.markers.length === 0) {
       throw new FriendlyError("That doesn't look like a lab report we can read. Try a clearer photo or the PDF from your lab.");
@@ -100,6 +111,7 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
     emit({ type: "stage", stage: "weighing" });
     // Events are usually found at onboarding already; don't hold the read for a slow search.
     await Promise.race([eventsJob, new Promise((r) => setTimeout(r, 8_000))]);
+    lap("events_wait");
     const event = await targetEvent(userId, profile, persona);
     const today = localDate(profile.timezone);
     const diet = dietText(await dietPicture(userId, profile));
@@ -151,6 +163,7 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
 
     emit({ type: "stage", stage: "writing" });
     const interpreted = mode === "mock" ? await mockRead(input) : await interpretReport(input);
+    lap("read");
     const read: Read = interpreted.data;
     // Safety floor: a flagged marker always means "doctor first", whatever the wording.
     if (rows.some((r) => r.flag) && read.verdict.level !== "doctor_first") read.verdict.level = "doctor_first";
@@ -162,6 +175,7 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
       .onConflictDoUpdate({ target: schema.analyses.reportId, set: { read, eventId: event?.id ?? null, createdAt: new Date() } });
     await setReport({ status: "ready", stage: null, analyzedAt: new Date(), model: interpreted.model });
     emit({ type: "done", reportId });
+    console.info(`[analyze] ${reportId} ready in ${((Date.now() - started) / 1000).toFixed(1)}s`, { ...times, markers: rows.length, model: interpreted.model });
   } catch (error) {
     console.error("[analyze]", error);
     const message =

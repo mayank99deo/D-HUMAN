@@ -47,8 +47,18 @@ Browser ──► Route Handlers (app/api/*) ──► lib/platform/* (services)
 - **Wraps** (`lib/platform/wraps.ts`). Code computes the stats; Claude only writes the cards from those numbers.
 - **Stack** (`lib/platform/stack.ts`). Claude with web search, high effort, under strict rules: an item only for a low or edge marker or a repeated food gap; conservative doses; iron only with low ferritin and a doctor check; flagged markers go to "See a doctor first"; brands sold in India, preferring third-party tested.
 - **Claude** (`lib/ai/client.ts`).
-  - Model: `CLAUDE_MODEL`, default `claude-opus-5-5`.
-  - Refusals: server-side fallback is on (`fallbacks: "default"`), so a policy decline is retried on the recommended fallback model in the same call.
+  - Models, chosen per job for cost (Mayank's call, 2026-11-09, after the first Opus-only runs):
+
+    | Job | Model | Why |
+    | --- | --- | --- |
+    | Reading values off a report | Haiku 5.5, low effort | Transcription; about 40× cheaper than Opus |
+    | Writing the read | Sonnet 5.5, medium effort | Medical judgement, tone and the safety rules |
+    | Meals, typical day | Haiku 5.5, low effort | Frequent, forgiving estimates |
+    | Wraps | Haiku 5.5, low effort | Copy from numbers the app worked out |
+    | Events (3 searches), stack brands (4) | Sonnet 5.5 | Needs the newer web search tool |
+
+    `CLAUDE_MODEL` switches every job at once; `CLAUDE_MODEL_EXTRACT`, `_READ`, `_FOOD`, `_WRAP`, `_EVENTS` or `_STACK` switch one. Every call logs `[ai] job model in=… out=… searches=… ~$cost` in the server logs.
+  - Refusals: Sonnet and Opus calls ask for server-side fallback (`fallbacks: "default"`); Haiku has none, so its calls don't.
   - Every reply is checked for `refusal` and `max_tokens` before use.
   - Language: reads, food notes, wraps and stacks follow the person's language. App labels are English for now.
 
@@ -96,11 +106,11 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 | `DATABASE_URL` | The Supabase transaction pooler string from step 3. Any Postgres works, such as Neon from the Vercel Marketplace. If you connected Supabase through Vercel's integration, skip this: it sets `POSTGRES_URL`, which the app uses when `DATABASE_URL` is absent. |
 | `ANTHROPIC_API_KEY` | From the Claude Console. Reads, food, events, wraps and stacks. |
 | `AUTH_SECRET` | Any long random string (`openssl rand -hex 32`). Required in production. |
-| `CLAUDE_MODEL` | Optional. Defaults to `claude-opus-5-5`. |
+| `CLAUDE_MODEL` | Optional. Overrides the per-job models (see Claude above). |
 
 `RESEND_API_KEY` is already set there, so sign-in codes send from `hello@dhuman.fit`. Migrations run on deploy. The landing page doesn't link to the platform yet; add a "Sign in" link when you're ready to open it.
 
-Rough cost per person: a report read is two Opus calls (about 20–40k tokens in, 8–15k out) plus a few web searches for events, which are shared by region. A logged meal is one short call at low effort.
+Rough cost: a report read is a Haiku call (well under a cent) plus a Sonnet call (a few cents). An event search is a few cents of Sonnet plus 3 searches at $0.01 each, shared by everyone in the same city and sport for a week. A stack is a Sonnet call plus up to 4 searches. A logged meal is a fraction of a cent. The exact figures are in the `[ai]` log lines.
 
 ## Not in Phase 1
 

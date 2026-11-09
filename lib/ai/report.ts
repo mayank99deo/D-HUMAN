@@ -2,7 +2,7 @@ import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { MARKERS } from "@/lib/domain/markers";
-import { FALLBACK_BETA, MODEL, VOICE, anthropic, assertComplete, languageRule } from "./client";
+import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
 import { ExtractedSchema, ReadSchema, type Extracted, type Read } from "./schemas";
 
 export type ReportFile = { mime: string; bytes: Buffer };
@@ -40,11 +40,11 @@ function filesToBlocks(files: ReportFile[]): BetaContentBlockParam[] {
 // Streams the extraction so marker names can appear on screen as Claude reads them.
 export async function extractReport(files: ReportFile[], onFound: (name: string) => void): Promise<{ data: Extracted; model: string }> {
   const seen = new Set<string>();
+  const t0 = Date.now();
   const stream = anthropic().beta.messages.stream({
-    model: MODEL,
+    model: MODELS.extract,
     max_tokens: 32000,
-    betas: [FALLBACK_BETA],
-    fallbacks: "default",
+    ...fallbackFor(MODELS.extract),
     // Copying values off a page needs little reasoning; low effort is much faster.
     output_config: { effort: process.env.CLAUDE_EXTRACT_EFFORT === "medium" ? "medium" : "low", format: betaZodOutputFormat(ExtractedSchema) },
     system: EXTRACT_SYSTEM,
@@ -64,6 +64,7 @@ export async function extractReport(files: ReportFile[], onFound: (name: string)
     }
   });
   const message = await stream.finalMessage();
+  logUsage("extract", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not read the report's structure");
   return { data: message.parsed_output, model: message.model };
@@ -166,17 +167,18 @@ Statuses were computed from the ranges: low/high are outside; edge_low/edge_high
 
 ${languageRule(person.language)}`;
 
+  const t0 = Date.now();
   const message = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: MODELS.read,
       max_tokens: 32000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallbackFor(MODELS.read),
       output_config: { effort: process.env.CLAUDE_READ_EFFORT === "high" ? "high" : "medium", format: betaZodOutputFormat(ReadSchema) },
       system: READ_SYSTEM,
       messages: [{ role: "user", content: prompt }],
     })
     .finalMessage();
+  logUsage("read", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not build the read");
   return { data: message.parsed_output, model: message.model };

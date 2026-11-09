@@ -1,6 +1,6 @@
 import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { FALLBACK_BETA, MODEL, VOICE, anthropic, assertComplete, languageRule } from "./client";
+import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
 import { WrapStorySchema, type WrapStory } from "./schemas";
 
 const SYSTEM = `${VOICE}
@@ -20,12 +20,12 @@ export async function writeWrap(input: {
   stats: unknown;
   language: string;
 }): Promise<{ data: WrapStory; model: string }> {
+  const t0 = Date.now();
   const message = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: MODELS.wrap,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallbackFor(MODELS.wrap),
       output_config: { effort: "low", format: betaZodOutputFormat(WrapStorySchema) },
       system: SYSTEM,
       messages: [
@@ -43,6 +43,7 @@ ${languageRule(input.language)}`,
       ],
     })
     .finalMessage();
+  logUsage("wrap", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not write the wrap");
   return { data: message.parsed_output, model: message.model };

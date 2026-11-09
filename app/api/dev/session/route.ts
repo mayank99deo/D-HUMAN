@@ -5,7 +5,7 @@ import { startSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 
 // Local development only: signs in as a demo person without email.
-// /api/dev/session?as=ankit (HYROX, 34, Mumbai) or ?as=mayank (trekking, 31, Pune)
+// /api/dev/session?as=ankit (HYROX, 34, Mumbai), ?as=mayank (trekking, 31, Pune), ?as=priya (runner, 40, Indore)
 // or ?as=fresh (no profile yet, to walk through onboarding). 404 in production.
 const PEOPLE = {
   ankit: {
@@ -15,6 +15,10 @@ const PEOPLE = {
   mayank: {
     name: "Mayank", birthYear: 1995, sex: "male", heightCm: 175, weightKg: 70, city: "Pune", activities: ["trekking", "walking"],
     primaryActivity: "trekking", level: "regular", sessionsPerWeek: 3, goals: ["energy", "longevity"], eventInMind: "Hampta Pass trek", diet: "veg", language: "hinglish",
+  },
+  priya: {
+    name: "Priya", birthYear: 1986, sex: "female", heightCm: 162, weightKg: 58, city: "Indore", activities: ["running", "yoga"],
+    primaryActivity: "running", level: "regular", sessionsPerWeek: 4, goals: ["energy", "performance"], eventInMind: "Indore Marathon", diet: "veg", language: "en",
   },
   fresh: null,
 } as const;

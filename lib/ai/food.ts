@@ -1,7 +1,7 @@
 import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { FALLBACK_BETA, MODEL, VOICE, anthropic, assertComplete, languageRule } from "./client";
+import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
 import { DaySchema, MealSchema, type Day, type Meal } from "./schemas";
 
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
@@ -40,29 +40,32 @@ ${contextLine(input.context)}
 Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. ${languageRule(input.context.language)} Keep food names as Indians say them (e.g. "rajma chawal").`,
   });
 
+  const t0 = Date.now();
   const message = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: MODELS.food,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallbackFor(MODELS.food),
+      // A calorie estimate gains little from a long think; this keeps logging a meal quick.
+      ...(MODELS.food.startsWith("claude-haiku") ? { thinking: { type: "disabled" as const } } : {}),
       output_config: { effort: "low", format: betaZodOutputFormat(MealSchema) },
       system: `${VOICE}\n\n${FOOD_RULES}`,
       messages: [{ role: "user", content }],
     })
     .finalMessage();
+  logUsage("meal", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not read the meal");
   return { data: message.parsed_output, model: message.model };
 }
 
 export async function estimateTypicalDay(description: string, context: FoodContext): Promise<{ data: Day; model: string }> {
+  const t0 = Date.now();
   const message = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: MODELS.food,
       max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallbackFor(MODELS.food),
       output_config: { effort: "low", format: betaZodOutputFormat(DaySchema) },
       system: `${VOICE}\n\n${FOOD_RULES}`,
       messages: [
@@ -76,6 +79,7 @@ Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protei
       ],
     })
     .finalMessage();
+  logUsage("typical_day", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not read the description");
   return { data: message.parsed_output, model: message.model };

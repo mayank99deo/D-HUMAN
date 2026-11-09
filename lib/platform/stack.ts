@@ -55,7 +55,7 @@ export async function startStack(userId: string): Promise<{ id: string; job: Pro
       const { data, model } =
         mode === "mock"
           ? await mockStack()
-          : await buildStack({ person, markers: table, diet, language: profile.language, today: localDate(profile.timezone) });
+          : await buildStack({ where: { city: profile.city, country: profile.country }, person, markers: table, diet, language: profile.language, today: localDate(profile.timezone) });
       await d.update(schema.stacks).set({ status: "ready", plan: data, model }).where(eq(schema.stacks.id, id));
     } catch (error) {
       console.error("[stack]", error);

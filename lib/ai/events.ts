@@ -31,7 +31,7 @@ export async function searchEvents(opts: {
   const prompt = `Today is ${opts.today}. Find upcoming ${opts.what} in the next 9 months, for someone based in ${where}.
 ${opts.named ? `They told us they have this in mind: "${opts.named}". Find that event first and include it if it's upcoming.\n` : ""}List up to 8: events in or near ${opts.city || "their city"} first, then the biggest ones elsewhere in ${opts.country || "India"}.`;
 
-  const { text, model } = await runWithWebSearch({ system: SYSTEM, prompt, maxUses: 6, effort: "medium" });
+  const { text, model } = await runWithWebSearch({ job: "events", system: SYSTEM, prompt, maxUses: 3, effort: "low", where: { city: opts.city, country: opts.country } });
   const parsed = EventsSchema.safeParse(extractJson(text));
   if (!parsed.success) throw new Error("Event search returned an unexpected shape");
   const valid = parsed.data.events.filter(
