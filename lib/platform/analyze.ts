@@ -98,7 +98,8 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
     await setReport({ status: "interpreting", stage: "weighing", labName: x.lab_name, collectedOn, nameOnReport: x.name_on_report });
 
     emit({ type: "stage", stage: "weighing" });
-    await Promise.race([eventsJob, new Promise((r) => setTimeout(r, 45_000))]);
+    // Events are usually found at onboarding already; don't hold the read for a slow search.
+    await Promise.race([eventsJob, new Promise((r) => setTimeout(r, 8_000))]);
     const event = await targetEvent(userId, profile, persona);
     const today = localDate(profile.timezone);
     const diet = dietText(await dietPicture(userId, profile));
@@ -139,6 +140,8 @@ export async function runAnalysis(reportId: string, userId: string, emit: (p: Pr
           status: r.status,
           flag: r.flag ?? null,
           priority: r.key ? rank.get(r.key) ?? null : null,
+          // Notes only where they add something: off or at the edge of range, flagged, or near the top for this persona.
+          note: (r.status !== "in_range" && r.status !== "unknown") || !!r.flag || (!!r.key && (rank.get(r.key) ?? 99) <= 8),
         };
       }),
       diet,

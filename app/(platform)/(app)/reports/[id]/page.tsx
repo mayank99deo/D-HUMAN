@@ -105,7 +105,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
             <h3 className="text-sm font-semibold text-graphite">{panel}</h3>
             <ul className="mt-1">
               {list.map((m) => (
-                <MarkerRow key={m.id} m={m} note={notes.get(m.id)} />
+                <MarkerRow key={m.id} m={m} note={notes.get(m.id) ?? markerDef(m.key)?.what} />
               ))}
             </ul>
           </div>

@@ -41,6 +41,7 @@ The running record of this project: where things stand, why they are the way the
 - **Vercel variables:** changes only apply after a Redeploy. Enter values without quotes. Duplicate keys in one "Add" dialog fail with "already exists".
 - **Testing Apps Script with curl:** `curl -X POST -L` keeps POST on the redirect and gets "Page not found". `fetch`, which the app uses, works.
 - **WebGL blocks the page while it starts:** creating a context is synchronous; it measured about 0.4 s on this Mac's GPU and about 2 s on a cold software renderer (what Lighthouse uses), on top of waiting behind the GPU process while it paints the page. That took mobile Performance down to 39. Keep WebGL setup in the worker.
+- **Vercel region:** functions default to Washington DC (`iad1`) even though Indian visitors enter at Mumbai; with the database in Mumbai that adds about a quarter second per query. `vercel.json` pins `bom1`. Check with the `x-vercel-id` header: `bom1::bom1::…` means edge and function are both in Mumbai.
 - **Measuring performance:** run Lighthouse against a production build (`next build` + `next start`), not `next dev`. Command: `npx -y lighthouse@12.8.2 <url> --form-factor=mobile --screenEmulation.mobile --chrome-flags="--headless=new --enable-unsafe-swiftshader --use-angle=swiftshader"`.
 - **Script-made forms and the public:** publishing is not enough. Anyone-with-the-link is a separate Drive permission (`type: anyone`, `view: published`, `role: reader`), and the owner can always open the form, so check signed out. `setupForm()` does both. Themes can't be scripted, so the header image is a manual upload.
 - **The waitlist Sheet is out of reach from chats:** it isn't in the Drive of `mayank29deo@gmail.com`, the account the claude.ai Google connectors use, and no connector can run Apps Script. Script changes have to be pasted and run by hand.
@@ -57,7 +58,7 @@ The running record of this project: where things stand, why they are the way the
 
 ## Open items
 
-- [ ] Platform live: Mayank is creating a Supabase project (Mumbai) and adding `DATABASE_URL` (transaction pooler, port 6543), `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel, then redeploying (steps in `docs/platform/PHASE-1.md`). After that, add a "Sign in" link on the landing page
+- [ ] Platform live: Supabase tables are in place (2026-11-09); still adding `DATABASE_URL` (transaction pooler, port 6543), `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel, then redeploying (steps in `docs/platform/PHASE-1.md`). After that, add a "Sign in" link on the landing page
 - [ ] Platform: run the live Claude read once against `tests/fixtures/sample-report.pdf` and a real report (only the demo stand-ins have been run so far)
 - [ ] Platform next: doctor review of reads, phone/WhatsApp sign-in, Hindi app labels, speech-to-text for browsers without the Web Speech API, uploads over 4 MB
 
@@ -72,6 +73,9 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-09
+- **Speed (Mayank: tab switches, report reads and the dashboard were slow):** measured the live site: requests entered Vercel at Mumbai (`bom1`) but functions ran in Washington DC (`iad1`), so every Supabase query crossed the world (a 2-query call took 0.86 s against 0.27 s for a static page). Now `vercel.json` pins functions to `bom1`. The dashboard's ~12 sequential queries run in two parallel batches, events and the target come from one helper (`eventsFor`), and the upload page no longer loads the whole dashboard. Report reads: extraction at low effort, the read at medium (overridable with `CLAUDE_EXTRACT_EFFORT` / `CLAUDE_READ_EFFORT` set to `medium` / `high`), notes only for markers that matter (the report page falls back to the catalogue's sentence), and at most 8 s waiting for an event search.
+- **Supabase set up (no code):** Mayank created the Supabase project "D-human" (free plan) and ran both migration files in its SQL editor, choosing "Run and enable RLS" at Supabase's prompt. The check query showed all 15 tables with RLS on. Still to do: Vercel variables and a redeploy.
+- **Push `fb73a64`:** the Supabase integration fallback below, plus the push record for `99168f2`.
 - **Database URL from Vercel's Supabase integration:** the app and the build-time migrations now use `POSTGRES_URL` when `DATABASE_URL` is absent (`lib/db/url.mjs`), and drop the `supa` and `pgbouncer` URL options that integration adds, which the `postgres` driver would otherwise send to Postgres as settings.
 - **Push `99168f2`:** platform Phase 1, the Supabase-ready migrations and the Nue Health teardown, live in about 48 s. Checked live: landing 200 with the tagline, waitlist details 403 on a fake token (Sheets secret fine), `/signin` 200, `/home` signed out redirects to `/signin`, platform APIs 401 signed out, dev routes 404. Sending a sign-in code returns 500 until `DATABASE_URL` and `AUTH_SECRET` are set in Vercel.
 - **Platform ready for Supabase:** migration `0001_row_level_security` (RLS on all 15 tables), `0000_init` made safe to run twice, Supabase steps in `docs/platform/PHASE-1.md`. Tested on fresh embedded databases: deploy then paste, paste then deploy, and a non-owner role reading nothing. Production build passes with the database unreachable, so nothing touches it at build time.

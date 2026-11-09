@@ -99,27 +99,36 @@ export async function upcomingEvents(profile: Profile, persona: Persona, limit =
     .limit(limit);
 }
 
-// The event the verdict aims at: the one they picked, else the one they named, else the soonest.
-export async function targetEvent(userId: string, profile: Profile, persona: Persona): Promise<EventRow | null> {
+// Upcoming events, the one they picked and the one the verdict aims at, in one go:
+// the picked one, else the one they named, else the soonest.
+export async function eventsFor(userId: string, profile: Profile, persona: Persona) {
   const d = await db();
   const today = localDate(profile.timezone);
-  const [picked] = await d
-    .select({ e: schema.events })
-    .from(schema.userEvents)
-    .innerJoin(schema.events, eq(schema.events.id, schema.userEvents.eventId))
-    .where(and(eq(schema.userEvents.userId, userId), eq(schema.userEvents.target, true), or(gte(schema.events.startsOn, today), isNull(schema.events.startsOn))))
-    .limit(1);
-  if (picked) return picked.e;
-
-  const upcoming = await upcomingEvents(profile, persona, 12);
+  const [pickedRows, upcoming] = await Promise.all([
+    d
+      .select({ e: schema.events })
+      .from(schema.userEvents)
+      .innerJoin(schema.events, eq(schema.events.id, schema.userEvents.eventId))
+      .where(and(eq(schema.userEvents.userId, userId), eq(schema.userEvents.target, true), or(gte(schema.events.startsOn, today), isNull(schema.events.startsOn))))
+      .limit(1),
+    upcomingEvents(profile, persona, 12),
+  ]);
+  const picked = pickedRows[0]?.e ?? null;
+  let target: EventRow | null = picked;
   const named = profile.eventInMind?.trim();
-  if (named) {
+  if (!target && named) {
     const words = named.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-    const match = upcoming.find((e) => words.every((w) => e.name.toLowerCase().includes(w)))
-      ?? upcoming.find((e) => words.some((w) => e.name.toLowerCase().includes(w)));
-    if (match) return match;
+    target =
+      upcoming.find((e) => words.every((w) => e.name.toLowerCase().includes(w))) ??
+      upcoming.find((e) => words.some((w) => e.name.toLowerCase().includes(w))) ??
+      null;
   }
-  return upcoming.find((e) => e.startsOn) ?? null;
+  target ??= upcoming.find((e) => e.startsOn) ?? null;
+  return { target, upcoming: upcoming.slice(0, 6), pickedId: picked?.id ?? null };
+}
+
+export async function targetEvent(userId: string, profile: Profile, persona: Persona): Promise<EventRow | null> {
+  return (await eventsFor(userId, profile, persona)).target;
 }
 
 export async function pickTargetEvent(userId: string, eventId: string | null) {

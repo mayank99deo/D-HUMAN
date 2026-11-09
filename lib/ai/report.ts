@@ -45,7 +45,8 @@ export async function extractReport(files: ReportFile[], onFound: (name: string)
     max_tokens: 32000,
     betas: [FALLBACK_BETA],
     fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(ExtractedSchema) },
+    // Copying values off a page needs little reasoning; low effort is much faster.
+    output_config: { effort: process.env.CLAUDE_EXTRACT_EFFORT === "medium" ? "medium" : "low", format: betaZodOutputFormat(ExtractedSchema) },
     system: EXTRACT_SYSTEM,
     messages: [
       {
@@ -97,6 +98,7 @@ export type ReadInput = {
     status: string;
     flag: string | null;
     priority: number | null; // 1 = matters most for this persona
+    note: boolean; // write a note for this one
   }[];
   diet: string | null; // a short summary of logged eating, when there is any
   labName: string | null;
@@ -120,7 +122,7 @@ Fields:
 - headline: six words or fewer.
 - summary: 2–3 sentences.
 - focus: 1–4 pointers, most important first, each tied to a marker when there is one (marker_key from the catalogue). "action" is food-first and practical for an Indian kitchen and their diet type. Don't recommend supplements here; D-Human builds the stack separately.
-- markers: one entry for EVERY marker id given, with a one-sentence note in context. for_you: good, watch (edge of range or matters for their goal), act (out of range and matters), neutral.
+- markers: one entry for each marker whose line starts with "*" (the ones that matter for this person), with a one-sentence note in context. Skip the rest; the app explains them itself. for_you: good, watch (edge of range or matters for their goal), act (out of range and matters), neutral.
 - wins: 1–3 things that are genuinely good.
 - doctor_questions: 0–4 short questions to take to a doctor; include at least one for every flagged marker.
 - retest: when to retest (weeks) and which marker keys.
@@ -138,7 +140,7 @@ export async function interpretReport(input: ReadInput): Promise<{ data: Read; m
   const markerLines = input.markers
     .map(
       (m) =>
-        `${m.id} | ${m.name}${m.key ? ` [${m.key}]` : ""} | ${m.value}${m.unit ? ` ${m.unit}` : ""} | range ${m.range} (${m.rangeSource}) | ${m.status}${
+        `${m.note ? "* " : "  "}${m.id} | ${m.name}${m.key ? ` [${m.key}]` : ""} | ${m.value}${m.unit ? ` ${m.unit}` : ""} | range ${m.range} (${m.rangeSource}) | ${m.status}${
           m.flag ? ` | FLAG: ${m.flag}` : ""
         }${m.priority ? ` | priority ${m.priority}` : ""}`,
     )
@@ -170,7 +172,7 @@ ${languageRule(person.language)}`;
       max_tokens: 32000,
       betas: [FALLBACK_BETA],
       fallbacks: "default",
-      output_config: { effort: "high", format: betaZodOutputFormat(ReadSchema) },
+      output_config: { effort: process.env.CLAUDE_READ_EFFORT === "high" ? "high" : "medium", format: betaZodOutputFormat(ReadSchema) },
       system: READ_SYSTEM,
       messages: [{ role: "user", content: prompt }],
     })
