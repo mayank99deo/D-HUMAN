@@ -195,3 +195,183 @@
     font-weight: 800;
   }
 }
+
+/* ───────────── Platform ─────────────
+   Monochrome first. The only colour is borrowed from blood itself, and only for
+   marker status, always next to a glyph: serum (in range), plasma straw (edge
+   of range), haem (out of range). Glows use them at very low strength. */
+@theme {
+  --color-serum: #b5d2c0;
+  --color-straw: #e2d3a2;
+  --color-haem: #e3a5a2;
+  --color-line: rgb(255 255 255 / 0.14);
+  --color-line-strong: rgb(255 255 255 / 0.3);
+  --color-lift: #0f0f0f; /* raised surfaces on ink */
+}
+
+@utility display-num {
+  font-variation-settings: "wdth" 125;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  font-feature-settings: "tnum" 1;
+}
+@utility verdict-type {
+  font-variation-settings: "wdth" 112;
+  font-weight: 720;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+}
+
+@layer components {
+  .button-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding-inline: 1.125rem;
+    border: 1px solid var(--color-line-strong);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: border-color 150ms, background-color 150ms;
+  }
+  .button-ghost:active {
+    background: rgb(255 255 255 / 0.08);
+  }
+  .button-ghost:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+  @media (hover: hover) {
+    .button-ghost:hover {
+      border-color: var(--color-paper);
+    }
+  }
+  .paper .button-ghost {
+    border-color: rgb(0 0 0 / 0.3);
+  }
+
+  .textarea {
+    width: 100%;
+    min-height: 6.5rem;
+    border: 1px solid rgb(255 255 255 / 0.4);
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .textarea:focus-visible {
+    border-color: var(--color-paper);
+    outline-offset: 2px;
+  }
+
+  /* Status glyphs: shape carries the meaning, colour only confirms it. */
+  .glyph {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    flex: none;
+  }
+  .glyph-in {
+    border-radius: 999px;
+    background: var(--color-serum);
+  }
+  .glyph-edge {
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--color-straw) 50%, transparent 50%);
+    box-shadow: inset 0 0 0 1.5px var(--color-straw);
+  }
+  .glyph-out {
+    background: var(--color-haem);
+    transform: rotate(45deg) scale(0.85);
+  }
+  .glyph-unknown {
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1.5px var(--color-graphite);
+  }
+}
+
+/* The analysis orbit and the emote stop moving for people who ask for less motion. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes spin-back {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Rotate around the centre of the whole drawing, not the text's own box. */
+.orbit-spin {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  animation: spin var(--orbit-speed, 80s) linear infinite;
+}
+.orbit-spin-back {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  animation: spin-back var(--orbit-speed, 120s) linear infinite;
+}
+.fact-in {
+  animation: fade-up 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orbit-spin,
+  .orbit-spin-back,
+  .fact-in {
+    animation: none;
+  }
+}
+
+/* The contour fingerprint draws itself in once, ring by ring. */
+@keyframes contour-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.contour-draw {
+  stroke-dasharray: 1;
+  animation: contour-draw 1400ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .contour-draw {
+    animation: none;
+  }
+}
+
+/* Wrap story progress: the current segment fills over the card's time on screen. */
+@keyframes wrap-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.wrap-fill {
+  animation: wrap-fill 5200ms linear both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wrap-fill {
+    animation: none;
+    width: 100%;
+  }
+}

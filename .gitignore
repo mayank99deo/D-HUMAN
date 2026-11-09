@@ -45,3 +45,6 @@ next-env.d.ts
 /video/**/.hyperframes/
 /video/**/renders/
 /video/**/.thumbnails/
+
+# embedded dev database
+/.data/

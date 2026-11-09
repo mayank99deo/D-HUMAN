@@ -1,8 +1,8 @@
-# D-Human landing page
+# D-Human
 
-The waitlist site for D-Human: "Your body speaks data. Hack your health."
+The waitlist site for D-Human ("Your body speaks data. Hack your health.") and, beside it, Phase 1 of the platform: sign in with an emailed code, answer a few questions, upload a blood report, and get a read made for how you train, plus food tracking, wraps and a supplement stack. The platform is described in [`docs/platform/PHASE-1.md`](docs/platform/PHASE-1.md).
 
-Next.js 16 (App Router), Tailwind CSS 4, a hand-written WebGL background, Google Sheets for signups, and Resend for email.
+Next.js 16 (App Router, Cache Components), Tailwind CSS 4, a hand-written WebGL background, Google Sheets for waitlist signups, Resend for email, and for the platform: Postgres through Drizzle, and Claude for reading reports and meals.
 
 ## Run it locally
 
@@ -13,6 +13,10 @@ npm run dev                  # http://localhost:3000
 ```
 
 The page works without any keys. Joining the waitlist then shows an error until the Google Sheet is connected, and emails are skipped until Resend is set up.
+
+The platform also runs with no setup: without `DATABASE_URL` it uses an embedded Postgres in `.data/`, and without Resend the sign-in code is printed in the dev server's log. Start with `D_HUMAN_AI_MOCK=1 npm run dev` to try every screen without an Anthropic key (results are labelled "Demo"), and open `/api/dev/session?as=ankit` to sign in as a demo athlete. Going live, environment variables and the safety rules: [`docs/platform/PHASE-1.md`](docs/platform/PHASE-1.md).
+
+Checks: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`.
 
 ## How a signup flows
 
@@ -86,7 +90,20 @@ The site's public address comes from `NEXT_PUBLIC_SITE_URL` if set, otherwise fr
 | `google-apps-script/Code.gs` | The Sheets webhook and the Google Form setup |
 | `google-apps-script/form-header.jpg` | The Google Form's theme header (1600 x 400) |
 | `components/brand/paths.ts` | The D-Human wordmark, traced from the logo artwork |
+| `app/(platform)/` | The platform's pages: sign-in, onboarding, home, upload, reports, fuel, wraps, stack, settings |
+| `components/platform/` | The bib, persona emotes, analysis orbit, contour fingerprint, range rails, food logger, wrap player, stack |
+| `app/api/{auth,profile,reports,food,stack,wraps,events,account}` | The platform's endpoints |
+| `lib/db/` | Database schema and connection (Postgres, or embedded PGlite locally); migrations in `drizzle/` |
+| `lib/auth/` | Email-code sign-in and sessions |
+| `lib/domain/` | Marker catalogue with ranges and doctor flags, personas, analysis facts, nutrition targets, wrap periods |
+| `lib/ai/` | Every Claude call: report extraction and read, events, meals, wraps, stack; local demo stand-ins |
+| `lib/platform/` | The services that join them: analysis pipeline, events, food, wraps, stack, dashboard |
+| `tests/` | Tests of the safety and persona logic, and an illustrative sample report |
+| `docs/platform/PHASE-1.md` | How the platform works, what it needs to go live, and what's next |
+| `docs/research/` | Front-end teardowns used as design research |
 
 ## Copy rules
+
+The platform names supplement brands in stacks, under a note that D-Human has no brand partners; the landing page names none.
 
 The page follows the pitch deck's claims language. It makes no disease claims and says "screening", "markers" and "risk". It uses only sourced numbers, attributed without naming lab brands (the vitamin D figure: 2.2 lakh lab tests across 27 Indian cities, 2023). Anything else shown as data, like the people behind the chart's squares and the phone's sample report, is labelled illustrative. Plan prices stay off the page until partner pricing is confirmed.

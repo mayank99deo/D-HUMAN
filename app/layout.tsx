@@ -46,7 +46,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-IN" className={archivo.variable}>
+    <html lang="en-IN" className={archivo.variable} data-scroll-behavior="smooth">
       <body>{children}</body>
     </html>
   );
