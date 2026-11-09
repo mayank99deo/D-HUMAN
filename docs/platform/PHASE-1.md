@@ -93,7 +93,7 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 
 | Variable | What |
 | --- | --- |
-| `DATABASE_URL` | The Supabase transaction pooler string from step 3. Any Postgres works, such as Neon from the Vercel Marketplace. |
+| `DATABASE_URL` | The Supabase transaction pooler string from step 3. Any Postgres works, such as Neon from the Vercel Marketplace. If you connected Supabase through Vercel's integration, skip this: it sets `POSTGRES_URL`, which the app uses when `DATABASE_URL` is absent. |
 | `ANTHROPIC_API_KEY` | From the Claude Console. Reads, food, events, wraps and stacks. |
 | `AUTH_SECRET` | Any long random string (`openssl rand -hex 32`). Required in production. |
 | `CLAUDE_MODEL` | Optional. Defaults to `claude-opus-5-5`. |

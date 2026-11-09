@@ -1,12 +1,14 @@
 import "server-only";
 import path from "node:path";
 import * as schema from "./schema";
+import { databaseUrl } from "./url.mjs";
 
 // Two ways to run:
-// - DATABASE_URL set to a postgres:// URL (production: Neon, Supabase or any Postgres).
-// - DATABASE_URL unset (local dev): an embedded Postgres (PGlite) in .data/pglite,
+// - DATABASE_URL (or POSTGRES_URL, from Vercel's Supabase or Neon integration) set
+//   to a postgres:// URL: production on Supabase, Neon or any Postgres.
+// - Neither set (local dev): an embedded Postgres (PGlite) in .data/pglite,
 //   migrated automatically, so `npm run dev` works with no setup.
-// Vercel has no writable disk, so there DATABASE_URL is required.
+// Vercel has no writable disk, so there a connection string is required.
 
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
@@ -17,8 +19,8 @@ const globalForDb = globalThis as unknown as { __dhumanDb?: Promise<Db> };
 const MIGRATIONS = path.join(process.cwd(), "drizzle");
 
 async function connect(): Promise<Db> {
-  const url = process.env.DATABASE_URL;
-  if (url && /^postgres(ql)?:\/\//.test(url)) {
+  const url = databaseUrl();
+  if (url) {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     // prepare:false keeps it working behind transaction poolers (Neon, Supabase).
@@ -26,7 +28,7 @@ async function connect(): Promise<Db> {
     return drizzle(client, { schema }) as unknown as Db;
   }
   if (process.env.VERCEL) {
-    throw new Error("DATABASE_URL is not set. Add a Postgres connection string in Vercel.");
+    throw new Error("No database: set DATABASE_URL (or connect Supabase, which sets POSTGRES_URL) in Vercel.");
   }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");
