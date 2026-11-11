@@ -64,6 +64,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
+- **Headless Chrome and the mic:** `getUserMedia` never resolves headlessly on this Mac even with permission granted, so real mic levels can't be tested here; use a synthetic stream or a device.
 - **Scrolling chip rows:** hidden radios (`sr-only`, absolutely placed) inside a sideways-scrolling row widen the page unless the scroller is `relative`.
 - **Function size on Vercel:** files reachable from server code are traced into every function. PGlite (62 MB) and the local `.data` folder were, until `outputFileTracingExcludes` in `next.config.ts`. Check sizes with the `.nft.json` files under `.next/server/app` after a build.
 - **Drizzle journal times:** migrations run if their journal `when` is later than the last one applied, so a hand-written entry must sit in time order or databases that ran a later one skip it. `tests/migrations.test.ts` checks the order. Hand-written migrations also need a snapshot: generate with drizzle-kit, then rewrite its SQL to be safe to run twice.
@@ -100,6 +101,22 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-11
+- **Voice logging: live mic, auto-log after a pause, reply in the language actually spoken (Mayank's request):**
+  - **Mic bars** (`components/platform/VoiceMeter.tsx`) sit beside "Listening in…".
+    - Real levels come from a second mic stream only on desktop Chromium, once the recogniser has the mic and permission is already granted, within 1.2 s, and never again after an `audio-capture` error.
+    - Everywhere else the bars follow recognition events.
+    - Reduced motion: the bars stay still and no stream opens.
+  - **Auto-log** (`components/platform/autolog.ts`, a pure state machine with tests):
+    - After a final result, 2 s of silence (or `speechend` / Chrome's `onend`) starts a 2 s countdown, "Logging in 2…", with Keep talking and Edit above the fold.
+    - The Log button reads "Log now" during it.
+    - Typing, Edit, Stop, Cancel, errors and a hidden tab disarm it. It never starts when the plan blocks meals.
+    - Only one log per countdown.
+  - **Reply language:** the picked language is a hint. The model returns `reply_language` (new in `MealSchema`), and writes in the language and script the words actually use, so Hindi spoken with English picked gets a Hinglish reply.
+    - `settleReply` in `speech.ts` validates it; it's stored in `micros.lang`, and `langTag` sets `hi-Latn` and similar.
+    - A quiet "Sounds like Hindi? Listen in हिंदी" suggestion appears when English is picked and the words look like Hindi in Latin letters.
+    - Typed Latin words from a Hindi-language user now expect a Latin-letter reply.
+  - **Checked:** typecheck, lint, 185 tests (20 new), the build, and headless Chrome with a stand-in recogniser (bars move, auto-log fires once, Edit cancels, the suggestion shows, a Hinglish reply). A real mic and Android timing are only verifiable on devices.
+- **Push `9847375`:** the 5-slide landing page.
 - **Landing page in 5 slides, alternating black and white (Mayank's request):**
   - **Slides:**
     1. Hero, black.

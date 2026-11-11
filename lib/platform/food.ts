@@ -8,7 +8,7 @@ import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
 import { MICROS, emptyMicros, targetsFor, type MicroKey, type Micros } from "@/lib/domain/nutrition";
-import { mealWords, type SpokenId } from "@/lib/domain/speech";
+import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
 import { localDate, personaFor } from "./profile";
 
 export type MealKind = "breakfast" | "lunch" | "dinner" | "snack";
@@ -62,6 +62,9 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
   const { data, model }: { data: Meal; model: string } =
     mode === "mock" ? await mockMeal(words) : await estimateMeal({ image: input.image, words, voice: input.source === "voice", context });
   if (!data.is_food || data.items.length === 0) return { notFood: true };
+  // The model follows the words actually used; its call is checked against them.
+  const reply = settleReply(data.reply_language, words);
+  console.info(`[food] reply ${reply.id} (expected ${words.reply.id}, model said ${data.reply_language ?? "nothing"})`);
 
   const sum = (k: "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fibre_g") => data.items.reduce((t, i) => t + (i[k] || 0), 0);
   const row = {
@@ -80,7 +83,8 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     carbsG: sum("carbs_g"),
     fatG: sum("fat_g"),
     fibreG: sum("fibre_g"),
-    micros: { ...data.micros, tip: data.tip },
+    // lang: the reply language, kept with the tip (no column needed).
+    micros: { ...data.micros, tip: data.tip, lang: reply.id },
     confidence: data.confidence,
     model,
   };

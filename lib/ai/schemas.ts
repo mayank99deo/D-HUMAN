@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EXTRACT_KEYS } from "@/lib/domain/markers";
+import { SPOKEN_IDS } from "@/lib/domain/speech";
 
 // Output shapes Claude must return. Structured-output shapes (extract, read,
 // meal, day, wrap) have every field required, nullable where it may be absent:
@@ -82,6 +83,8 @@ const ItemSchema = z.object({
 
 export const MealSchema = z.object({
   is_food: z.boolean(),
+  // Before the title, so the language is settled before any words are written.
+  reply_language: z.enum(SPOKEN_IDS).describe("The language you write the title and tip in"),
   title: z.string(),
   meal_guess: z.enum(["breakfast", "lunch", "dinner", "snack"]).nullable(),
   items: z.array(ItemSchema),

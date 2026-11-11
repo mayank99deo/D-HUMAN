@@ -6,9 +6,12 @@ import { allowAppImports } from "./support/app.ts";
 import {
   SPOKEN,
   SPOKEN_IDS,
+  langTag,
   mealWords,
   replyLanguage,
   scriptLanguage,
+  settleReply,
+  soundsLikeHindi,
   spokenById,
   spokenForAppLanguage,
   translateSource,
@@ -64,11 +67,12 @@ describe("reply language", () => {
   it("keeps Hinglish people in Hinglish when they type Devanagari", () => {
     assert.equal(replyLanguage("दो रोटी", { appLanguage: "hinglish" }), "hinglish");
   });
-  it("keeps the app language for Latin script and for no words, as before", () => {
+  it("expects a Latin-letter reply for Latin letters, and the app language for no words", () => {
     assert.equal(replyLanguage("2 rotis and dal", { appLanguage: "en" }), "en");
     assert.equal(replyLanguage("do roti aur dal", { appLanguage: "hinglish" }), "hinglish");
-    assert.equal(replyLanguage("do roti aur dal", { appLanguage: "hi" }), "hi");
+    assert.equal(replyLanguage("do roti aur dal", { appLanguage: "hi" }), "hinglish");
     assert.equal(replyLanguage("", { appLanguage: "hi" }), "hi");
+    assert.equal(replyLanguage("2 🍌", { appLanguage: "hi" }), "hi");
   });
   it("falls back to English when nothing can be judged", () => {
     assert.equal(replyLanguage("2 🍌"), "en");
@@ -114,21 +118,79 @@ describe("what the server makes of the words", () => {
   });
 });
 
+describe("Hindi in Latin letters", () => {
+  it("spots Hindi heard or typed in Latin letters", () => {
+    assert.ok(soundsLikeHindi("do roti aur dal khayi"));
+    assert.ok(soundsLikeHindi("ek glass doodh piya"));
+    assert.ok(soundsLikeHindi("Maine subah poha khaya aur chai pi"));
+    assert.ok(soundsLikeHindi("chicken ke saath rice"));
+  });
+  it("leaves English the way Indians speak it alone", () => {
+    assert.equal(soundsLikeHindi("2 rotis and dal"), false);
+    assert.equal(soundsLikeHindi("I had rajma chawal and a katori of curd"), false);
+    assert.equal(soundsLikeHindi("chai and two biscuits"), false);
+    assert.equal(soundsLikeHindi("Paneer tikka, dal makhani, 2 naan"), false);
+    assert.equal(soundsLikeHindi(""), false);
+  });
+  it("only looks at Latin letters", () => {
+    assert.equal(soundsLikeHindi("दो रोटी और दाल"), false);
+  });
+});
+
+describe("the language a reply was written in", () => {
+  const latin = mealWords({ text: "do roti aur dal khayi", spoken: "en" });
+  const tamil = mealWords({ text: "இரண்டு இட்லி", spoken: "ta" });
+  it("takes the model's word when it fits the words", () => {
+    assert.equal(settleReply("hinglish", latin).id, "hinglish");
+    assert.equal(settleReply("en", latin).id, "en");
+    assert.equal(settleReply("ta", tamil).id, "ta");
+    assert.equal(settleReply("mr", mealWords({ text: "दोन पोळ्या", spoken: "hi" })).id, "mr");
+  });
+  it("falls back to the expected language when it doesn't", () => {
+    assert.equal(settleReply("klingon", latin).id, "en");
+    assert.equal(settleReply(undefined, latin).id, "en");
+    assert.equal(settleReply(42, latin).id, "en");
+    assert.equal(settleReply("en", tamil).id, "ta", "Tamil words get a reply in Tamil script");
+    assert.equal(settleReply("bn", tamil).id, "ta");
+  });
+  it("tags the reply for screen readers and fonts", () => {
+    assert.equal(langTag("en", "Dal and rice"), "en");
+    assert.equal(langTag("hinglish", "Do roti aur dal"), "hi-Latn");
+    assert.equal(langTag("hi", "दो रोटी"), "hi");
+    assert.equal(langTag("ta", "Rendu idli"), "ta-Latn");
+    assert.equal(langTag("pa", "ਦੋ ਰੋਟੀਆਂ"), "pa");
+    assert.equal(langTag("xx", "anything"), undefined);
+  });
+});
+
 describe("what Claude is asked", () => {
   const context = { language: "en", diet: "veg", focus: [] };
-  it("sends the translation with their words and asks for the reply in their language", () => {
+  it("sends the translation with their words and asks for the reply in the language actually used", () => {
     const words = mealWords({ text: "Two idlis with sambar", original: "இரண்டு இட்லி சாம்பார்", spoken: "ta" });
     const prompt = mealPrompt({ words, voice: true, context });
     assert.match(prompt, /In my words, in Tamil \(spoken, so speech recognition may have misheard a word\): "இரண்டு இட்லி சாம்பார்"/);
     assert.match(prompt, /My browser translated that into English: "Two idlis with sambar"/);
-    assert.match(prompt, /Write the title and the tip in Tamil\./);
+    assert.match(prompt, /They chose to speak Tamil\. Write the title and the tip in the language their words are actually in: Tamil if they're in Tamil; if they're clearly in another language, that one; if unsure, Tamil\./);
+    assert.match(prompt, /Judge this from their own words, not the browser's translation/);
+    assert.match(prompt, /words in Latin letters get a reply in Latin letters/);
+    assert.match(prompt, /Set reply_language to the language you write in: "hinglish" for Hindi in Latin letters/);
     assert.match(prompt, /everyday Tamil, in Tamil script/);
+  });
+  it("treats the picked language as a hint when English is picked and Hindi is spoken", () => {
+    const prompt = mealPrompt({ words: mealWords({ text: "do roti aur dal khayi", spoken: "en" }), voice: true, context });
+    assert.match(prompt, /They chose to speak English\. Write the title and the tip in the language their words are actually in/);
+    assert.match(prompt, /like Hinglish/);
   });
   it("sends typed words as they are", () => {
     const prompt = mealPrompt({ words: mealWords({ text: "2 rotis and dal", appLanguage: "en" }), voice: false, context });
     assert.match(prompt, /In my words: "2 rotis and dal"/);
     assert.doesNotMatch(prompt, /translated|speech recognition/);
-    assert.match(prompt, /Write the title and the tip in English\./);
+    assert.match(prompt, /Their words look like English\./);
+  });
+  it("asks for the app language when there are no words", () => {
+    const prompt = mealPrompt({ image: { mime: "image/jpeg", bytes: Buffer.from("") }, words: mealWords({ appLanguage: "hi" }), voice: false, context });
+    assert.match(prompt, /Write the title and the tip in Hindi\./);
+    assert.match(prompt, /Set reply_language to "hi"\./);
   });
   it("keeps the app languages' rules as they were for reads, wraps and stacks", () => {
     assert.match(languageRule("hi"), /^Write every sentence meant for the person in simple, everyday Hindi \(Devanagari\)\./);

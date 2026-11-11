@@ -32,6 +32,21 @@ My browser translated that into English: "${words.english}"
 Browser translations can get Indian food names wrong; where the two differ, go by my words.`;
 }
 
+// Which language to answer in. The expected one (picked for speaking, or read from
+// the script) is only a hint: people pick English and speak Hindi, which the browser
+// then writes in Latin letters. The reply follows the words actually used, in a
+// script the person used, and says which language it is (reply_language).
+function languageLine(words: MealWords, voice: boolean): string {
+  const hint = words.reply;
+  if (!words.said) return `Write the title and the tip in ${hint.name}. ${languageRule(hint.id)} Set reply_language to "${hint.id}".`;
+  const source = voice ? `They chose to speak ${hint.name}.` : `Their words look like ${hint.name}.`;
+  const judge = words.english ? " Judge this from their own words, not the browser's translation." : "";
+  return `${source} Write the title and the tip in the language their words are actually in: ${hint.name} if they're in ${hint.name}; if they're clearly in another language, that one; if unsure, ${hint.name}.${judge}
+Match their script: words in an Indian script get a reply in that script; words in Latin letters get a reply in Latin letters (English, or Hindi or another Indian language written in Latin letters the way people text it, like Hinglish).
+Keep it simple and short. Keep marker names, units and brand names in English, and numbers as digits. Set reply_language to the language you write in: "hinglish" for Hindi in Latin letters, "en" for English, otherwise that language's code.
+When you write in ${hint.name}: ${languageRule(hint.id)}`;
+}
+
 type MealRequest = { image?: { mime: string; bytes: Buffer }; words: MealWords; voice: boolean; context: FoodContext };
 
 /** The text part of the meal request. Exported for tests. */
@@ -39,7 +54,8 @@ export function mealPrompt(input: MealRequest): string {
   return `${input.image ? "Here's a photo of what I ate." : ""}${wordsLine(input.words, input.voice)}
 
 ${contextLine(input.context)}
-Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. Write the title and the tip in ${input.words.reply.name}. ${languageRule(input.words.reply.id)} Keep food names as Indians say them (e.g. "rajma chawal").`;
+Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. Keep food names as Indians say them (e.g. "rajma chawal").
+${languageLine(input.words, input.voice)}`;
 }
 
 export async function estimateMeal(input: MealRequest): Promise<{ data: Meal; model: string }> {

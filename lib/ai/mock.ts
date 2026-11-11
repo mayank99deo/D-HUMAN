@@ -1,6 +1,6 @@
 import "server-only";
 import { markerDef } from "@/lib/domain/markers";
-import type { MealWords, SpokenId } from "@/lib/domain/speech";
+import { scriptLanguage, soundsLikeHindi, spokenById, type MealWords, type SpokenId } from "@/lib/domain/speech";
 import type { Day, Extracted, Meal, Read, StackPlan, WrapStory } from "./schemas";
 import type { ReadInput } from "./report";
 import type { FoundEvent } from "./events";
@@ -136,23 +136,35 @@ const YOUR_MEAL: Record<SpokenId, string> = {
   ur: "آپ کا کھانا",
 };
 
+// What the live model is asked to do with the language (lib/ai/food.ts), roughly:
+// follow the words actually used, in a script the person used.
+function mockReplyLanguage(words: Pick<MealWords, "said" | "reply">): SpokenId {
+  if (!words.said) return words.reply.id;
+  const script = scriptLanguage(words.said);
+  if (script) return words.reply.script === spokenById(script).script ? words.reply.id : script;
+  if (soundsLikeHindi(words.said)) return "hinglish";
+  return words.reply.script === "Latin" ? words.reply.id : "en";
+}
+
 export async function mockMeal(words: Pick<MealWords, "said" | "english" | "reply">): Promise<{ data: Meal; model: string }> {
   await wait(1200);
   const heard = `${words.said} ${words.english ?? ""}`;
   const hit = MEALS.find(([re]) => re.test(heard));
   const [, matched, kcal, protein_g, carbs_g, fat_g, fibre_g] = hit ?? NO_MATCH;
   const food = hit ? matched : words.said.slice(0, 40) || "Your meal";
-  const local = words.reply.id === "en" ? null : YOUR_MEAL[words.reply.id];
+  const reply = spokenById(mockReplyLanguage(words));
+  const local = reply.id === "en" ? null : YOUR_MEAL[reply.id];
   const title = local ? (hit ? `${local}: ${food}` : local) : food;
   return {
     data: {
       is_food: true,
+      reply_language: reply.id,
       title,
       meal_guess: null,
       items: [{ name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g }],
       micros: { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2, folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 },
       confidence: "low",
-      tip: `Demo estimate. The live version reads your photo or words properly${local ? ` and answers in ${words.reply.name}` : ""}.`,
+      tip: `Demo estimate. The live version reads your photo or words properly${local ? ` and answers in ${reply.name}` : ""}.`,
     },
     model: MOCK_MODEL,
   };

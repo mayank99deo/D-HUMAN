@@ -66,16 +66,41 @@ const SCRIPTS: [RegExp, SpokenId][] = [
 export const scriptLanguage = (text: string): SpokenId | undefined => SCRIPTS.find(([re]) => re.test(text))?.[1];
 
 /**
- * Which language a reply should be in. Spoken meals answer in the language chosen
- * for speaking. Typed meals answer in the language of their script. Latin script,
- * or no words at all (a photo alone), keeps the person's app language, as before:
- * English unless they chose Hindi or Hinglish.
+ * The language a reply is expected in: the model's starting hint, and the fallback
+ * when its own call can't be used (see settleReply). Spoken meals: the language
+ * chosen for speaking. Typed meals: the language of their script. Latin letters get
+ * a Latin-letter reply: Hinglish for people whose app is in Hindi or Hinglish, else
+ * English. No words at all (a photo alone) keeps the app language.
  */
 export function replyLanguage(text: string, opts: { spoken?: SpokenId | null; appLanguage?: string | null } = {}): SpokenId {
   if (opts.spoken && spokenOf(opts.spoken)) return opts.spoken;
   const script = scriptLanguage(text);
   if (script === "hi" && opts.appLanguage === "hinglish") return "hinglish";
-  return script ?? spokenForAppLanguage(opts.appLanguage);
+  if (script) return script;
+  const app = spokenForAppLanguage(opts.appLanguage);
+  if (!/\p{L}/u.test(text)) return app;
+  return app === "en" ? "en" : "hinglish";
+}
+
+// Hindi words that rarely turn up in English sentences, for spotting Hindi heard or
+// typed in Latin letters ("do roti aur dal khayi"). Food names are left out on
+// purpose: "2 rotis and dal" is English the way Indians speak it.
+const HINDI_IN_LATIN = new Set(
+  ("aur maine mene mainne humne hamne khaya khayi khaye khaaya khaai khana khane piya piyi piye liya liye " +
+    "thoda thodi thode saath sath ke ka ki hai hain tha thi aaj subah dopahar shaam sham raat nashta nashte " +
+    "kuch bhi wala wali wale ek teen chaar paanch aadha adha aadhi mein se gilaas doodh ande anda bas sirf").split(" "),
+);
+
+/**
+ * True when Latin-letter words look like Hindi: at least two of the words above,
+ * making up at least a quarter of the words. Used to suggest listening in Hindi
+ * when English is picked; it never switches anything by itself.
+ */
+export function soundsLikeHindi(text: string): boolean {
+  if (scriptLanguage(text)) return false;
+  const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  const hits = words.filter((w) => HINDI_IN_LATIN.has(w)).length;
+  return hits >= 2 && hits / words.length >= 0.25;
 }
 
 /**
@@ -97,7 +122,7 @@ export type MealWords = {
   english: string | null;
   /** The language they said it in (for the prompt when there's a translation). */
   saidIn: Spoken;
-  /** The language the meal's title and tip come back in. */
+  /** The language the title and tip are expected in: the model's hint, and the fallback. */
   reply: Spoken;
 };
 
@@ -113,4 +138,32 @@ export function mealWords(input: { text?: string; original?: string; spoken?: Sp
   const reply = spokenById(replyLanguage(said, { spoken: input.spoken, appLanguage: input.appLanguage }));
   const saidIn = spokenOf(input.spoken) ?? spokenOf(scriptLanguage(said)) ?? reply;
   return { said, english, saidIn, reply };
+}
+
+/**
+ * The language a meal's reply was written in. The model says which (it follows the
+ * words actually used, with the expected language as a hint); its call stands when
+ * it's one of ours and, for words in an Indian script, uses that same script, so
+ * people get a reply in a script they wrote or heard. Otherwise the expected one.
+ */
+export function settleReply(claimed: unknown, words: MealWords): Spoken {
+  const said = typeof claimed === "string" ? spokenOf(claimed) : undefined;
+  if (!said) return words.reply;
+  const script = scriptLanguage(words.said);
+  if (script && spokenById(script).script !== said.script) return words.reply;
+  return said;
+}
+
+/**
+ * The HTML lang tag for text written in a reply language, so screen readers and
+ * fonts treat it right. Hinglish, and any Indian language written in Latin letters,
+ * gets the -Latn script subtag.
+ */
+export function langTag(id: string | null | undefined, text: string): string | undefined {
+  const s = spokenOf(id);
+  if (!s) return undefined;
+  if (s.id === "en") return "en";
+  if (s.id === "hinglish") return "hi-Latn";
+  const base = s.speech.split("-")[0];
+  return scriptLanguage(text) ? base : `${base}-Latn`;
 }

@@ -3,7 +3,21 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { PlanView } from "@/lib/domain/plan";
-import { MEAL_ENGLISH_MAX, MEAL_WORDS_MAX, SPOKEN, spokenById, spokenForAppLanguage, spokenOf, translateSource, type Spoken, type SpokenId } from "@/lib/domain/speech";
+import {
+  MEAL_ENGLISH_MAX,
+  MEAL_WORDS_MAX,
+  SPOKEN,
+  langTag,
+  scriptLanguage,
+  soundsLikeHindi,
+  spokenById,
+  spokenForAppLanguage,
+  spokenOf,
+  translateSource,
+  type Spoken,
+  type SpokenId,
+} from "@/lib/domain/speech";
+import { COUNTDOWN_MS, IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { MealOrbit, type MealRun } from "./MealOrbit";
 import { OFFLINE, send } from "./net";
 import { Paywall, PlanLine } from "./Paywall";
@@ -11,9 +25,14 @@ import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
 import { shrinkImage } from "./shrink";
 import { toEnglish } from "./translate";
+import { useReducedMotion, VoiceActivity, VoiceMeter } from "./VoiceMeter";
 
 type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number };
-type Log = { id: string; meal: string; title: string; source: string; kcal: number; proteinG: number; confidence: string | null; tip: string | null; items: string[]; demo: boolean };
+type Log = {
+  id: string; meal: string; title: string; source: string; kcal: number; proteinG: number; confidence: string | null; tip: string | null; items: string[]; demo: boolean;
+  /** The language the title and tip are written in, as an HTML lang tag. */
+  lang?: string;
+};
 type Mode = "photo" | "voice" | "text";
 type Meal = "" | "breakfast" | "lunch" | "dinner" | "snack";
 
@@ -45,9 +64,16 @@ type Recognition = {
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
+  onaudiostart: (() => void) | null;
+  onsoundstart: (() => void) | null;
+  onspeechstart: (() => void) | null;
+  onspeechend: (() => void) | null;
 };
 
 const noop = () => () => {};
+// Handlers and timers read the time through this. They never run during render, but
+// the React compiler's purity check can't always tell, and flags Date.now() in them.
+const clock = () => Date.now();
 const hasSpeech = () => {
   const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
   return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
@@ -185,6 +211,22 @@ export function FuelLogger({
   const spoken = spokenById(spokenId);
   const langRow = useRef<HTMLDivElement>(null);
   const camera = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const reduced = useReducedMotion();
+  // What the recogniser hears, for the mic's bars (VoiceMeter.tsx).
+  const [activity] = useState(() => new VoiceActivity());
+  // Logging a spoken meal by itself after a pause (autolog.ts). The ref is the truth
+  // for callbacks; the state mirrors it for the screen.
+  const auto = useRef<AutoLog>(IDLE);
+  const [autoView, setAutoView] = useState<AutoLog>(IDLE);
+  const counting = autoView.kind === "counting";
+  const suggestHindi = mode === "voice" && voiceOk && spoken.id === "en" && soundsLikeHindi(text);
+  // Recogniser callbacks and the clock outlive the render that made them; they go
+  // through this ref so they always see the current screen.
+  const driveRef = useRef<(e: AutoEvent) => void>(() => {});
+  // One meal log at a time, however it was started.
+  const inFlight = useRef(false);
+  const drain = useRef<HTMLSpanElement>(null);
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
   const [editingTypical, setEditingTypical] = useState(!typical);
   const [typicalBusy, setTypicalBusy] = useState(false);
@@ -203,36 +245,61 @@ export function FuelLogger({
     r.interimResults = true;
     r.continuous = true;
     const before = text.trim() ? `${text.trim()} ` : "";
+    const mine = () => rec.current === r;
+    activity.reset();
+    r.onaudiostart = () => mine() && activity.note("audiostart");
+    r.onsoundstart = r.onspeechstart = () => mine() && activity.note("speechstart");
+    r.onspeechend = () => {
+      if (!mine()) return;
+      activity.note("speechend");
+      driveRef.current({ type: "speechend", at: clock() });
+    };
     r.onresult = (e) => {
-      if (rec.current !== r) return;
+      if (!mine()) return;
       let s = "";
-      for (let i = 0; i < e.results.length; i++) s += e.results[i][0].transcript;
+      let final = false;
+      for (let i = 0; i < e.results.length; i++) {
+        s += e.results[i][0].transcript;
+        final ||= e.results[i].isFinal;
+      }
       // The box's maxLength doesn't cap what code puts in it.
-      setText((before + s).slice(0, MEAL_WORDS_MAX));
+      const words = (before + s).slice(0, MEAL_WORDS_MAX);
+      setText(words);
+      activity.note("result");
+      driveRef.current({ type: "result", at: clock(), final, spoke: s.trim() !== "", words });
     };
     r.onend = () => {
-      if (rec.current === r) setListening(false);
+      if (!mine()) return;
+      setListening(false);
+      activity.note("end");
+      driveRef.current({ type: "ended", at: clock() });
     };
     r.onerror = (e) => {
-      if (rec.current !== r) return;
+      if (!mine()) return;
       setListening(false);
       setHeardProblem(listenError(e.error, lang));
+      if (e.error === "audio-capture") activity.captureFailed();
+      // Don't log half a sentence because the browser stumbled.
+      driveRef.current({ type: "hold" });
     };
     rec.current = r;
     setHeardProblem(null);
     try {
       r.start();
       setListening(true);
+      drive({ type: "start", at: clock(), words: text });
     } catch {
       rec.current = null;
       setListening(false);
     }
   }
 
-  // Stop listening but keep the last words, which can arrive just after.
+  // Stop listening but keep the last words, which can arrive just after. A stop by
+  // hand means they'll log it themselves.
   function stop() {
     rec.current?.stop();
     setListening(false);
+    drive({ type: "hold" });
   }
 
   // Stop listening and drop anything still on its way (on log, cancel or leaving voice).
@@ -241,15 +308,75 @@ export function FuelLogger({
     rec.current = null;
     setListening(false);
     setHeardProblem(null);
+    drive({ type: "hold" });
   }
+
+  function drive(event: AutoEvent) {
+    const before = auto.current;
+    const next = stepAutoLog(before, event, { allowed: mode === "voice" && voiceOk && !plan.mealBlock && !aiOff });
+    if (next === before) return;
+    auto.current = next;
+    setAutoView(next);
+    // The countdown ran out: log it, as if they'd tapped the button.
+    if (next.kind === "logging" && event.type === "tick") void submit();
+  }
+
+  useEffect(() => {
+    driveRef.current = drive;
+  });
+
+  // A clock for the pause and the countdown, only while one could be running.
+  const ticking = autoView.kind === "listening" || counting;
+  useEffect(() => {
+    if (!ticking) return;
+    const id = setInterval(() => driveRef.current({ type: "tick", at: clock() }), 100);
+    return () => clearInterval(id);
+  }, [ticking]);
+
+  // The shrinking bar on the Log button while counting down.
+  const countdownEnds = autoView.kind === "counting" ? autoView.endsAt : null;
+  useEffect(() => {
+    if (countdownEnds == null || reduced) return;
+    const bar = drain.current?.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], {
+      duration: Math.max(0, countdownEnds - clock()),
+      easing: "linear",
+      fill: "forwards",
+    });
+    return () => bar?.cancel();
+  }, [countdownEnds, reduced]);
+
+  // Leaving the page stops listening (keeping the words) and never logs behind their back.
+  useEffect(() => {
+    const onHide = () => {
+      if (!document.hidden) return;
+      rec.current?.stop();
+      setListening(false);
+      driveRef.current({ type: "hold" });
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, []);
 
   useEffect(() => () => rec.current?.abort(), []);
 
-  function pickSpoken(next: Spoken) {
+  // Picking a language listens in it straight away when already listening, or when
+  // asked to (the "Sounds like Hindi?" suggestion). Otherwise it waits for Talk again.
+  function pickSpoken(next: Spoken, andListen = false) {
     setPicked(next.id);
     rememberSpoken(next.id);
     setHeardProblem(null);
-    if (listening) listen(next);
+    if (listening || andListen) listen(next);
+    else drive({ type: "hold" });
+  }
+
+  // During the countdown: carry on speaking, or stop and fix the words by hand.
+  function keepTalking() {
+    if (listening) drive({ type: "start", at: clock(), words: text });
+    else listen(spoken);
+  }
+  function editWords() {
+    stop();
+    box.current?.focus();
   }
 
   // Show the picked language when the row opens, even if it's off to the side on a phone.
@@ -273,12 +400,24 @@ export function FuelLogger({
   }
 
   async function submit() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    drive({ type: "submit" });
+    try {
+      await logNow();
+    } finally {
+      inFlight.current = false;
+      drive({ type: "done" });
+    }
+  }
+
+  async function logNow() {
     quiet();
     setBusy(true);
     setError(null);
     const words = text.trim();
     const speaking = mode === "voice" && voiceOk ? spokenId : null;
-    const startedAt = Date.now();
+    const startedAt = clock();
     setRun({ kind: "meal", startedAt, state: "running" });
     // Into English on this device when the browser can; if not, their words go as they are.
     // The server answers in the language they spoke either way.
@@ -310,6 +449,7 @@ export function FuelLogger({
     const logged: Log = {
       id: l.id, meal: l.meal, title: l.title, source: l.source, kcal: l.kcal, proteinG: l.proteinG, confidence: l.confidence,
       tip: l.micros?.tip ?? null, items: l.items.map((i: { name: string; portion: string }) => `${i.name}, ${i.portion}`), demo: l.model === "mock",
+      lang: langTag(l.micros?.lang, l.title),
     };
     setLast(logged);
     setRun((r) => (r ? { ...r, state: "done", result: { title: logged.title, kcal: logged.kcal, proteinG: logged.proteinG, tip: logged.tip, demo: logged.demo } } : r));
@@ -331,7 +471,7 @@ export function FuelLogger({
 
   async function saveTypical() {
     setTypicalBusy(true);
-    setRun({ kind: "typical", startedAt: Date.now(), state: "running" });
+    setRun({ kind: "typical", startedAt: clock(), state: "running" });
     const res = await fetch("/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description: typicalText }) }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setTypicalBusy(false);
@@ -483,12 +623,22 @@ export function FuelLogger({
                         {heardProblem}
                       </p>
                     )}
+                    {/* A quiet offer, never a switch: with English picked, Hindi comes out in Latin letters. */}
+                    {suggestHindi && (
+                      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-graphite">
+                        Sounds like Hindi?
+                        <button type="button" className="link-quiet min-h-11 text-paper" onClick={() => pickSpoken(spokenById("hi"), true)}>
+                          Listen in <span lang="hi">हिंदी</span>
+                        </button>
+                      </p>
+                    )}
                     {/* True for Chrome and most phones: speech recognition runs on the browser maker's servers. */}
                     <p className="mt-2 text-xs text-graphite">Your browser turns your voice into words; some browsers use their maker&apos;s servers for this. We only receive the words.</p>
                   </fieldset>
                 )}
                 <label className="block">
-                  <span className="mb-2 block text-sm text-graphite">
+                  <span className="mb-2 flex items-center gap-2 text-sm text-graphite">
+                    {mode === "voice" && listening && <VoiceMeter active activity={activity} />}
                     {mode === "photo"
                       ? "Anything the photo won't show? (optional)"
                       : mode === "voice"
@@ -498,8 +648,14 @@ export function FuelLogger({
                         : "What did you eat?"}
                   </span>
                   <textarea
+                    ref={box}
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={(e) => {
+                      // Their typing wins: stop listening, and don't log by itself.
+                      if (listening) quiet();
+                      else drive({ type: "hold" });
+                      setText(e.target.value);
+                    }}
                     maxLength={MEAL_WORDS_MAX}
                     dir="auto"
                     lang={mode === "voice" && voiceOk ? (spoken.translateFrom ?? undefined) : undefined}
@@ -508,10 +664,36 @@ export function FuelLogger({
                   />
                 </label>
                 {mode === "voice" && voiceOk && (
-                  <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
-                    {listening ? "Stop listening" : "Talk again"}
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    {autoView.kind === "counting" ? (
+                      // Here, not only on the Log button: on a phone that button is below the fold.
+                      <div className="w-full">
+                        <p className="text-sm font-semibold">Logging in {autoView.left}…</p>
+                        {/* With reduced motion the countdown is the words alone. */}
+                        {!reduced && (
+                          <span aria-hidden className="mt-2 block h-0.5 w-full bg-line">
+                            <span ref={drain} className="block h-full origin-left bg-paper" />
+                          </span>
+                        )}
+                        <div className="mt-3 flex gap-3">
+                          <button type="button" onClick={keepTalking} className="button-ghost h-11">
+                            Keep talking
+                          </button>
+                          <button type="button" onClick={editWords} className="button-ghost h-11">
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
+                        {listening ? "Stop listening" : "Talk again"}
+                      </button>
+                    )}
+                  </div>
                 )}
+                <p role="status" className="sr-only">
+                  {counting ? `Logging this meal in ${COUNTDOWN_MS / 1000} seconds. Choose Keep talking or Edit to stop it.` : ""}
+                </p>
                 <fieldset className="flex flex-wrap gap-2">
                   <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
                   {MEALS.map((m) => (
@@ -522,8 +704,13 @@ export function FuelLogger({
                   ))}
                 </fieldset>
                 <div className="flex gap-3">
-                  <button type="button" onClick={submit} disabled={busy || (!text.trim() && !(mode === "photo" && photo))} className="button-primary h-13 flex-1 sm:flex-none sm:px-10">
-                    {busy ? "Reading your meal…" : "Log this meal"}
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={busy || (!text.trim() && !(mode === "photo" && photo))}
+                    className="button-primary h-13 flex-1 sm:flex-none sm:px-10"
+                  >
+                    {busy ? "Reading your meal…" : counting ? "Log now" : "Log this meal"}
                   </button>
                   <button
                     type="button"
@@ -551,13 +738,19 @@ export function FuelLogger({
         {last && (
           <article className="fact-in mt-6 border border-paper p-5" aria-live="polite">
             <p className="text-sm text-graphite">Logged{last.demo ? " (demo estimate)" : ""}</p>
-            <h3 className="mt-1 text-xl font-bold">{last.title}</h3>
+            <h3 lang={last.lang} className="mt-1 text-xl font-bold">
+              {last.title}
+            </h3>
             <p className="mt-2">
               <span className="display-num text-3xl">{Math.round(last.kcal)}</span> <span className="text-graphite">kcal</span>
               <span className="ml-5 display-num text-3xl">{Math.round(last.proteinG)}</span> <span className="text-graphite">g protein</span>
             </p>
             <p className="mt-2 text-sm text-graphite">{last.items.join("; ")}</p>
-            {last.tip && <p className="mt-3">{last.tip}</p>}
+            {last.tip && (
+              <p lang={last.lang} className="mt-3">
+                {last.tip}
+              </p>
+            )}
           </article>
         )}
       </section>
@@ -578,7 +771,10 @@ export function FuelLogger({
                     {l.meal[0].toUpperCase() + l.meal.slice(1)}, by {l.source === "photo" ? "photo" : l.source === "voice" ? "voice" : "text"}
                     {l.confidence === "low" ? ", rough estimate" : ""}
                   </p>
-                  <p className="font-semibold">{l.title}</p>
+                  {/* Titles in an Indian script get their language; the rest inherit the page's. */}
+                  <p lang={langTag(scriptLanguage(l.title), l.title)} className="font-semibold">
+                    {l.title}
+                  </p>
                   <p className="truncate text-sm text-graphite">{l.items.join("; ")}</p>
                 </div>
                 <div className="text-right">
