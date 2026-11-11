@@ -2,7 +2,7 @@ import { SPOKEN, type SpokenId } from "@/lib/domain/speech";
 import { LanguageTabs } from "./LanguageTabs";
 import { nativeStyle } from "./native";
 
-// Slide 2: Fuel, the calorie and protein tracker. One meal, said in five of the
+// Slide 2, on white: Fuel, the calorie and protein tracker. One meal, said in five of the
 // languages people can log in (lib/domain/speech.ts), comes back with the same
 // numbers every time. The labels around it stay English, as the app's do.
 // Marker names stay in English inside every language, as the app's language rule
@@ -89,11 +89,11 @@ export function Fuel() {
     <section
       id="fuel"
       aria-labelledby="fuel-title"
-      className="flex min-h-[calc(100svh-5rem)] snap-start flex-col justify-center border-t border-paper/15 py-16 lg:py-12"
+      className="paper flex min-h-[calc(100svh-5rem)] snap-start flex-col justify-center py-16 lg:py-12"
     >
       <div className="mx-auto grid w-full max-w-[1280px] gap-10 px-5 sm:px-8 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-10">
         <div className="lg:col-span-5">
-          <p className="text-sm font-semibold text-graphite">Calorie tracking</p>
+          <p className="text-sm font-semibold text-smoke">Calorie tracking</p>
           <h2 id="fuel-title" className="semiwide mt-3 max-w-[12ch] text-title font-bold">
             Snap it. Say it. Type it.
           </h2>
@@ -104,27 +104,27 @@ export function Fuel() {
         </div>
 
         <figure className="lg:col-span-6 lg:col-start-7 lg:row-span-2 lg:self-center">
-          <LanguageTabs tabs={TABS} idBase="meal-lang" label="Language of the example meal">
-            <div className="border border-line-strong bg-lift p-5 sm:p-6">
-              <p className="text-sm text-graphite">What you said</p>
+          <LanguageTabs tabs={TABS} idBase="meal-lang" label="Language of the example meal" tone="paper">
+            <div className="border border-ink bg-paper p-5 sm:p-6">
+              <p className="text-sm text-smoke">What you said</p>
               <Rotating field="said" className="mt-1 text-lg leading-snug" />
-              <div className="mt-5 border-t border-line pt-5">
-                <p className="text-sm text-graphite">Logged</p>
+              <div className="mt-5 border-t border-rule pt-5">
+                <p className="text-sm text-smoke">Logged</p>
                 <Rotating field="title" className="mt-1 text-xl font-bold leading-snug" />
                 {/* The same numbers in every language: it's the same meal. */}
                 <p className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1">
                   <span className="whitespace-nowrap">
-                    <span className="display-num text-4xl">{MEAL.kcal}</span> <span className="text-graphite">kcal</span>
+                    <span className="display-num text-4xl">{MEAL.kcal}</span> <span className="text-smoke">kcal</span>
                   </span>
                   <span className="whitespace-nowrap">
-                    <span className="display-num text-4xl">{MEAL.protein}</span> <span className="text-graphite">g protein</span>
+                    <span className="display-num text-4xl">{MEAL.protein}</span> <span className="text-smoke">g protein</span>
                   </span>
                 </p>
                 <Rotating field="tip" className="mt-4 leading-normal" />
               </div>
             </div>
           </LanguageTabs>
-          <figcaption className="mt-4 text-sm text-graphite">
+          <figcaption className="mt-4 text-sm text-smoke">
             <span className="block">
               Also{" "}
               {MORE.map((s, i) => (
@@ -142,9 +142,9 @@ export function Fuel() {
 
         <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-sm sm:gap-x-8 lg:col-span-5 lg:row-start-2 lg:self-start">
           {DETAILS.map((d) => (
-            <div key={d.title} className="border-t border-line pt-3">
+            <div key={d.title} className="border-t border-rule pt-3">
               <dt className="font-semibold">{d.title}</dt>
-              <dd className="mt-0.5 text-graphite">{d.body}</dd>
+              <dd className="mt-0.5 text-smoke">{d.body}</dd>
             </div>
           ))}
         </dl>

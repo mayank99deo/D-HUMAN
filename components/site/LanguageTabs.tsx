@@ -4,6 +4,12 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 
 export type LanguageTab = { id: string; label: string; lang?: string; style?: CSSProperties };
 
+// Colours for a black slide or a white one. Full strings, so Tailwind sees every class.
+const TONES = {
+  ink: { on: "text-paper", off: "text-graphite hover:text-paper", track: "bg-line", fill: "bg-paper" },
+  paper: { on: "text-ink", off: "text-smoke hover:text-ink", track: "bg-rule", fill: "bg-ink" },
+};
+
 // Tabs that cycle the example meal card through languages. The card itself is
 // server-rendered children: every language is in the HTML, stacked in one grid
 // cell (so the tallest sets the height and nothing shifts), and each layer shows
@@ -15,7 +21,20 @@ export type LanguageTab = { id: string; label: string; lang?: string; style?: CS
 // (animation-play-state), reduced motion never runs it (no animationend, no
 // rotation), and it only runs while the card is on screen and the tab visible.
 // A tap or arrow key picks a language and stops the rotation for good.
-export function LanguageTabs({ tabs, idBase, label, children }: { tabs: LanguageTab[]; idBase: string; label: string; children: ReactNode }) {
+export function LanguageTabs({
+  tabs,
+  idBase,
+  label,
+  tone = "ink",
+  children,
+}: {
+  tabs: LanguageTab[];
+  idBase: string;
+  label: string;
+  tone?: keyof typeof TONES;
+  children: ReactNode;
+}) {
+  const c = TONES[tone];
   const root = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(0);
@@ -72,18 +91,18 @@ export function LanguageTabs({ tabs, idBase, label, children }: { tabs: Language
               onClick={() => pick(i)}
               onKeyDown={(e) => onKeyDown(e, i)}
               className={`relative min-h-11 pt-3 text-sm font-semibold transition-colors active:opacity-60 ${
-                on ? "text-paper" : "text-graphite hover:text-paper"
+                on ? c.on : c.off
               }`}
             >
-              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 bg-line">
+              <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-0.5 ${c.track}`}>
                 {on &&
                   (running ? (
                     <span
                       onAnimationEnd={() => setActive((a) => (a + 1) % tabs.length)}
-                      className="absolute inset-y-0 left-0 w-0 animate-[wrap-fill_3500ms_linear_both] bg-paper group-focus-within/rot:[animation-play-state:paused] group-hover/rot:[animation-play-state:paused] motion-reduce:w-full motion-reduce:animate-none"
+                      className={`absolute inset-y-0 left-0 w-0 animate-[wrap-fill_3500ms_linear_both] ${c.fill} group-focus-within/rot:[animation-play-state:paused] group-hover/rot:[animation-play-state:paused] motion-reduce:w-full motion-reduce:animate-none`}
                     />
                   ) : (
-                    <span className="absolute inset-0 bg-paper" />
+                    <span className={`absolute inset-0 ${c.fill}`} />
                   ))}
               </span>
               <span lang={t.lang} style={t.style}>

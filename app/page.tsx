@@ -34,9 +34,11 @@ export default function Home() {
     );
   }
 
-  // Open mode, for the pilot: four slides. 1 the hero and Start free; 2 Fuel, calorie
-  // tracking in your language; 3 blood reports, with tests through D-Human coming soon;
-  // 4 Start free again, with the footer filling out the last screen.
+  // Open mode, for the pilot: five slides, alternating black and white.
+  // 1 black: the hero and Start free. 2 white: Fuel, calorie tracking in your language.
+  // 3 black: blood reports, the 76% figure and tests through D-Human coming soon.
+  // 4 white: the phone, test first and supplement second. 5 black: Start free again,
+  // with the footer filling out the last screen.
   return (
     <>
       <style href="landing-snap" precedence="default">
@@ -47,6 +49,7 @@ export default function Home() {
         <Hero />
         <Fuel />
         <Reports />
+        <Loop slide />
         <Closing className="flex snap-start flex-col justify-center py-20 lg:min-h-[calc(100svh-5rem-13rem)]" />
       </main>
       <Footer />

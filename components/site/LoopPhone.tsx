@@ -2,7 +2,7 @@
 
 import { useInView } from "motion/react";
 import Image from "next/image";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { isWaitlist } from "@/lib/site-mode";
 
 // Chapter starts in the phone clip (video/loop). Change them together with the composition.
@@ -32,7 +32,8 @@ const CHAPTERS = [
   },
   {
     title: "Retest",
-    body: "Key markers again at 3–4 months, to show what moved.",
+    // Open mode: the read picks the markers and the weeks (lib/ai/report.ts), so no fixed months here.
+    body: isWaitlist ? "Key markers again at 3–4 months, to show what moved." : "Key markers again when your read says, to show what moved.",
     start: 15.8,
     still: "retest",
     alt: "Your retest: vitamin D and evening cortisol back in range, hsCRP still raised. New results reset the stack.",
@@ -61,13 +62,55 @@ const readStill = () =>
   matchMedia(REDUCE).matches ||
   Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
 
-export function LoopPhone() {
+// Without `intro`, the layout waitlist mode has always had. With it (open mode's phone
+// slide), three columns on wide screens: the headline and the closing words, the phone,
+// then the steps beside it. The phone also shrinks on short screens, so the slide fits
+// about one screen.
+const LAYOUT = {
+  page: {
+    grid: "mt-14 grid gap-10 lg:mt-16 lg:grid-cols-12 lg:gap-8",
+    figure: "lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1",
+    phone: "mx-auto w-[min(17.5rem,76vw)] rounded-[2.75rem] border-[3px] border-[#2e2e2e] bg-ink p-2.5 sm:w-[19.5rem] lg:mr-0",
+    caption: "mx-auto mt-4 flex w-[min(17.5rem,76vw)] items-center justify-between gap-4 text-sm text-smoke sm:w-[19.5rem] lg:mr-0",
+    steps: "lg:col-span-6 lg:row-start-1",
+    list: "grid grid-cols-4 gap-3 lg:grid-cols-1 lg:gap-6",
+    button: "lg:pt-5",
+    number: "wide text-sm font-extrabold leading-none lg:text-4xl",
+    title: "block text-sm font-bold sm:text-base lg:text-2xl",
+    close: "lg:col-span-6 lg:row-start-2",
+    lead: "semiwide text-lead font-bold",
+    body: "mt-6 max-w-[42ch] text-smoke",
+  },
+  slide: {
+    grid: "grid gap-8 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-8",
+    figure: "lg:col-span-4 lg:col-start-5 lg:row-span-2 lg:row-start-1 lg:self-center",
+    phone:
+      "mx-auto w-[min(17.5rem,76vw)] rounded-[2.75rem] border-[3px] border-[#2e2e2e] bg-ink p-2.5 sm:w-[19.5rem] lg:w-full lg:max-w-[min(19.5rem,calc((100svh-13rem)/2.16))]",
+    caption:
+      "mx-auto mt-4 flex w-[min(17.5rem,76vw)] items-center justify-between gap-4 text-sm text-smoke sm:w-[19.5rem] lg:w-full lg:max-w-[min(19.5rem,calc((100svh-13rem)/2.16))]",
+    steps: "lg:col-span-4 lg:col-start-9 lg:row-span-2 lg:row-start-1 lg:self-center",
+    list: "grid grid-cols-4 gap-3 lg:grid-cols-1 lg:gap-4",
+    button: "lg:pt-3",
+    number: "wide text-sm font-extrabold leading-none lg:text-2xl",
+    title: "block text-sm font-bold sm:text-base lg:text-xl",
+    close: "lg:col-span-4 lg:row-start-2",
+    lead: "semiwide text-xl font-bold",
+    body: "mt-3 max-w-[46ch] text-smoke",
+  },
+};
+
+export function LoopPhone({ intro }: { intro?: ReactNode }) {
+  const k = intro === undefined ? LAYOUT.page : LAYOUT.slide;
   const still = useSyncExternalStore(subscribeMotion, readStill, () => false);
 
   const phoneRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fills = useRef<(HTMLSpanElement | null)[]>([]);
   const inView = useInView(phoneRef, { amount: 0.35 });
+  // On the slide, the poster waits until the phone is within a screen of view, so it doesn't
+  // compete with the hero for bandwidth on first load. Waitlist mode keeps it from the start.
+  const near = useInView(phoneRef, { once: true, margin: "0px 0px 100% 0px" });
+  const poster = intro === undefined || near ? "/media/loop/poster.webp" : undefined;
 
   const [active, setActive] = useState(0);
   const [userPaused, setUserPaused] = useState(false);
@@ -137,11 +180,13 @@ export function LoopPhone() {
   const chapter = CHAPTERS[active];
 
   return (
-    <div className="mt-14 grid gap-10 lg:mt-16 lg:grid-cols-12 lg:gap-8">
-      <figure className="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
+    <div className={k.grid}>
+      {/* First in the DOM so phones read the headline before the phone. */}
+      {intro !== undefined && <div className="lg:col-span-4 lg:row-start-1">{intro}</div>}
+      <figure className={k.figure}>
         <div
           ref={phoneRef}
-          className="mx-auto w-[min(17.5rem,76vw)] rounded-[2.75rem] border-[3px] border-[#2e2e2e] bg-ink p-2.5 sm:w-[19.5rem] lg:mr-0"
+          className={k.phone}
         >
           <div className="relative aspect-[600/1296] overflow-hidden rounded-[2.2rem] bg-paper">
             {still ? (
@@ -161,7 +206,7 @@ export function LoopPhone() {
                 playsInline
                 loop
                 preload="none"
-                poster="/media/loop/poster.webp"
+                poster={poster}
                 disablePictureInPicture
                 aria-hidden="true"
                 tabIndex={-1}
@@ -172,7 +217,7 @@ export function LoopPhone() {
             )}
           </div>
         </div>
-        <figcaption className="mx-auto mt-4 flex w-[min(17.5rem,76vw)] items-center justify-between gap-4 text-sm text-smoke sm:w-[19.5rem] lg:mr-0">
+        <figcaption className={k.caption}>
           <span>Sample flow. Values are illustrative.</span>
           {!still && (
             <button
@@ -193,15 +238,15 @@ export function LoopPhone() {
         )}
       </figure>
 
-      <div className="lg:col-span-6 lg:row-start-1">
-        <ol className="grid grid-cols-4 gap-3 lg:grid-cols-1 lg:gap-6">
+      <div className={k.steps}>
+        <ol className={k.list}>
           {CHAPTERS.map((step, i) => (
             <li key={step.title}>
               <button
                 type="button"
                 onClick={() => show(i)}
                 aria-current={active === i ? "step" : undefined}
-                className={`group relative block min-h-11 w-full pt-4 text-left transition-colors active:opacity-60 lg:pt-5 ${
+                className={`group relative block min-h-11 w-full pt-4 text-left transition-colors active:opacity-60 ${k.button} ${
                   active === i ? "text-ink" : "text-ink/60 hover:text-ink"
                 }`}
               >
@@ -214,11 +259,11 @@ export function LoopPhone() {
                   />
                 </span>
                 <span className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:gap-5">
-                  <span aria-hidden="true" className="wide text-sm font-extrabold leading-none lg:text-4xl">
+                  <span aria-hidden="true" className={k.number}>
                     {i + 1}
                   </span>
                   <span>
-                    <span className="block text-sm font-bold sm:text-base lg:text-2xl">{step.title}</span>
+                    <span className={k.title}>{step.title}</span>
                     <span
                       className={`mt-1 hidden max-w-[34ch] lg:block ${active === i ? "text-smoke" : ""}`}
                     >
@@ -234,11 +279,11 @@ export function LoopPhone() {
         <p className="mt-4 min-h-[3.1em] text-smoke lg:hidden">{chapter.body}</p>
       </div>
 
-      <div className="lg:col-span-6 lg:row-start-2">
-        <p className="semiwide text-lead font-bold">
+      <div className={k.close}>
+        <p className={k.lead}>
           We recommend a supplement only when a marker points to it. No test result, no pitch.
         </p>
-        <p className="mt-6 max-w-[42ch] text-smoke">
+        <p className={k.body}>
           {isWaitlist
             ? "Food and sleep come first. Brands in the stack have to clear a clean-label bar: third-party tested, every ingredient and dose on the label, FSSAI licensed and traceable by batch."
             : "Food and sleep come first. Brands in a stack are found on merit: D-Human has no brand partners and earns nothing from them."}

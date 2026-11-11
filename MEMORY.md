@@ -100,7 +100,17 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-11
-- **Meals in 12 Indian languages, and a 4-slide landing page (Mayank's request), not committed yet:**
+- **Landing page in 5 slides, alternating black and white (Mayank's request):**
+  - **Slides:**
+    1. Hero, black.
+    2. Fuel with the rotating multilingual card, white (`LanguageTabs` has a `tone` prop).
+    3. Blood reports, black: "Know your numbers before you buy another bottle.", the 76% line, and "Coming soon: blood tests through D-Human".
+    4. The phone loop back as it was, white, in three columns on desktop: "Test first. Supplement second.", the phone, the four steps.
+    5. Start free plus the footer, black.
+  - Open mode's Retest step now says "Key markers again when your read says". The phone's poster loads only near the slide, which kept LCP at 3.6 s.
+  - **Checked:** Lighthouse mobile 88–90 locally (unchanged); waitlist mode identical by pixels; no overflow at 320, 390, 430 or 1440 px; typecheck, lint, 165 tests and the build pass.
+- **Push `93850a9`:** meals in 12 languages and the 4-slide landing page.
+- **Meals in 12 Indian languages, and a 4-slide landing page (Mayank's request):**
   - **Voice (staff engineer):** Fuel's Say has a "Speaking in" row with 12 languages (`lib/domain/speech.ts`): English, Hinglish, हिंदी, বাংলা, मराठी, తెలుగు, தமிழ், ગુજરાતી, ಕನ್ನಡ, മലയാളം, ਪੰਜਾਬੀ, اردو.
     - It defaults to the app language and remembers the last pick (`dh-spoken`).
     - Speech recognition listens in that language; a refusal says to type instead.
