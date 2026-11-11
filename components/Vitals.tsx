@@ -1,9 +1,11 @@
 "use client";
 
+import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-// Vercel Speed Insights (enabled for this project in Vercel). Report and food URLs
-// carry ids and query strings; strip them so only the page's shape leaves the browser.
+// Vercel Web Analytics (visits) and Speed Insights (page speed), both enabled for
+// this project in Vercel. Report and food URLs carry ids and query strings; strip
+// them so only the page's shape leaves the browser.
 const ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 function scrub(url: string): string {
@@ -19,5 +21,10 @@ function scrub(url: string): string {
 }
 
 export function Vitals() {
-  return <SpeedInsights beforeSend={(event) => ({ ...event, url: scrub(event.url) })} />;
+  return (
+    <>
+      <Analytics beforeSend={(event) => ({ ...event, url: scrub(event.url) })} />
+      <SpeedInsights beforeSend={(event) => ({ ...event, url: scrub(event.url) })} />
+    </>
+  );
 }

@@ -153,7 +153,7 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 2. Keep payment capture on automatic (the default). Manual capture works too: the app captures what it confirms. Keep customer fee bearer off: the app checks that each payment is exactly ₹49.
 3. Test with test keys: Razorpay's test checkout has success and failure buttons, test cards and the UPI ids `success@razorpay` and `failure@razorpay`. Then switch the three variables to live values and redeploy.
 
-`RESEND_API_KEY` is already set there, so sign-in codes send from `hello@dhuman.fit`. Migrations run on deploy. The landing page opens the platform ("Start free" and "Sign in") unless `NEXT_PUBLIC_SITE_MODE` is `waitlist`. Vercel Speed Insights reports page speed (`components/Vitals.tsx`), with ids and query strings stripped from URLs.
+`RESEND_API_KEY` is already set there, so sign-in codes send from `hello@dhuman.fit`. Migrations run on deploy. The landing page opens the platform ("Start free" and "Sign in") unless `NEXT_PUBLIC_SITE_MODE` is `waitlist`. Vercel Web Analytics (visits) and Speed Insights (page speed) run from `components/Vitals.tsx`, with ids and query strings stripped from URLs.
 
 Rough cost: a report read is a Haiku call (well under a cent) plus a Sonnet call (a few cents). An event search is a few cents of Sonnet plus 3 searches at $0.01 each, shared by everyone in the same metro area and sport for 14 days. A stack costs nothing per person: the plan is code, and each brand search (about $0.05) is shared by everyone for a month; a Hindi or Hinglish stack adds a translation of about a tenth of a cent. A logged meal is a fraction of a cent. The exact figures are in the `[ai]` log lines.
 
