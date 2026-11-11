@@ -11,7 +11,7 @@ The signed-in product that sits beside the waitlist page in this repo. A person 
 | `/home` | The dashboard. The bib (age as the number, an animated pictogram of their sport, their name and persona, the next event on the tear-off strip), the **verdict** aimed at their event ("Ready for HYROX Mumbai, with one fix."), the markers that matter for their sport first, their pointers, **Your contour** (every marker as a direction on a topographic fingerprint), today's fuel, events found on the web to aim at, and the stack. |
 | `/upload` | PDF or up to 6 photos. While Claude reads, the **orbit** runs: the outer ring fills with marker names as they are found, the inner ring shows the steps, and the centre holds one persona fact at a time, still and readable. |
 | `/reports/[id]` | The full read: verdict, headline, what's going well, pointers in order, every marker by panel with range rails, questions for a doctor, retest plan, delete. |
-| `/fuel` | Snap, Say or Type a meal. Today's plate (kcal and macros against targets), micronutrients, the biggest gaps over two weeks, and "How you usually eat" for people who won't log every meal. |
+| `/fuel` | Snap, Say or Type a meal. While Claude reads it, the orbit shows facts picked for the person's age, height and weight bands, diet and sex (`lib/domain/food-facts.ts`, no AI cost), then the result. Today's plate (kcal and macros against targets), micronutrients, the biggest gaps over two weeks, and "How you usually eat" for people who won't log every meal. |
 | `/wraps` | This week, last week, this month, last month, this year. Each plays as full-screen cards. |
 | `/stack` | Supplements tied to a marker or a real food gap, with dose, timing, duration, cautions and brands sold in India, plus "You don't need these" and "Food first". Opens with the no-partners note. |
 | `/settings` | Every onboarding answer, sign out, delete everything. |
@@ -44,6 +44,11 @@ Browser ──► Route Handlers (app/api/*) ──► lib/platform/* (services)
   - Micronutrients: ICMR-NIN 2020 allowances.
 
   Gaps use the last 14 days when there are 3 or more properly logged days, else the typical day.
+- **Fuel facts** (`lib/domain/food-facts.ts`). A static library, so it costs nothing to show:
+  - About 35 facts for everyone, 24 tied to age ranges, and 10 tied to diets; some also apply to women only.
+  - Every 5 cm height band and 5 kg weight band gets facts with its own numbers, worked out from standard formulas: the healthy weight range for Indian adults (BMI 18.5–22.9), half-height waist, protein at 0.83 and 1.2–1.6 g/kg, energy for a 5 km run (about 1 kcal per kg per km) and for walking off a samosa (about 0.75 kcal per kg per km), and water at 30–35 mL/kg.
+  - Bands end on a multiple of 5 (166–170 cm, 61–65 kg, 21–25 years). Personal and universal facts alternate, personal first. Tests are in `tests/food-facts.test.ts`.
+- **The orbit** (`components/platform/Orbit.tsx`). One waiting screen for reports and meals: personal words in the outer ring, steps in the inner ring, and progress ticks that run from pale green to full green as the work nears 100%. On phones it's wider than the screen, so the centre has room and the rings crop at the edges.
 - **Wraps** (`lib/platform/wraps.ts`). Code computes the stats; Claude only writes the cards from those numbers.
 - **Stack** (`lib/platform/stack.ts`). Claude with web search, high effort, under strict rules: an item only for a low or edge marker or a repeated food gap; conservative doses; iron only with low ferritin and a doctor check; flagged markers go to "See a doctor first"; brands sold in India, preferring third-party tested.
 - **Claude** (`lib/ai/client.ts`).

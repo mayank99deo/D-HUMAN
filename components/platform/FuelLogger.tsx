@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { MealOrbit, type MealRun } from "./MealOrbit";
+import type { OrbitFact } from "./Orbit";
 import { shrinkImage } from "./shrink";
 
 type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number };
@@ -81,6 +83,8 @@ export function FuelLogger({
   gaps,
   gapSource,
   language,
+  facts,
+  categories,
 }: {
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
@@ -91,6 +95,8 @@ export function FuelLogger({
   gaps: { label: string; pct: number }[];
   gapSource: "logs" | "typical_day" | "none";
   language: string;
+  facts: OrbitFact[];
+  categories: string[];
 }) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
@@ -110,6 +116,7 @@ export function FuelLogger({
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
   const [editingTypical, setEditingTypical] = useState(!typical);
   const [typicalBusy, setTypicalBusy] = useState(false);
+  const [run, setRun] = useState<MealRun | null>(null);
 
   function listen() {
     const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
@@ -162,15 +169,23 @@ export function FuelLogger({
     if (text.trim()) form.append("text", text.trim());
     if (meal) form.append("meal", meal);
     if (mode === "photo" && photo) form.append("photo", photo.file, "meal.jpg");
+    const startedAt = Date.now();
+    setRun({ kind: "meal", startedAt, state: "running" });
     const res = await fetch("/api/food", { method: "POST", body: form }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
-    if (!res?.ok) return setError(ERRORS[data.error] ?? "We couldn't log that. Try again.");
+    if (!res?.ok) {
+      const message = ERRORS[data.error] ?? "We couldn't log that. Try again.";
+      setRun((r) => (r ? { ...r, state: "error", error: message } : r));
+      return setError(message);
+    }
     const l = data.log;
-    setLast({
+    const logged: Log = {
       id: l.id, meal: l.meal, title: l.title, source: l.source, kcal: l.kcal, proteinG: l.proteinG, confidence: l.confidence,
       tip: l.micros?.tip ?? null, items: l.items.map((i: { name: string; portion: string }) => `${i.name}, ${i.portion}`), demo: l.model === "mock",
-    });
+    };
+    setLast(logged);
+    setRun((r) => (r ? { ...r, state: "done", result: { title: logged.title, kcal: logged.kcal, proteinG: logged.proteinG, tip: logged.tip, demo: logged.demo } } : r));
     setText("");
     setPhoto(null);
     setMode(null);
@@ -185,18 +200,26 @@ export function FuelLogger({
 
   async function saveTypical() {
     setTypicalBusy(true);
-    const res = await fetch("/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description: typicalText }) });
+    setRun({ kind: "typical", startedAt: Date.now(), state: "running" });
+    const res = await fetch("/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description: typicalText }) }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
     setTypicalBusy(false);
-    if (res.ok) {
+    if (res?.ok) {
       setEditingTypical(false);
+      setRun((r) => (r ? { ...r, state: "done", patterns: data.day?.patterns ?? [] } : r));
       startTransition(() => router.refresh());
-    } else setError("Tell us a little more about a normal day, then save.");
+    } else {
+      const message = "Tell us a little more about a normal day, then save.";
+      setRun((r) => (r ? { ...r, state: "error", error: message } : r));
+      setError(message);
+    }
   }
 
   const sorted = [...logs].sort((a, b) => MEAL_ORDER.indexOf(a.meal) - MEAL_ORDER.indexOf(b.meal));
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
+      {run && <MealOrbit run={run} facts={facts} categories={categories} onClose={() => setRun(null)} />}
       <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Fuel</h1>
 
       <section className={`mt-8 flex flex-wrap items-center gap-8 ${refreshing ? "opacity-70" : ""}`} aria-label="Today so far">

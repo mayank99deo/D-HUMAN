@@ -5,6 +5,7 @@ import { FuelLogger } from "@/components/platform/FuelLogger";
 import { aiMode } from "@/lib/ai/client";
 import type { Day } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
+import { foodFactsFor } from "@/lib/domain/food-facts";
 import { MICROS, targetsFor } from "@/lib/domain/nutrition";
 import { dietPicture, logsBetween, totalsOf } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
@@ -24,6 +25,8 @@ async function Fuel() {
   const picture = await dietPicture(user.id, profile);
   const d = await db();
   const [base] = await d.select().from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, user.id)).limit(1);
+  // Facts for the waiting screen, picked by age, height and weight bands, diet and sex. No AI involved.
+  const { facts, categories } = foodFactsFor({ age: persona.age, heightCm: profile.heightCm, weightKg: profile.weightKg, sex: profile.sex, diet: profile.diet });
 
   return (
     <FuelLogger
@@ -47,6 +50,8 @@ async function Fuel() {
       gaps={picture.source === "none" ? [] : picture.gaps.slice(0, 4).map((g) => ({ label: g.label, pct: g.pct }))}
       gapSource={picture.source}
       language={profile.language}
+      facts={facts}
+      categories={categories}
     />
   );
 }
