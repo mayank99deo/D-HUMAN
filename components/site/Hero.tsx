@@ -1,6 +1,7 @@
 import { SignalField } from "@/components/signal-field/SignalField";
 import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
 import { isWaitlist } from "@/lib/site-mode";
+import { Hindi } from "./Hindi";
 import { StartForm } from "./StartForm";
 
 export function Hero() {
@@ -26,12 +27,26 @@ export function Hero() {
             supplements only where your markers point. Then we retest to show what moved.
           </p>
         ) : (
-          // Open mode says what "Start free" gives today: a read of a report the person brings.
-          <p className="mt-8 max-w-[48ch] text-graphite sm:mt-10">
-            Upload a recent blood report. D-Human analyses it with AI for the way you train, puts food
-            first, and recommends supplements only where your markers point. Then retest to see what
-            moved.
-          </p>
+          // Open mode leads with Fuel, the pilot's everyday habit; the blood report read comes second.
+          // The languages sit on a line of their own: when the Devanagari font swaps in, it can't
+          // re-wrap the paragraph and shift the headline.
+          <>
+            <p className="mt-8 max-w-[44ch] text-pretty font-medium sm:mt-10 sm:text-xl">
+              Calorie and protein tracking, made for Indian meals. Snap your plate, say what you ate, or
+              type a few words.
+            </p>
+            <p className="mt-4 max-w-[48ch] text-pretty text-graphite">
+              AI estimates every roti and katori, and writes back in your language. Add a blood report and
+              it reads that too, for the way you train.
+            </p>
+            <p className="mt-5 flex flex-wrap gap-x-3 text-sm font-semibold">
+              <span>English</span>
+              <span aria-hidden="true" className="text-graphite">/</span>
+              <Hindi>हिंदी</Hindi>
+              <span aria-hidden="true" className="text-graphite">/</span>
+              <span>Hinglish</span>
+            </p>
+          </>
         )}
         {/* "Join the waitlist" links land here while the closing section is hidden. Open mode keeps
             the anchor so old links to /#join still reach the start form. */}

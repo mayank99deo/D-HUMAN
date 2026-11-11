@@ -6,11 +6,11 @@ import { Contour, type ContourMarker } from "@/components/platform/Contour";
 import { EventPicker } from "@/components/platform/EventPicker";
 import { MarkerTile, rangeText } from "@/components/platform/Markers";
 import { retestFrom } from "@/components/platform/retest";
+import { Stall } from "@/components/platform/Stall";
 import { overBy, TargetBar } from "@/components/platform/Target";
 import { Verdict } from "@/components/platform/Verdict";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
-import { dashboard } from "@/lib/platform/dashboard";
-import { requireMember } from "@/lib/platform/member";
+import { homeData } from "@/lib/platform/dashboard";
 import { localDate } from "@/lib/platform/profile";
 
 export const metadata: Metadata = { title: "Home" };
@@ -31,8 +31,7 @@ function stackLine(plan: { items: unknown[]; see_doctor: unknown[] } | null) {
 }
 
 async function Dashboard() {
-  const { user, profile, persona } = await requireMember();
-  const data = await dashboard(user.id, profile, persona);
+  const { profile, persona, data } = await homeData();
   const read = data.view?.read;
   const notes = new Map(read?.markers.map((m) => [m.id, m.note]) ?? []);
   const markers = data.view?.markers ?? [];
@@ -253,14 +252,28 @@ async function Dashboard() {
   );
 }
 
+// What shows the moment home opens: the two things people come to do, a plain
+// loading line, and a reload offer if it drags on. Never just grey boxes.
 function Skeleton() {
   return (
-    <div className="mx-auto grid max-w-6xl gap-12 px-4 pt-6 sm:px-6 lg:grid-cols-12 lg:pt-10" aria-busy>
-      <div className="h-[28rem] bg-lift lg:col-span-5" />
-      <div className="space-y-4 lg:col-span-7">
-        <div className="h-6 w-40 bg-lift" />
-        <div className="h-24 bg-lift" />
-        <div className="h-64 bg-lift" />
+    <div className="mx-auto grid max-w-6xl gap-12 px-4 pt-6 sm:px-6 lg:grid-cols-12 lg:pt-10">
+      <div className="h-[28rem] bg-lift lg:col-span-5" aria-hidden />
+      <div className="lg:col-span-7">
+        <p className="text-sm text-graphite" role="status" aria-live="polite">
+          Loading your dashboard…
+        </p>
+        <Stall />
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Link href="/fuel" className="flex min-h-24 flex-col justify-between border border-line-strong p-4 active:bg-lift">
+            <span className="text-lg font-bold semiwide">Log a meal</span>
+            <span className="text-sm text-graphite">Snap, say or type it</span>
+          </Link>
+          <Link href="/upload" className="flex min-h-24 flex-col justify-between border border-line-strong p-4 active:bg-lift">
+            <span className="text-lg font-bold semiwide">Upload a report</span>
+            <span className="text-sm text-graphite">PDF or photos from your lab</span>
+          </Link>
+        </div>
+        <div className="mt-8 h-64 bg-lift" aria-hidden />
       </div>
     </div>
   );

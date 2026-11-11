@@ -1,5 +1,6 @@
 import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { connection } from "next/server";
 import type { Read } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import type { EventRow, Marker, Profile } from "@/lib/db/schema";
@@ -8,6 +9,7 @@ import { targetsFor } from "@/lib/domain/nutrition";
 import { eventsFor } from "./events";
 import { logsBetween, totalsOf } from "./food";
 import { daysBetween, localDate } from "./profile";
+import { requireMember } from "./member";
 import { latestStack } from "./stack";
 
 export type ReportView = {
@@ -102,6 +104,19 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
     today: { totals: totalsOf(todayLogs), meals: todayLogs.length, targets },
     stack,
   };
+}
+
+/** Everything home needs, for the signed-in member. A slow load is logged with where the time went. */
+export async function homeData() {
+  // The clock is read only at request time (Cache Components prerenders otherwise).
+  await connection();
+  const started = Date.now();
+  const member = await requireMember();
+  const signedIn = Date.now();
+  const data = await dashboard(member.user.id, member.profile, member.persona);
+  const took = Date.now() - started;
+  if (took > 1500) console.warn(`[home] slow load ${took} ms (session and profile ${signedIn - started} ms, dashboard ${Date.now() - signedIn} ms)`);
+  return { ...member, data };
 }
 
 export async function eventsByIds(ids: string[]): Promise<EventRow[]> {

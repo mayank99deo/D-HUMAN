@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "D-Human",
     description: isWaitlist
       ? "Test first. Supplement second. Join the D-Human waitlist."
-      : "Test first. Supplement second. Start free with D-Human.",
+      : "Track calories and protein in Indian meals, in English, Hindi or Hinglish. Start free with D-Human.",
     start_url: "/",
     scope: "/",
     display: "standalone",

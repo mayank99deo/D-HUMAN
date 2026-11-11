@@ -14,7 +14,9 @@ The signed-in product that sits beside the waitlist page in this repo. A person 
 | `/fuel` | Snap, Say or Type a meal. While Claude reads it, the orbit shows facts picked for the person's age, height and weight bands, diet and sex (`lib/domain/food-facts.ts`, no AI cost), then the result. Today's plate (kcal and macros against targets), micronutrients, the biggest gaps over two weeks, and "How you usually eat" for people who won't log every meal. |
 | `/wraps` | This week, last week, this month, last month, this year. Each plays as full-screen cards. |
 | `/stack` | Supplements tied to a marker or a real food gap, with dose, timing, duration, cautions and brands sold in India, plus "You don't need these" and "Food first". Opens with the no-partners note. |
-| `/settings` | Their plan (what's left, Pay ₹49, past payments), every onboarding answer, sign out, delete everything. |
+| `/settings` | Their plan (what's left, Pay ₹49, past payments), every onboarding answer, sign out, replay the app tour, delete everything. |
+
+**First-run tour** (`components/platform/Tour.tsx`, copy in `tour-stops.ts`): on the first app page after onboarding, the screen dims and a light moves across the real tabs in six stops (Fuel, Upload, Home, Stack, Wraps, language in Settings), ending on "Log your first meal". Skip tour or Esc ends it at any stop; Next and Back move between stops. Finishing or skipping sets `profiles.tour_done_at` through `POST /api/profile/tour`, so it shows once across devices; migration `0006` marked everyone already onboarded as done. Each first finish or skip logs `[tour] finished|skipped at stop N of 6`.
 
 Personas come from the main activity and level (`lib/domain/persona.ts`): runner, hybrid athlete (HYROX), lifter, trekker, cyclist, swimmer, yogi, player, walker, or "fresh start". Each has its own marker priority list, which goals then adjust; its own facts during analysis (`lib/domain/facts.ts`); its own emote (`components/platform/Emote.tsx`); and an event search, where one applies.
 

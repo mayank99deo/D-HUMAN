@@ -7,6 +7,7 @@ import type { PlanView } from "@/lib/domain/plan";
 import { birthYearOk, MIN_AGE } from "./age";
 import { OFFLINE, send } from "./net";
 import { PlanCard, type PaidPass } from "./Paywall";
+import { ReplayTour } from "./Tour";
 
 type P = {
   name: string; birthYear: string; sex: string | null; heightCm: string; weightKg: string; city: string;
@@ -118,8 +119,8 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
       setSigningOut(false);
       return setSignOutError(r.offline ? `You're still signed in. ${OFFLINE}` : "You're still signed in. Try again.");
     }
-    router.replace("/signin");
-    router.refresh();
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a session change: start from a clean page load
+    window.location.assign("/signin");
   }
 
   async function deleteAll() {
@@ -131,8 +132,8 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
       // Never let a failed delete of health data look like it worked.
       return setDeleteError(r.offline ? `Nothing was deleted. ${OFFLINE}` : "Nothing was deleted. Try again in a minute.");
     }
-    router.replace("/");
-    router.refresh();
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a session change: start from a clean page load
+    window.location.assign("/");
   }
 
   return (
@@ -215,6 +216,7 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
             {signOutError}
           </p>
         )}
+        <ReplayTour className="mt-4 block" />
       </section>
 
       <section className="mt-14 border border-line-strong p-5" aria-labelledby="delete">

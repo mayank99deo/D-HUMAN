@@ -3,12 +3,14 @@
 import { useInView } from "motion/react";
 import Image from "next/image";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isWaitlist } from "@/lib/site-mode";
 
 // Chapter starts in the phone clip (video/loop). Change them together with the composition.
 const CHAPTERS = [
   {
     title: "Test",
-    body: "Blood, urine, gut and more. Most of it from home.",
+    // Open mode runs no tests of its own yet: people bring a report, and booking through D-Human is coming soon.
+    body: isWaitlist ? "Blood, urine, gut and more. Most of it from home." : "Upload a recent blood report, as a PDF or photos. Tests through D-Human are coming soon.",
     start: 0,
     still: "test",
     alt: "The Tests screen: blood, urine, gut and body marked collected, and a notification that the AI-analysed report is in.",
@@ -22,7 +24,8 @@ const CHAPTERS = [
   },
   {
     title: "Stack",
-    body: "Supplements matched to your markers, from clean-label brands.",
+    // Open mode's stacks name brands found on merit, with no clean-label audit behind them.
+    body: isWaitlist ? "Supplements matched to your markers, from clean-label brands." : "Supplements only where a marker or a food gap points.",
     start: 9.8,
     still: "stack",
     alt: "Your stack: vitamin D3 with K2, magnesium bisglycinate and omega-3, each for a flagged marker, and four clean-label checks: third-party tested, every dose on the label, FSSAI licensed, traceable by batch.",
@@ -236,8 +239,9 @@ export function LoopPhone() {
           We recommend a supplement only when a marker points to it. No test result, no pitch.
         </p>
         <p className="mt-6 max-w-[42ch] text-smoke">
-          Food and sleep come first. Brands in the stack have to clear a clean-label bar: third-party
-          tested, every ingredient and dose on the label, FSSAI licensed and traceable by batch.
+          {isWaitlist
+            ? "Food and sleep come first. Brands in the stack have to clear a clean-label bar: third-party tested, every ingredient and dose on the label, FSSAI licensed and traceable by batch."
+            : "Food and sleep come first. Brands in a stack are found on merit: D-Human has no brand partners and earns nothing from them."}
         </p>
       </div>
     </div>

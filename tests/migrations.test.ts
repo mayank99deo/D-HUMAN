@@ -44,8 +44,8 @@ async function one<T>(pg: PGlite, query: string): Promise<T> {
 
 async function assertCurrentShape(pg: PGlite) {
   const col = await pg.query(`select table_name, column_name, is_nullable, column_default from information_schema.columns
-    where (table_name, column_name) in (('reports','started_at'), ('events','query'))`);
-  assert.equal(col.rows.length, 2, "started_at and query exist");
+    where (table_name, column_name) in (('reports','started_at'), ('events','query'), ('profiles','tour_done_at'))`);
+  assert.equal(col.rows.length, 3, "started_at, query and tour_done_at exist");
 
   const key = await one<{ nnd: boolean; cols: string }>(pg, `select i.indnullsnotdistinct as nnd, pg_get_indexdef(i.indexrelid) as cols
     from pg_constraint c join pg_index i on i.indexrelid = c.conindid where c.conname = 'events_unique'`);
@@ -89,6 +89,39 @@ describe("migrations", () => {
     await assertCurrentShape(pg);
     await pg.close();
   });
+
+  // Only people who finish onboarding after the tour ships see it: 0006 marks everyone
+  // already onboarded as done, once, and a later re-run never marks anyone new.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0006 marks the tour seen for people already onboarded, once (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0006_"));
+      assert.ok(at > 0, "0006 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at); // production before the tour
+      await pg.exec(`
+        insert into users (id, email) values ('old', 'old@x'), ('mid', 'mid@x');
+        insert into profiles (user_id, onboarded_at) values ('old', now() - interval '3 days');
+        insert into profiles (user_id) values ('mid');
+      `);
+      const done = async () =>
+        Object.fromEntries((await pg.query<{ user_id: string; seen: boolean }>(`select user_id, tour_done_at is not null as seen from profiles order by user_id`)).rows.map((r) => [r.user_id, r.seen]));
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await paste(pg);
+      } else {
+        await paste(pg);
+        await deploy(pg);
+      }
+      assert.deepEqual(await done(), { mid: false, old: true }, "onboarded before: seen; mid-onboarding: not yet");
+
+      // Someone finishes onboarding after the release; running the migrations again must not hide their tour.
+      await pg.exec(`update profiles set onboarded_at = now() where user_id = 'mid'`);
+      await paste(pg);
+      await deploy(pg);
+      assert.deepEqual(await done(), { mid: false, old: true });
+      await pg.close();
+    });
+  }
 
   for (const order of ["deploy then paste", "paste then deploy"] as const) {
     it(`0002 on live data (${order}): merges duplicate events and keeps picks`, async () => {

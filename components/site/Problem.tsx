@@ -1,10 +1,12 @@
 import { VitaminDChart } from "./VitaminDChart";
 
-export function Problem() {
+// `kicker` labels the section as the page's second chapter in open mode; waitlist mode passes none.
+export function Problem({ kicker }: { kicker?: string }) {
   return (
     <section aria-labelledby="problem-title" className="border-t border-paper/15 py-24 sm:py-32">
       <div className="mx-auto grid max-w-[1280px] gap-14 px-5 sm:px-8 lg:grid-cols-12 lg:gap-8">
         <div className="lg:col-span-6">
+          {kicker && <p className="mb-4 text-sm font-semibold text-graphite">{kicker}</p>}
           <h2 id="problem-title" className="semiwide max-w-[16ch] text-title font-bold">
             Most people buy supplements blind.
           </h2>

@@ -31,8 +31,8 @@ export function DeleteReport({ id }: { id: string }) {
             // Health data: never let a failed delete look like it worked.
             return setError(r.offline ? `Nothing was deleted. ${OFFLINE}` : "Nothing was deleted. Try again in a minute.");
           }
+          // Home is dynamic, so this fetches it fresh; a refresh on top would render it twice.
           router.push("/home");
-          router.refresh();
         }}
       >
         {busy ? "Deleting…" : "Delete report"}

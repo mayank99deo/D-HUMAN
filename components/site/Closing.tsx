@@ -6,7 +6,8 @@ import { StartForm } from "./StartForm";
 export function Closing() {
   return (
     <section
-      id="join"
+      // The hero holds #join in open mode, so this one can't share it.
+      id={isWaitlist ? "join" : "start"}
       aria-labelledby="join-title"
       className="relative isolate overflow-hidden border-t border-paper/15 py-28 sm:py-40"
     >
@@ -17,12 +18,12 @@ export function Closing() {
       />
       <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
         <h2 id="join-title" className="wide max-w-[16ch] text-title font-extrabold">
-          Know your numbers before you buy another bottle.
+          {isWaitlist ? "Know your numbers before you buy another bottle." : "Start with your next meal."}
         </h2>
         <p className="mt-6 max-w-[44ch] text-graphite">
           {isWaitlist
             ? "Join the waitlist for early access and launch pricing."
-            : "Start with a blood report you already have."}
+            : "Snap it, say it or type it. Add a blood report whenever you have one."}
         </p>
         <div className="mt-10 max-w-xl">
           {isWaitlist ? <WaitlistForm source="closing" /> : <StartForm />}

@@ -25,14 +25,17 @@ const devanagari = Anek_Devanagari({
 
 const description = isWaitlist
   ? "Test first. Supplement second. D-Human tests your blood, gut and body, analyses the results with AI, and recommends supplements only where your markers point. Join the waitlist."
-  : "Test first. Supplement second. Upload a blood report and D-Human analyses it with AI for the way you train, then recommends supplements only where your markers point. Start free.";
+  : "Track calories and protein in Indian meals from a photo, your voice or a few words, in English, Hindi or Hinglish. Add a blood report and D-Human's AI reads it for the way you train. Start free.";
+
+// Waitlist mode keeps its old title; the open site leads with calorie tracking.
+const title = isWaitlist ? "D-Human | Your body speaks data" : "D-Human | Calorie tracking for Indian meals";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl() ?? "http://localhost:3000"),
-  title: "D-Human | Your body speaks data",
+  title,
   description,
   openGraph: {
-    title: "D-Human | Your body speaks data",
+    title,
     description,
     siteName: "D-Human",
     locale: "en_IN",
@@ -40,7 +43,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "D-Human | Your body speaks data",
+    title,
     description,
   },
   // Home-screen web app on iPhone: own title, black status bar.

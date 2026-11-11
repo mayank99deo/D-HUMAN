@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Video projects and their raw footage aren't app code; scanning them can also hit
+   media files macOS won't let the dev server read. */
+@source not "../video";
 
 /* Brand: white pack, black ink. True black and white only; greys carry hierarchy. */
 @theme {
@@ -386,5 +389,29 @@
   .wrap-fill {
     animation: none;
     width: 100%;
+  }
+}
+
+/* The first-run tour (Tour.tsx): the screen dims once, then the light and the card
+   glide from stop to stop. Transitions start only after the first placement. */
+@keyframes tour-in {
+  from {
+    opacity: 0;
+  }
+}
+.tour-in {
+  animation: tour-in 320ms ease-out both;
+}
+[data-placed] .tour-move {
+  transition-property: top, left, width, height, clip-path;
+  transition-duration: 460ms;
+  transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-in {
+    animation: none;
+  }
+  [data-placed] .tour-move {
+    transition: none;
   }
 }

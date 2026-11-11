@@ -7,6 +7,8 @@ import { db, schema } from "@/lib/db";
 // Local development only: signs in as a demo person without email.
 // /api/dev/session?as=ankit (HYROX, 34, Mumbai), ?as=mayank (trekking, 31, Pune), ?as=priya (runner, 40, Indore)
 // or ?as=fresh (no profile yet, to walk through onboarding). 404 in production.
+// Demo people have seen the first-run tour; add &tour=1 to see it again. &new=1 with
+// ?as=fresh makes a brand-new person each time, who gets the tour after onboarding.
 const PEOPLE = {
   ankit: {
     name: "Ankit", birthYear: 1992, sex: "male", heightCm: 178, weightKg: 79, city: "Mumbai", activities: ["hyrox", "running", "strength"],
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
   const who = (params.get("as") ?? "ankit") as keyof typeof PEOPLE;
   const to = params.get("to");
   if (!(who in PEOPLE)) return new Response("Unknown demo person", { status: 400 });
-  const email = `${who}@demo.dhuman.local`;
+  const email = who === "fresh" && params.get("new") === "1" ? `fresh-${newId().slice(0, 8)}@demo.dhuman.local` : `${who}@demo.dhuman.local`;
   const d = await db();
   let [user] = await d.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
   if (!user) {
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
   if (person) {
     await d
       .update(schema.profiles)
-      .set({ ...person, activities: [...person.activities], goals: [...person.goals], timezone: "Asia/Kolkata", consentAt: new Date(), onboardedAt: new Date() })
+      .set({ ...person, activities: [...person.activities], goals: [...person.goals], timezone: "Asia/Kolkata", consentAt: new Date(), onboardedAt: new Date(), tourDoneAt: params.get("tour") === "1" ? null : new Date() })
       .where(eq(schema.profiles.userId, user.id));
   }
   await startSession(user.id);

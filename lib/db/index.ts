@@ -24,10 +24,12 @@ async function connect(): Promise<Db> {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     // prepare:false keeps it working behind transaction poolers (Neon, Supabase).
-    // Serverless copies sit idle between requests: close a connection after 20 s
-    // idle so warm copies don't hold the pooler's client slots, and replace each
-    // one after 30 minutes so none lives forever.
-    const client = postgres(url, { max: 5, prepare: false, idle_timeout: 20, max_lifetime: 30 * 60 });
+    // A warm copy keeps its connections for 2 idle minutes, so someone reading a
+    // page and tapping on doesn't wait for fresh TLS connections each time (with
+    // few visitors, 20 s meant reconnecting on almost every page). Connecting gives
+    // up after 10 s instead of the driver's 30, so a stuck connect fails into the
+    // error screen. Each connection is replaced after 30 minutes.
+    const client = postgres(url, { max: 5, prepare: false, idle_timeout: 120, connect_timeout: 10, max_lifetime: 30 * 60 });
     return drizzle(client, { schema }) as unknown as Db;
   }
   if (process.env.VERCEL) {

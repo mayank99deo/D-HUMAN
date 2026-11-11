@@ -226,14 +226,18 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
           next={d.eventInMind.trim() ? `Aiming at ${d.eventInMind.trim()}` : "Next: your first blood report"}
           nextDetail="Upload a report and your bib gets its verdict."
         />
+        {/* Food first: logging a meal works today, with or without a report. */}
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <Link href="/upload" className="button-primary h-13">
+          <Link href="/fuel" className="button-primary h-13">
+            Log your first meal
+          </Link>
+          <Link href="/upload" className="button-ghost h-13">
             Upload a blood report
           </Link>
-          <Link href="/home" className="button-ghost h-13">
-            Go to my dashboard
-          </Link>
         </div>
+        <Link href="/home" className="link-quiet mt-3 inline-flex min-h-11 items-center self-start text-sm">
+          Go to my dashboard
+        </Link>
       </main>
     );
   }

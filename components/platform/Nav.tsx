@@ -46,7 +46,8 @@ export function Nav({ initial }: { initial: string }) {
 }
 
 // The same bar without reading the URL, for the loading state: on dynamic
-// routes the path isn't known until the request streams in.
+// routes the path isn't known until the request streams in. data-tour marks
+// what the first-run tour points at (components/platform/tour-stops.ts).
 export function NavView({ initial, path }: { initial: string; path: string }) {
   const active = (href: string) => path === href || (href !== "/home" && path.startsWith(href)) || (href === "/home" && path.startsWith("/reports"));
   return (
@@ -61,7 +62,7 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
           aria-label="Profile and settings"
           className={`grid h-11 w-11 place-items-center text-sm font-bold ${path.startsWith("/settings") ? "text-paper" : "text-graphite"}`}
         >
-          <span className="grid h-8 w-8 place-items-center border border-line-strong semiwide">{initial}</span>
+          <span data-tour="settings" className="grid h-8 w-8 place-items-center border border-line-strong semiwide">{initial}</span>
         </Link>
       </header>
 
@@ -79,6 +80,7 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
                 <Link
                   href={t.href}
                   aria-current={on ? "page" : undefined}
+                  data-tour={t.icon}
                   className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[0.6875rem] transition-colors lg:min-h-18 ${
                     on ? "text-paper" : "text-graphite"
                   }`}

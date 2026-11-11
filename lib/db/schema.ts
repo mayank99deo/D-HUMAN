@@ -89,6 +89,8 @@ export const profiles = pgTable("profiles", {
   currentSupplements: text("current_supplements"),
   consentAt: timestamp("consent_at", { withTimezone: true }),
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+  // When they finished or skipped the first-run tour; null means it's still to show.
+  tourDoneAt: timestamp("tour_done_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 

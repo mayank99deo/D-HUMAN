@@ -197,7 +197,6 @@ export function Uploader({
     if (reduce) return;
     const t = setTimeout(() => {
       router.push("/home");
-      router.refresh();
     }, 2600);
     return () => clearTimeout(t);
   }, [stage, router]);
@@ -207,7 +206,7 @@ export function Uploader({
       <main className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden bg-ink px-3 py-6">
         <Orbit facts={facts} found={found} stage={stage} noun={noun} target={target} error={failMessage}>
           {stage === "done" ? (
-            <Link href="/home" className="button-primary h-12" onClick={() => router.refresh()}>
+            <Link href="/home" className="button-primary h-12">
               See my verdict
             </Link>
           ) : (
@@ -246,6 +245,7 @@ export function Uploader({
         The PDF from your lab works best. Photos work too: flat, in good light, one page per photo, up to {MAX_FILES}.
       </p>
       <PlanLine plan={plan} kind="read" />
+      <p className="mt-2 text-sm text-graphite">No recent report? Blood tests through D-Human are coming soon.</p>
       {aiOff && (
         <p className="error-mark mt-6 border border-line-strong p-4 text-sm">
           Report reading isn&apos;t switched on yet on this server (no AI key). You can still upload; we&apos;ll keep your file.

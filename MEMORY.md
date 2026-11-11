@@ -25,7 +25,7 @@ The running record of this project: where things stand, why they are the way the
 - **The crew (2026-11-11):** nine role agents in `.claude/agents/`, run by the main session as orchestrator (agents can't start agents). They are AI roles, not people; medical review, legal and money decisions stay with Mayank and qualified humans.
 
 - **Brand:** monochrome only, true `#000` and `#fff` ("white pack, black ink"). Archivo with its width axis, set wide to echo the logo. The primary button's cut top-left corner borrows the notch in the logo's D. No accent colour; errors are marked with a "!" glyph.
-- **Page scope (2026-10-28):** the live page shows only the hero, the vitamin D section and the test-first loop. Tests, Plans and Closing are hidden in `app/page.tsx` until the user brings them back.
+- **Page scope (2026-11-11, pilot):** the open landing page leads with Fuel (calorie tracking) and the three languages, then blood reports, then "blood tests through D-Human, coming soon", then a closing Start free. Waitlist mode keeps the 2026-10-28 page (hero, vitamin D, loop). Tests and Plans stay hidden.
 - **Platform design (2026-11-09):** black and white stay the brand; the only colour comes from blood, used for marker status and always paired with a glyph: serum `#B5D2C0` (in range), plasma straw `#E2D3A2` (edge of range), haem `#E3A5A2` (out of range), plus faint washes of the same behind verdicts, bibs and wraps. Archivo only; the wide axis carries numbers and verdicts. The signature pieces: the race bib (age as the number, an animated sports pictogram of the persona), the verdict aimed at the person's event, the contour fingerprint of their markers, and the orbit while a report is read. Nue Health's in-range colour is purple; ours stays blood-derived so we don't look alike.
 - **Models (2026-11-09):** cost first. Haiku 5.5 for transcription-like and frequent jobs (report values, meals, wraps, stack translations), Sonnet 5.5 where judgement or web search matters (the read, events, brand searches). Since 2026-11-11 the stack itself is code. Opus 5.5 only if a job's quality falls short; switch one job with `CLAUDE_MODEL_<JOB>`.
 - **Plans (2026-11-11, Mayank):** free 2 reads and 20 meal logs per account (history counts); a ₹49 one-time pass for 30 days with 3 reads; at most 5 meal logs a day for everyone. One-time payment, not a subscription (Mayank chose this over Razorpay Subscriptions). Rules in `lib/domain/plan.ts`; the landing page's price line reads the same constants. Uses are counted in a `usage` ledger, released when a read or meal fails, kept when a report is deleted.
@@ -64,6 +64,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
+- **Function size on Vercel:** files reachable from server code are traced into every function. PGlite (62 MB) and the local `.data` folder were, until `outputFileTracingExcludes` in `next.config.ts`. Check sizes with the `.nft.json` files under `.next/server/app` after a build.
 - **Drizzle journal times:** migrations run if their journal `when` is later than the last one applied, so a hand-written entry must sit in time order or databases that ran a later one skip it. `tests/migrations.test.ts` checks the order. Hand-written migrations also need a snapshot: generate with drizzle-kit, then rewrite its SQL to be safe to run twice.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
@@ -74,6 +75,8 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Razorpay usually wants Terms, Privacy, Refund and Contact pages on the site; none exist yet (Mayank's legal call, including whether passes are refundable)
 - [ ] Footer says imaging and clinical tests are run by licensed partner centres; check that's still true now that people upload their own reports
 - [ ] Refunds don't take a pass away yet; decide whether they should
+- [ ] Landing follow-ups: a native speaker to check the Hindi and Hinglish examples in `components/site/Languages.tsx`; confirm the open-mode footer line; re-render or reframe the loop video (it shows home test booking and a clean-label bar); cut Anek Devanagari (726 KB) down to the weights used, for Hindi users in the app; local Lighthouse mobile was 85–87 before and after the redesign, so the 93–95 in the Snapshot is out of date
+- [ ] Tour: "once" means finished or skipped; closing the tab mid-tour shows it again. Mayank to confirm, or mark it done when it opens
 - [ ] Decide: free reads left unused are lost when someone buys a pass (history counts after it ends); deleting an account resets the free allowance and erases payment records (DPDP and accounting both matter here)
 - [ ] Run `tests/billing.test.ts` once against real Postgres: PGlite runs one query at a time, so it can't prove the locks under real parallel load
 - [ ] Re-run Lighthouse on the live site after the open landing page and Speed Insights
@@ -93,7 +96,34 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-11
-- **Vercel Web Analytics:** Mayank enabled it in Vercel after `ba72a35` (its script went from 404 to 200), so `@vercel/analytics` 2.0.1 joins Speed Insights in `components/Vitals.tsx`, with the same URL scrubbing. Checked: typecheck, lint, 125 tests, production build.
+- **Fuel-first landing page, first-run tour, "tests coming soon" (Mayank's requests), not committed yet:**
+  - **Landing, open mode (crew designer):**
+    - Hero leads with calorie and protein tracking for Indian meals and shows English / हिंदी / Hinglish.
+    - New `Fuel` section: Snap, Say, Type, a logged-meal card and a Today ring, all labelled illustrative, playing once in view through `PlayOnView`.
+    - New `Languages` section: the same meal note in three languages; voice listens in Hindi only when Hindi is the chosen language, and buttons stay in English.
+    - Reports second, then the new `TestsSoon` section ("Coming soon: Blood tests through D-Human"), then a closing "Start with your next meal".
+    - Title "D-Human | Calorie tracking for Indian meals"; mode-aware description and footer.
+    - Waitlist mode checked identical, by DOM and pixels.
+    - The landing's Devanagari uses the phone's own font: Anek Devanagari's Devanagari part is 726 KB.
+  - **First-run tour (crew designer):**
+    - `components/platform/Tour.tsx` and `tour-stops.ts`, mounted in the app layout in its own Suspense boundary.
+    - 6 stops, Fuel first, each spotlighting the real nav item, with Skip tour, Back, Next, Esc and arrow keys, in a native `<dialog>`.
+    - Shown once per person: `profiles.tour_done_at` (migration `0006` adds it and backfills already-onboarded people, only on the run that adds the column), `POST /api/profile/tour`, a local-storage backup, and "Replay the app tour" in Settings.
+    - Onboarding's finish now leads with "Log your first meal".
+    - Dev session: demo people count as toured; `&tour=1` replays the tour; `?as=fresh&new=1` gives a brand-new person.
+    - `@source not "../video"` in `globals.css`, because Turbopack crashed scanning an unreadable video file in `video/assets`.
+  - **Coming soon:** "Blood tests through D-Human" on the landing page, the upload page and the tour's upload stop. The landing's "Test" step says tests through D-Human are coming soon, which also squares the loop video's booked-test screen.
+  - **Checked:** typecheck, lint, 140 tests, the production build, the new section and tour stop at 390 px, and no overflow.
+- **Home stuck on its skeleton (Mayank, after sign-in), not committed yet:**
+  - **Measured locally:** sign-in to dashboard took 0.5 to 0.9 s in dev, and the production build gave 0.35 to 0.47 s for a full load and 0.33 s for a client navigation. Not reproducible locally, so the cause is production-only.
+  - **Found:** every deployed function shipped 65 MB, 62 MB of it PGlite, which production never uses. Cold starts paid for all of it. `outputFileTracingExcludes` now leaves out PGlite and `.data`, so functions are about 3 MB.
+  - **Postgres:** idle connections now last 120 s instead of 20, so a reader tapping on after a pause doesn't reconnect every time. Connecting gives up after 10 s instead of 30.
+  - **Navigation:** sign-in, sign-out and account deletion do a full page load. Report upload and delete do one `router.push` instead of push plus refresh (two server renders).
+  - **Loading screen:** home's loading screen now shows "Log a meal" and "Upload a report" at once, a loading line, and after 6 s "This is taking longer than usual" with Reload (`components/platform/Stall.tsx`).
+  - **Errors:** `app/(platform)/(app)/error.tsx` catches failures with "Try again".
+  - **Logs:** a home load over 1.5 s logs `[home] slow load` with where the time went.
+  - **Live baseline before this deploy:** a function's first response was 1.15 s, then 0.22 to 0.26 s warm.
+- **Push `de4d9fe`, Vercel Web Analytics:** Mayank enabled it in Vercel after `ba72a35` (its script went from 404 to 200), so `@vercel/analytics` 2.0.1 joins Speed Insights in `components/Vitals.tsx`, with the same URL scrubbing. Checked: typecheck, lint, 125 tests, production build.
 - **Push `ba72a35`:** everything since `f72d2ee` in one commit: the open landing page and ₹49 pass, AI-analysed-only copy, the essential panel and ratios in code, rules-built stacks, shared events, the kickoff fixes, Speed Insights, migrations 0002 to 0005. Live in about 60 s. Checked live: "Start free" and the price line on `/`, no waitlist wording, `/signin` says "Start free or sign in", the billing routes give 401 signed out, the webhook gives 503 (no secret in Vercel yet), the Speed Insights script is served, the new Permissions-Policy is live, and functions run in `bom1`. The build succeeding means Supabase took migrations 0002 to 0005.
 - **Open sign-up, ₹49 pass and Speed Insights (Mayank's request):**
   - Landing: a crew agent built `lib/site-mode.ts`, `components/site/StartForm.tsx` ("Start free", which carries the email to sign-in in sessionStorage, never the URL) and `lib/signin-handoff.ts`. Header "Sign in", "Find your number" to `/signin`, mode-aware description and manifest, and a new open-mode hero line about uploading a report you already have. Waitlist mode checked pixel-identical to the old page. Sign-in now says "Start free or sign in".

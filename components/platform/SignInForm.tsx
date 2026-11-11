@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { clearHandedOffEmail, readHandedOffEmail } from "@/lib/signin-handoff";
 import { send } from "./net";
@@ -19,7 +18,6 @@ const MESSAGES: Record<string, string> = {
 const noChanges = () => () => {};
 
 export function SignInForm() {
-  const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   // The email typed on the landing page, if any. Empty on the server, filled
   // in on the client, so hydration matches. What the person types wins.
@@ -56,8 +54,8 @@ export function SignInForm() {
       return setError(MESSAGES[data.error ?? ""] ?? MESSAGES.invalid);
     }
     clearHandedOffEmail();
-    router.replace(data.next ?? "/home");
-    router.refresh();
+    // A full page load: the new session is read once, fresh, with nothing cached from before sign-in.
+    window.location.assign(data.next ?? "/home");
   }
 
   return step === "email" ? (
