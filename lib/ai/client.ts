@@ -34,24 +34,38 @@ export function fallbackFor(model: string): { betas?: string[]; fallbacks?: "def
   return model.startsWith("claude-haiku") ? {} : { betas: [FALLBACK_BETA], fallbacks: "default" };
 }
 
-// USD per million tokens (input, output), for the cost estimate in logs. Haiku's
-// rate is for prompts up to 100K tokens; web searches are $10 per thousand.
-const PRICES: Record<string, [number, number]> = {
-  "claude-opus-5-5": [4, 20],
-  "claude-opus-5": [5, 25],
-  "claude-sonnet-5-5": [2, 10],
-  "claude-sonnet-5": [2, 10],
-  "claude-haiku-5-5": [0.1, 0.5],
+// USD per million tokens (input, output, cache read), for the cost estimate in
+// logs. Cache writes cost 1.25x input (5-minute) or 2x (1-hour). Haiku's rate is
+// for prompts up to 100K tokens; web searches are $10 per thousand.
+const PRICES: Record<string, [number, number, number]> = {
+  "claude-opus-5-5": [4, 20, 0.2],
+  "claude-opus-5": [5, 25, 0.5],
+  "claude-sonnet-5-5": [2, 10, 0.2],
+  "claude-sonnet-5": [2, 10, 0.2],
+  "claude-haiku-5-5": [0.1, 0.5, 0.01],
 };
+
+export function costOf(message: BetaMessage): number {
+  const u = message.usage;
+  const [pin, pout, pread] = PRICES[message.model] ?? [0, 0, 0];
+  const written = u.cache_creation_input_tokens ?? 0;
+  const written1h = Math.min(written, u.cache_creation?.ephemeral_1h_input_tokens ?? 0);
+  const read = u.cache_read_input_tokens ?? 0;
+  const searches = u.server_tool_use?.web_search_requests ?? 0;
+  const tokens = u.input_tokens * pin + (written - written1h) * pin * 1.25 + written1h * pin * 2 + read * pread + u.output_tokens * pout;
+  return tokens / 1e6 + searches * 0.01;
+}
 
 export function logUsage(job: string, message: BetaMessage, startedAt?: number) {
   const u = message.usage;
-  const [pin, pout] = PRICES[message.model] ?? [0, 0];
-  const input = u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+  const read = u.cache_read_input_tokens ?? 0;
+  const written = u.cache_creation_input_tokens ?? 0;
   const searches = u.server_tool_use?.web_search_requests ?? 0;
-  const cost = (input * pin + u.output_tokens * pout) / 1e6 + searches * 0.01;
+  const cache = `${read ? ` cache_read=${read}` : ""}${written ? ` cache_write=${written}` : ""}`;
   const secs = startedAt ? ` ${((Date.now() - startedAt) / 1000).toFixed(1)}s` : "";
-  console.info(`[ai] ${job} ${message.model} in=${input} out=${u.output_tokens}${searches ? ` searches=${searches}` : ""} ~$${cost.toFixed(4)}${secs}`);
+  console.info(
+    `[ai] ${job} ${message.model} in=${u.input_tokens}${cache} out=${u.output_tokens}${searches ? ` searches=${searches}` : ""} ~$${costOf(message).toFixed(4)}${secs}`,
+  );
 }
 
 export type AiMode = "live" | "mock" | "off";

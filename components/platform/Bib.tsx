@@ -21,6 +21,7 @@ export function Bib({
   archetype,
   next,
   nextDetail,
+  retest = null,
   tone = null,
   className = "",
 }: {
@@ -30,14 +31,16 @@ export function Bib({
   archetype: Archetype;
   next: string;
   nextDetail?: string | null;
+  retest?: string | null; // a second line on the strip, so the retest stays in view when an event is picked
   tone?: Tone;
   className?: string;
 }) {
   // Sized to the card, not the screen, so the number and the figure never collide.
+  // Every row shares one side padding (--bib-pad), wide enough to clear the pin holes.
   const big = number.length > 2 ? "text-[24cqw]" : "text-[31cqw]";
   return (
     <figure
-      className={`paper @container relative isolate overflow-hidden [--cut:22px] ${className}`}
+      className={`paper @container relative isolate overflow-hidden [--bib-pad:clamp(2.25rem,8cqw,3rem)] [--cut:22px] ${className}`}
       style={{
         clipPath: "polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut))",
         backgroundImage: tone ? WASH[tone] : undefined,
@@ -53,12 +56,12 @@ export function Bib({
         <span key={pos} aria-hidden className={`absolute h-2.5 w-2.5 rounded-full bg-ink ${pos}`} />
       ))}
 
-      <div className="flex items-start justify-between gap-4 px-[8cqw] pt-8">
+      <div className="flex items-start justify-between gap-4 px-(--bib-pad) pt-8">
         <Wordmark className="h-3 w-auto" />
         <span className="text-right text-sm font-semibold leading-tight semiwide">{label}</span>
       </div>
 
-      <div className="flex items-end justify-between gap-2 px-[7cqw] pb-6 pt-2">
+      <div className="flex items-end justify-between gap-2 px-(--bib-pad) pb-6 pt-2">
         <div className="min-w-0 flex-1">
           <p className={`display-num ${big}`} aria-hidden>
             {number}
@@ -68,9 +71,10 @@ export function Bib({
         <Emote archetype={archetype} className="-mb-2 h-[33cqw] w-[33cqw] shrink-0" label={label} />
       </div>
 
-      <div className="relative border-t-2 border-dashed border-ink/35 px-10 py-4">
+      <div className="relative border-t-2 border-dashed border-ink/35 px-(--bib-pad) pb-6 pt-4">
         <p className="text-[0.9375rem] font-semibold leading-snug">{next}</p>
         {nextDetail && <p className="text-sm text-smoke">{nextDetail}</p>}
+        {retest && <p className="mt-2 border-t border-ink/15 pt-2 text-sm font-semibold leading-snug">{retest}</p>}
       </div>
     </figure>
   );

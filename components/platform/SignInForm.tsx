@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { clearHandedOffEmail, readHandedOffEmail } from "@/lib/signin-handoff";
+import { send } from "./net";
 
 const MESSAGES: Record<string, string> = {
   invalid_email: "That email doesn't look right.",
@@ -10,29 +12,37 @@ const MESSAGES: Record<string, string> = {
   invalid: "That code doesn't match. Check the latest email.",
   expired: "That code has expired. Ask for a new one.",
   locked: "Too many wrong tries for this code. Ask for a new one.",
+  offline: "We couldn't reach D-Human. Check your connection and try again.",
 };
+
+// sessionStorage doesn't announce changes in the same tab, so there is nothing to subscribe to.
+const noChanges = () => () => {};
 
 export function SignInForm() {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
-  const [email, setEmail] = useState("");
+  // The email typed on the landing page, if any. Empty on the server, filled
+  // in on the client, so hydration matches. What the person types wins.
+  const handedOff = useSyncExternalStore(noChanges, readHandedOffEmail, () => "");
+  const [typed, setTyped] = useState<string | null>(null);
+  const email = typed ?? handedOff;
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function post(url: string, body: unknown) {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
+    const r = await send<{ error: string; next: string }>(url, { body });
+    return { ok: r.ok, data: r.offline ? { error: "offline" } : r.data };
   }
 
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault();
     setBusy(true);
     setError(null);
+    setTyped(email); // fixed from here, even once the hand-off is cleared
     const { ok, data } = await post("/api/auth/code", { email });
     setBusy(false);
-    if (!ok) return setError(MESSAGES[data.error] ?? MESSAGES.unavailable);
+    if (!ok) return setError(MESSAGES[data.error ?? ""] ?? MESSAGES.unavailable);
     setStep("code");
   }
 
@@ -43,8 +53,9 @@ export function SignInForm() {
     const { ok, data } = await post("/api/auth/verify", { email, code });
     if (!ok) {
       setBusy(false);
-      return setError(MESSAGES[data.error] ?? MESSAGES.invalid);
+      return setError(MESSAGES[data.error ?? ""] ?? MESSAGES.invalid);
     }
+    clearHandedOffEmail();
     router.replace(data.next ?? "/home");
     router.refresh();
   }
@@ -62,7 +73,7 @@ export function SignInForm() {
         enterKeyHint="send"
         required
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e) => setTyped(e.target.value)}
         className="field h-13"
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? "signin-error" : undefined}

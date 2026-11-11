@@ -10,3 +10,7 @@
 - Commits that only update this memory (such as recording a hash) don't get their own log entry.
 - Keep the Snapshot, Gotchas and Open items current. Edit them in place rather than appending contradictions.
 - Never write secret values (API keys, the webhook URL or secret). Variable names only.
+
+## The crew
+
+Nine specialist agents live in `.claude/agents/` (product and engineering lead, chief of staff, staff engineer, systems and data engineer, AI efficiency lead, product designer, UX and retention designer, graphic designer, QA and security engineer). `docs/team/CREW.md` says who does what and how work flows. The main session orchestrates: agents can't start other agents, so dispatch them from the plan, then log their work here and commit only after Mayank agrees.

@@ -4,6 +4,7 @@ import { Uploader } from "@/components/platform/Uploader";
 import { aiMode } from "@/lib/ai/client";
 import { factsFor } from "@/lib/domain/facts";
 import { targetEvent } from "@/lib/platform/events";
+import { currentPlan } from "@/lib/platform/plan-state";
 import { requireMember } from "@/lib/platform/member";
 
 export const metadata: Metadata = { title: "Upload a report" };
@@ -11,7 +12,7 @@ export const metadata: Metadata = { title: "Upload a report" };
 async function Upload({ searchParams }: { searchParams: Promise<{ report?: string }> }) {
   const { user, profile, persona } = await requireMember();
   const { report } = await searchParams;
-  const target = await targetEvent(user.id, profile, persona);
+  const [target, plan] = await Promise.all([targetEvent(user.id, profile, persona), currentPlan(user.id, profile.timezone)]);
   return (
     <Uploader
       facts={factsFor(persona.archetype)}
@@ -19,6 +20,7 @@ async function Upload({ searchParams }: { searchParams: Promise<{ report?: strin
       target={target?.name ?? null}
       watchId={report ?? null}
       aiOff={aiMode() === "off"}
+      plan={plan}
     />
   );
 }

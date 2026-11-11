@@ -72,6 +72,7 @@ export function rangeText(m: Pick<Marker, "refLow" | "refHigh" | "refText" | "ra
         : m.refHigh != null
           ? `below ${fmt(m.refHigh)}`
           : m.refText || "no range printed";
+  if (m.rangeSource === "derived") return `${r} (typical range; calculated from your results)`;
   return m.rangeSource === "catalog" ? `${r} (typical range)` : r;
 }
 

@@ -5,7 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Wordmark } from "@/components/brand/Logo";
 import { ACTIVITIES, CONDITIONS, DIETS, GOALS, LANGUAGES, LEVELS, SEXES, labelOf } from "@/lib/domain/options";
 import { personaOf } from "@/lib/domain/persona";
+import { birthYearOk, MIN_AGE } from "./age";
 import { Bib } from "./Bib";
+import { send } from "./net";
 
 export type Draft = {
   name: string;
@@ -36,6 +38,14 @@ const EMPTY: Draft = {
 
 const thisYear = new Date().getFullYear();
 const NO_EVENTS = new Set(["yoga", "starting"]);
+// D-Human is for adults. A birth year can't prove 18 to the day, so consent also asks.
+const yearOk = (y: string) => /^\d{4}$/.test(y) && birthYearOk(+y, thisYear);
+function yearProblem(y: string) {
+  if (!y || yearOk(y)) return null;
+  if (y.length < 4) return y.length === 2 ? "Use all four digits, like 1994." : null;
+  if (+y > thisYear - MIN_AGE && +y <= thisYear) return `D-Human is for adults, so you need to be ${MIN_AGE} or over.`;
+  return "Check the year: four digits, like 1994.";
+}
 
 type Step = {
   id: string;
@@ -46,12 +56,20 @@ type Step = {
   optional?: boolean;
 };
 
+// Consent comes first, so nothing about your health is saved before you've
+// agreed. Then the language, so every question after it is in context.
 const STEPS: Step[] = [
+  { id: "consent", ask: () => "Your data stays yours.", help: "Before any questions, here's what we do with your answers.", ok: (d) => d.consent },
+  {
+    id: "language", ask: () => "Which language for your reads?",
+    help: "Your report reads, food notes and wraps will be written in it. Buttons and labels stay in English for now.",
+    ok: (d) => !!d.language,
+  },
   { id: "name", ask: () => "What should we call you?", help: "Your first name is enough. It goes on your bib.", ok: (d) => d.name.trim().length > 0 },
   {
     id: "born", ask: (d) => `${d.name.trim() || "Hi"}, when were you born?`,
     help: "Year and sex at birth set the right lab ranges for you. Haemoglobin, ferritin and more differ by sex.",
-    ok: (d) => /^\d{4}$/.test(d.birthYear) && +d.birthYear >= thisYear - 100 && +d.birthYear <= thisYear - 13 && !!d.sex,
+    ok: (d) => yearOk(d.birthYear) && !!d.sex,
   },
   { id: "body", ask: () => "Height and weight?", help: "Used for your protein and calorie targets. Skip if you'd rather not.", ok: (d) => validBody(d), optional: true },
   { id: "city", ask: () => "Where are you based?", help: "Your town or city. We use it to find events near you.", ok: (d) => d.city.trim().length > 1 },
@@ -66,8 +84,6 @@ const STEPS: Step[] = [
   },
   { id: "diet", ask: () => "How do you eat?", ok: (d) => !!d.diet },
   { id: "health", ask: () => "Anything we should know?", help: "All optional. It keeps suggestions safe for you.", ok: () => true, optional: true },
-  { id: "language", ask: () => "Which language for your reads?", help: "Your report reads, food notes and wraps will be written in it.", ok: (d) => !!d.language },
-  { id: "consent", ask: () => "Your data stays yours.", ok: (d) => d.consent },
 ];
 
 function validBody(d: Draft) {
@@ -75,9 +91,12 @@ function validBody(d: Draft) {
   const w = d.weightKg ? +d.weightKg : null;
   return (h == null || (h >= 100 && h <= 250)) && (w == null || (w >= 25 && w <= 300));
 }
-function saveProgress(d: Draft) {
-  const year = /^\d{4}$/.test(d.birthYear) && +d.birthYear >= thisYear - 100 && +d.birthYear <= thisYear - 13 ? +d.birthYear : null;
-  const body = {
+// Saves the answers so far. Never before consent: until then nothing leaves the phone.
+function progressBody(d: Draft) {
+  if (!d.consent) return null;
+  const year = yearOk(d.birthYear) ? +d.birthYear : null;
+  return {
+    consent: true as const,
     name: d.name.trim() || null,
     birthYear: year,
     sex: d.sex,
@@ -95,7 +114,6 @@ function saveProgress(d: Draft) {
     currentSupplements: d.currentSupplements.trim() || null,
     language: d.language,
   };
-  fetch("/api/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true }).catch(() => undefined);
 }
 
 const primary = (d: Draft) => d.primaryActivity ?? d.activities[0] ?? null;
@@ -109,6 +127,18 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const lastSaved = useRef<string | null>(null);
+
+  function saveProgress() {
+    const body = progressBody(d);
+    if (!body) return;
+    const text = JSON.stringify(body);
+    if (text === lastSaved.current) return; // nothing new since the last save
+    lastSaved.current = text;
+    void send("/api/profile", { body, keepalive: true }).then((r) => {
+      if (!r.ok) lastSaved.current = null; // try again on the next step
+    });
+  }
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -134,7 +164,7 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
   function go(dir: 1 | -1) {
     setError(null);
     // Each answer is saved as you go, so a closed tab or a new phone picks up where you left off.
-    if (dir === 1) saveProgress(d);
+    if (dir === 1) saveProgress();
     let j = i + dir;
     while (j >= 0 && j < STEPS.length && STEPS[j].skip?.(d)) j += dir;
     if (j < 0) return;
@@ -169,9 +199,16 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
       consent: true,
       complete: true,
     };
-    const res = await fetch("/api/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await send<{ issues: string[] }>("/api/profile", { body });
     setSaving(false);
-    if (!res.ok) return setError("We couldn't save that. Check your answers and try again.");
+    if (r.offline) return setError("No connection. Your answers are safe on this screen. Try again.");
+    if (r.status === 429) return setError("That's a lot of saves. Wait a few minutes, then try again.");
+    if (!r.ok) {
+      const bad = r.data.issues ?? [];
+      return setError(
+        bad.includes("birthYear") ? `Check your year of birth. D-Human is for adults, ${MIN_AGE} and over.` : "We couldn't save that. Check your answers and try again.",
+      );
+    }
     setDone(true);
   }
 
@@ -244,7 +281,7 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
               </button>
             )}
             <button type="submit" disabled={!canGo || saving} className="button-primary h-13 flex-1">
-              {saving ? "Saving…" : i === STEPS.length - 1 ? "Agree and finish" : step.optional && isBlankOptional(step.id, d) ? "Skip" : "Continue"}
+              {saving ? "Saving…" : step.id === "consent" ? "Agree and continue" : i === STEPS.length - 1 ? "Finish" : step.optional && isBlankOptional(step.id, d) ? "Skip" : "Continue"}
             </button>
           </div>
         </div>
@@ -287,7 +324,23 @@ function StepBody({
     case "born":
       return (
         <div className="space-y-6">
-          <input inputMode="numeric" autoComplete="bday-year" placeholder={`e.g. ${thisYear - 32}`} maxLength={4} value={d.birthYear} onChange={(e) => set("birthYear", e.target.value.replace(/\D/g, ""))} className="field h-14 text-xl" aria-label="Year of birth" />
+          <div>
+            <input
+              inputMode="numeric"
+              autoComplete="bday-year"
+              placeholder={`e.g. ${thisYear - 32}`}
+              maxLength={4}
+              value={d.birthYear}
+              onChange={(e) => set("birthYear", e.target.value.replace(/\D/g, ""))}
+              className="field h-14 text-xl"
+              aria-label="Year of birth"
+              aria-invalid={yearProblem(d.birthYear) ? true : undefined}
+              aria-describedby="born-problem"
+            />
+            <p id="born-problem" aria-live="polite" className={yearProblem(d.birthYear) ? "error-mark mt-2 text-sm" : "sr-only"}>
+              {yearProblem(d.birthYear)}
+            </p>
+          </div>
           <fieldset className="flex flex-wrap gap-2">
             <legend className="mb-2 text-sm text-graphite">Sex at birth</legend>
             {SEXES.map((s) => (
@@ -309,6 +362,9 @@ function StepBody({
             <span className="mb-2 block text-sm text-graphite">Weight (kg)</span>
             <input inputMode="decimal" value={d.weightKg} onChange={(e) => set("weightKg", e.target.value.replace(/[^\d.]/g, ""))} className="field h-14 text-xl" />
           </label>
+          <p aria-live="polite" className={validBody(d) ? "sr-only" : "error-mark col-span-2 text-sm"}>
+            {validBody(d) ? "" : "Height in centimetres (100 to 250, like 168) and weight in kilograms (25 to 300)."}
+          </p>
         </div>
       );
     case "city":
@@ -408,15 +464,22 @@ function StepBody({
       return (
         <div className="space-y-5 text-[0.9375rem]">
           <ul className="space-y-3 text-graphite">
-            <li>Your reports and answers are used only to give you your reads, your food notes and your stack.</li>
-            <li>Claude, an AI model by Anthropic, reads your reports and meals for us. We don&apos;t sell or share your data with brands.</li>
+            <li>D-Human is for adults, {MIN_AGE} and over.</li>
+            <li>We use your reports and answers only to give you your reads, your food notes and your stack.</li>
+            <li>
+              Claude, an AI model made by Anthropic, reads your reports and meals for us. That processing happens outside India, on Anthropic&apos;s
+              servers.
+            </li>
+            <li>We don&apos;t sell your data or share it with brands.</li>
             <li>Reads are AI, not a diagnosis. When a marker needs a doctor, we say so.</li>
             <li>You can delete everything, any time, from Settings.</li>
           </ul>
           <label className="choice min-h-14 w-full gap-3 py-3">
             <input type="checkbox" checked={d.consent} onChange={() => set("consent", !d.consent)} className="sr-only" />
-            <span aria-hidden className="grid h-5 w-5 place-items-center border border-current text-xs">{d.consent ? "✓" : ""}</span>
-            <span className="font-semibold">I agree to D-Human processing my health data for this</span>
+            <span aria-hidden className="grid h-5 w-5 shrink-0 place-items-center border border-current text-xs">
+              {d.consent ? "✓" : ""}
+            </span>
+            <span className="font-semibold">I&apos;m {MIN_AGE} or over, and I agree to D-Human processing my health data this way.</span>
           </label>
         </div>
       );

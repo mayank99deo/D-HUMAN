@@ -29,6 +29,8 @@ async function Flow() {
     medications: p?.medications ?? "",
     currentSupplements: p?.currentSupplements ?? "",
     language: p?.language ?? "en",
+    // Someone coming back finds their earlier agreement ticked; nothing else changes.
+    consent: !!p?.consentAt,
   };
   return <Onboarding initial={initial} />;
 }

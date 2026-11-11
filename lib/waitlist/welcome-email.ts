@@ -21,7 +21,7 @@ const FONT = "Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 const STEPS = [
   ["Test", "Blood, urine, gut and more. Most of it from home."],
-  ["Read", "A doctor-reviewed report in plain words."],
+  ["Read", "An AI-analysed report in plain words."],
   ["Stack", "Supplements matched to your markers, from clean-label brands."],
   ["Retest", "Key markers again at 3–4 months, to show what moved."],
 ] as const;

@@ -102,7 +102,7 @@ export function OrbitScreen({
         <span className="mt-1 block text-sm font-semibold text-graphite">{fact.kicker}</span>
         <span className="mt-2 block text-balance text-[clamp(0.9rem,2.5vw,1.375rem)] font-semibold leading-snug">{fact.text}</span>
       </span>
-      <span className="mt-3 block text-xs text-graphite opacity-70 group-active:opacity-100">Tap for another</span>
+      <span className="mt-3 block text-xs text-graphite group-active:text-paper">Tap for another</span>
     </button>
   );
 
@@ -115,7 +115,7 @@ export function OrbitScreen({
         </defs>
 
         <g className={state !== "error" ? "orbit-spin" : ""} style={{ ["--orbit-speed" as string]: running ? "110s" : "220s" }}>
-          <text className="fill-paper text-[17px] font-semibold" style={{ fontVariationSettings: '"wdth" 112' }} opacity={ringLit ? 0.9 : 0.45}>
+          <text className="fill-paper text-[17px] font-semibold" style={{ fontVariationSettings: '"wdth" 112' }} opacity={ringLit ? 0.9 : 0.6}>
             <textPath href="#orbit-outer">{outer}</textPath>
           </text>
         </g>
@@ -123,9 +123,10 @@ export function OrbitScreen({
         <g className={state !== "error" ? "orbit-spin-back" : ""} style={{ ["--orbit-speed" as string]: running ? "150s" : "300s" }}>
           <text className="text-[14px]">
             <textPath href="#orbit-inner">
+              {/* State by mark and weight, not by fading: ✓ done, ● now (bold, white), plain for next. */}
               {steps.map((x, i) => (
-                <tspan key={i} className={x.state === "now" ? "fill-paper font-bold" : "fill-graphite"} opacity={x.state === "next" ? 0.5 : 1}>
-                  {x.state === "done" ? "✓ " : ""}
+                <tspan key={i} className={x.state === "now" ? "fill-paper font-bold" : "fill-graphite"}>
+                  {x.state === "done" ? "✓ " : x.state === "now" ? "● " : ""}
                   {x.text}
                   {"   "}
                 </tspan>
@@ -138,13 +139,15 @@ export function OrbitScreen({
         {Array.from({ length: ticks }, (_, i) => {
           const a = -Math.PI / 2 + (i / ticks) * Math.PI * 2;
           const on = i < lit;
+          // Lit ticks are longer and thicker as well as green, so progress reads without colour.
+          const inner = on ? (i % 8 === 0 ? 178 : 182) : i % 8 === 0 ? 184 : 188;
           return (
             <line
               key={i}
               x1={(300 + 194 * Math.cos(a)).toFixed(2)}
               y1={(300 + 194 * Math.sin(a)).toFixed(2)}
-              x2={(300 + (i % 8 === 0 ? 181 : 186) * Math.cos(a)).toFixed(2)}
-              y2={(300 + (i % 8 === 0 ? 181 : 186) * Math.sin(a)).toFixed(2)}
+              x2={(300 + inner * Math.cos(a)).toFixed(2)}
+              y2={(300 + inner * Math.sin(a)).toFixed(2)}
               stroke={on ? green(i / (ticks - 1)) : "var(--color-line-strong)"}
               strokeWidth={on ? 2.4 : 1}
               style={{ transition: "stroke 400ms" }}

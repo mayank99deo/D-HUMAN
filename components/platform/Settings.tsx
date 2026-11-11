@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ACTIVITIES, CONDITIONS, DIETS, GOALS, LANGUAGES, LEVELS, SEXES } from "@/lib/domain/options";
+import type { PlanView } from "@/lib/domain/plan";
+import { birthYearOk, MIN_AGE } from "./age";
+import { OFFLINE, send } from "./net";
+import { PlanCard, type PaidPass } from "./Paywall";
 
 type P = {
   name: string; birthYear: string; sex: string | null; heightCm: string; weightKg: string; city: string;
@@ -41,11 +45,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function Settings({ email, profile }: { email: string; profile: P }) {
+export function Settings({ email, profile, plan, passes }: { email: string; profile: P; plan: PlanView; passes: PaidPass[] }) {
   const router = useRouter();
   const [p, setP] = useState(profile);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [problem, setProblem] = useState<string | null>(null);
   const [del, setDel] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const set = <K extends keyof P>(k: K, v: P[K]) => {
     setSaved("idle");
     setP((c) => ({ ...c, [k]: v }));
@@ -54,12 +63,16 @@ export function Settings({ email, profile }: { email: string; profile: P }) {
     set(k, p[k].includes(v) ? p[k].filter((x) => x !== v) : [...p[k], v]);
 
   async function save() {
+    const fail = (why: string) => {
+      setSaved("error");
+      setProblem(why);
+    };
+    if (p.birthYear && !(/^\d{4}$/.test(p.birthYear) && birthYearOk(+p.birthYear))) return fail(`Check the year of birth: four digits, and D-Human is for adults, ${MIN_AGE} and over.`);
     setSaved("saving");
+    setProblem(null);
     const primary = p.activities.includes(p.primaryActivity ?? "") ? p.primaryActivity : p.activities[0] ?? null;
-    const res = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    const r = await send<{ issues: string[] }>("/api/profile", {
+      body: {
         name: p.name.trim() || null,
         birthYear: p.birthYear ? +p.birthYear : null,
         sex: p.sex,
@@ -77,30 +90,57 @@ export function Settings({ email, profile }: { email: string; profile: P }) {
         medications: p.medications.trim() || null,
         currentSupplements: p.currentSupplements.trim() || null,
         language: p.language,
-      }),
+      },
     });
-    setSaved(res.ok ? "saved" : "error");
-    if (res.ok) router.refresh();
+    if (r.ok) {
+      setSaved("saved");
+      return router.refresh();
+    }
+    const bad = r.data.issues ?? [];
+    fail(
+      r.offline
+        ? `Not saved. ${OFFLINE} Your changes are still here.`
+        : r.status === 429
+          ? "That's a lot of saves. Wait a few minutes, then try again."
+          : bad.includes("birthYear")
+            ? `Check the year of birth. D-Human is for adults, ${MIN_AGE} and over.`
+            : bad.some((k) => k === "heightCm" || k === "weightKg")
+              ? "Check height (100 to 250 cm) and weight (25 to 300 kg)."
+              : "Couldn't save. Check your answers and try again.",
+    );
   }
 
   async function signOut() {
-    await fetch("/api/auth/signout", { method: "POST" });
+    setSigningOut(true);
+    setSignOutError(null);
+    const r = await send("/api/auth/signout");
+    if (!r.ok) {
+      setSigningOut(false);
+      return setSignOutError(r.offline ? `You're still signed in. ${OFFLINE}` : "You're still signed in. Try again.");
+    }
     router.replace("/signin");
     router.refresh();
   }
 
   async function deleteAll() {
-    const res = await fetch("/api/account/delete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: del }) });
-    if (res.ok) {
-      router.replace("/");
-      router.refresh();
+    setDeleting(true);
+    setDeleteError(null);
+    const r = await send("/api/account/delete", { body: { confirm: del } });
+    if (!r.ok) {
+      setDeleting(false);
+      // Never let a failed delete of health data look like it worked.
+      return setDeleteError(r.offline ? `Nothing was deleted. ${OFFLINE}` : "Nothing was deleted. Try again in a minute.");
     }
+    router.replace("/");
+    router.refresh();
   }
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-24 pt-8 sm:px-6 lg:pt-12">
       <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">You</h1>
       <p className="mt-2 text-graphite">Signed in as {email}</p>
+
+      <PlanCard plan={plan} passes={passes} />
 
       <section className="mt-10" aria-label="Profile">
         <Field label="Name">
@@ -160,29 +200,39 @@ export function Settings({ email, profile }: { email: string; profile: P }) {
           <button type="button" onClick={save} disabled={saved === "saving"} className="button-primary h-12 px-8">
             {saved === "saving" ? "Saving…" : "Save changes"}
           </button>
-          <span role="status" className="text-sm text-graphite">
-            {saved === "saved" ? "Saved. New reads use these answers." : saved === "error" ? "Couldn't save. Check the year, height and weight." : ""}
+          <span role="status" className={saved === "error" ? "error-mark text-sm" : "text-sm text-graphite"}>
+            {saved === "saved" ? "Saved. New reads use these answers." : saved === "error" ? problem : ""}
           </span>
         </div>
       </section>
 
       <section className="mt-14 border-t border-line pt-6">
-        <button type="button" onClick={signOut} className="button-ghost h-12">
-          Sign out
+        <button type="button" onClick={signOut} disabled={signingOut} className="button-ghost h-12">
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
+        {signOutError && (
+          <p role="alert" className="error-mark mt-3 text-sm">
+            {signOutError}
+          </p>
+        )}
       </section>
 
       <section className="mt-14 border border-line-strong p-5" aria-labelledby="delete">
         <h2 id="delete" className="text-xl font-bold semiwide">
           Delete everything
         </h2>
-        <p className="mt-2 text-sm text-graphite">Your account, reports, files, markers, food log, wraps and stacks are erased for good. Type DELETE to confirm.</p>
+        <p className="mt-2 text-sm text-graphite">Your account, reports, files, markers, food log, wraps, stacks and any pass you&apos;ve paid for are erased for good. Type DELETE to confirm.</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <input className="field h-12 w-40" value={del} onChange={(e) => setDel(e.target.value)} aria-label="Type DELETE to confirm" autoComplete="off" />
-          <button type="button" disabled={del !== "DELETE"} onClick={deleteAll} className="button-primary h-12">
-            Delete my account
+          <button type="button" disabled={del !== "DELETE" || deleting} onClick={deleteAll} className="button-primary h-12">
+            {deleting ? "Deleting…" : "Delete my account"}
           </button>
         </div>
+        {deleteError && (
+          <p role="alert" className="error-mark mt-3 text-sm">
+            {deleteError}
+          </p>
+        )}
       </section>
     </main>
   );

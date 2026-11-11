@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { Wordmark } from "@/components/brand/Logo";
+import { isWaitlist } from "@/lib/site-mode";
+
+const BUTTON =
+  "inline-flex min-h-11 items-center border border-paper px-4 text-sm font-semibold whitespace-nowrap transition-colors hover:bg-paper hover:text-ink active:bg-paper active:text-ink";
 
 function subscribe(onChange: () => void) {
   window.addEventListener("scroll", onChange, { passive: true });
@@ -26,12 +31,16 @@ export function Header() {
         <a href="#top" className="-mx-2 flex h-11 items-center px-2">
           <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
         </a>
-        <a
-          href="#join"
-          className="inline-flex min-h-11 items-center border border-paper px-4 text-sm font-semibold whitespace-nowrap transition-colors hover:bg-paper hover:text-ink active:bg-paper active:text-ink"
-        >
-          Join the waitlist
-        </a>
+        {isWaitlist ? (
+          <a href="#join" className={BUTTON}>
+            Join the waitlist
+          </a>
+        ) : (
+          // New people start here too: the sign-in form makes the account.
+          <Link href="/signin" className={BUTTON}>
+            Sign in
+          </Link>
+        )}
       </div>
     </header>
   );

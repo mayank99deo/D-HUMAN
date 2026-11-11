@@ -10,7 +10,7 @@ export function Footer() {
         </div>
         <p className="max-w-[60ch] text-sm text-graphite lg:col-span-6 lg:col-start-7">
           D-Human offers wellness guidance and screening. It does not diagnose or treat any condition.
-          Imaging and clinical tests are run by licensed partner centres and reviewed by a doctor.
+          Imaging and clinical tests are run by licensed partner centres.
           <span className="mt-4 block">© 2026 D-Human</span>
         </p>
       </div>

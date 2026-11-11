@@ -23,6 +23,8 @@ export type MarkerDef = {
   doctor?: Bounds | { male: Bounds; female: Bounds };
   urgent?: Bounds;
   what: string; // one plain sentence
+  /** Worked out in code from other markers (lib/domain/derived.ts) when a report doesn't print it. */
+  derived?: true;
 };
 
 export type Panel =
@@ -37,7 +39,8 @@ export type Panel =
   | "minerals"
   | "inflammation"
   | "hormones"
-  | "muscle";
+  | "muscle"
+  | "immune";
 
 export const PANELS: Record<Panel, string> = {
   blood: "Blood count",
@@ -52,6 +55,7 @@ export const PANELS: Record<Panel, string> = {
   inflammation: "Inflammation",
   hormones: "Hormones",
   muscle: "Muscle",
+  immune: "White cells",
 };
 
 const mgdl = ["mg/dl", "mg%"];
@@ -214,7 +218,7 @@ export const MARKERS: MarkerDef[] = [
   {
     key: "non_hdl", name: "Non-HDL cholesterol", short: "Non-HDL", panel: "lipids", unit: "mg/dL", units: mgdl,
     aliases: ["non-hdl cholesterol", "non hdl cholesterol", "non-hdl"],
-    range: { high: 130 },
+    range: { high: 130 }, derived: true,
     what: "Every cholesterol particle that can clog arteries.",
   },
   {
@@ -370,9 +374,301 @@ export const MARKERS: MarkerDef[] = [
     doctor: { above: 1500 },
     what: "Leaks from muscle after hard or new work. High after training is common.",
   },
+  // ── The essential panel, added 2026-11-11 (benchmarked against Nue Health's
+  //    95-marker panel; see docs/research/nuehealth-biomarkers.md). Fallback ranges
+  //    only where they're widely agreed; hormones that depend on age, sex and cycle
+  //    rely on the lab's printed range.
+  // Blood count, finer detail
+  {
+    key: "mch", name: "Mean cell haemoglobin", short: "MCH", panel: "blood", unit: "pg", units: ["pg", "picogram"],
+    aliases: ["mch", "mean corpuscular hemoglobin", "mean corpuscular haemoglobin", "mean cell hemoglobin"],
+    range: { low: 27, high: 32 },
+    what: "How much haemoglobin each red cell carries. Low often goes with low iron.",
+  },
+  {
+    key: "mchc", name: "Mean cell haemoglobin concentration", short: "MCHC", panel: "blood", unit: "g/dL", units: ["g/dl", "gm/dl", "g%"],
+    aliases: ["mchc", "mean corpuscular hemoglobin concentration", "mean corpuscular haemoglobin concentration"],
+    range: { low: 31.5, high: 34.5 },
+    what: "How packed with haemoglobin your red cells are.",
+  },
+  {
+    key: "rdw", name: "Red cell distribution width", short: "RDW", panel: "blood", unit: "%", units: ["%", "fl"],
+    aliases: ["rdw", "rdw-cv", "rdw cv", "red cell distribution width"],
+    range: { low: 11.6, high: 14 },
+    what: "How much your red cells vary in size. It often rises early when iron, B12 or folate run low.",
+  },
+  {
+    key: "mpv", name: "Mean platelet volume", short: "MPV", panel: "blood", unit: "fL", units: ["fl"],
+    aliases: ["mpv", "mean platelet volume"],
+    range: { low: 7.5, high: 11.5 },
+    what: "The average size of your platelets.",
+  },
+  {
+    key: "pdw", name: "Platelet distribution width", short: "PDW", panel: "blood", unit: "fL", units: ["fl", "%"],
+    aliases: ["pdw", "platelet distribution width"],
+    what: "How much your platelets vary in size.",
+  },
+  // White cells
+  {
+    key: "neutrophils", name: "Neutrophils (absolute)", short: "Neut", panel: "immune", unit: "10³/µL", units: ["10^3/µl", "10^3/ul", "thou/µl", "thou/ul", "10³/µl"],
+    aliases: ["neutrophils absolute", "absolute neutrophil count", "anc", "neutrophils (absolute)", "neut#", "absolute neutrophils"],
+    range: { low: 2, high: 7 },
+    doctor: { below: 1 }, urgent: { below: 0.5 },
+    what: "Your first-line infection fighters.",
+  },
+  {
+    key: "neutrophils_pct", name: "Neutrophils %", short: "Neut %", panel: "immune", unit: "%", units: ["%"],
+    aliases: ["neutrophils", "neutrophils %", "neutrophil %", "neut%", "polymorphs", "segmented neutrophils"],
+    range: { low: 40, high: 80 },
+    what: "Neutrophils as a share of all white cells.",
+  },
+  {
+    key: "lymphocytes", name: "Lymphocytes (absolute)", short: "Lymph", panel: "immune", unit: "10³/µL", units: ["10^3/µl", "10^3/ul", "thou/µl", "thou/ul", "10³/µl"],
+    aliases: ["lymphocytes absolute", "absolute lymphocyte count", "alc", "lymphocytes (absolute)", "lymph#"],
+    range: { low: 1, high: 3 },
+    what: "White cells that make antibodies and remember past infections.",
+  },
+  {
+    key: "lymphocytes_pct", name: "Lymphocytes %", short: "Lymph %", panel: "immune", unit: "%", units: ["%"],
+    aliases: ["lymphocytes", "lymphocytes %", "lymphocyte %", "lymph%"],
+    range: { low: 20, high: 40 },
+    what: "Lymphocytes as a share of all white cells.",
+  },
+  {
+    key: "monocytes", name: "Monocytes (absolute)", short: "Mono", panel: "immune", unit: "10³/µL", units: ["10^3/µl", "10^3/ul", "thou/µl", "thou/ul", "10³/µl"],
+    aliases: ["monocytes absolute", "absolute monocyte count", "monocytes (absolute)", "mono#"],
+    range: { low: 0.2, high: 1 },
+    what: "White cells that clear debris and help with healing.",
+  },
+  {
+    key: "monocytes_pct", name: "Monocytes %", short: "Mono %", panel: "immune", unit: "%", units: ["%"],
+    aliases: ["monocytes", "monocytes %", "monocyte %", "mono%"],
+    range: { low: 2, high: 10 },
+    what: "Monocytes as a share of all white cells.",
+  },
+  {
+    key: "eosinophils", name: "Eosinophils (absolute)", short: "Eos", panel: "immune", unit: "10³/µL", units: ["10^3/µl", "10^3/ul", "thou/µl", "thou/ul", "10³/µl"],
+    aliases: ["eosinophils absolute", "absolute eosinophil count", "aec", "eosinophils (absolute)", "eos#"],
+    range: { low: 0.02, high: 0.5 },
+    what: "White cells that rise with allergies and some infections.",
+  },
+  {
+    key: "eosinophils_pct", name: "Eosinophils %", short: "Eos %", panel: "immune", unit: "%", units: ["%"],
+    aliases: ["eosinophils", "eosinophils %", "eosinophil %", "eos%"],
+    range: { low: 1, high: 6 },
+    what: "Eosinophils as a share of all white cells.",
+  },
+  {
+    key: "basophils", name: "Basophils (absolute)", short: "Baso", panel: "immune", unit: "10³/µL", units: ["10^3/µl", "10^3/ul", "thou/µl", "thou/ul", "10³/µl"],
+    aliases: ["basophils absolute", "absolute basophil count", "basophils (absolute)", "baso#"],
+    range: { high: 0.1 },
+    what: "A small group of white cells involved in allergic reactions.",
+  },
+  {
+    key: "basophils_pct", name: "Basophils %", short: "Baso %", panel: "immune", unit: "%", units: ["%"],
+    aliases: ["basophils", "basophils %", "basophil %", "baso%"],
+    range: { high: 2 },
+    what: "Basophils as a share of all white cells.",
+  },
+  {
+    key: "nlr", name: "Neutrophil to lymphocyte ratio", short: "NLR", panel: "immune", unit: "ratio", units: ["ratio", ""],
+    aliases: ["nlr", "neutrophil lymphocyte ratio", "neutrophil to lymphocyte ratio", "n/l ratio"],
+    range: { high: 3 }, derived: true,
+    what: "A simple sign of stress on the body from infection, inflammation or hard training.",
+  },
+  // Iron
+  {
+    key: "uibc", name: "Unsaturated iron-binding capacity", short: "UIBC", panel: "iron", unit: "µg/dL", units: ["µg/dl", "ug/dl", "mcg/dl"],
+    aliases: ["uibc", "unsaturated iron binding capacity"],
+    what: "Spare room on your iron carriers. It rises when iron is short.",
+  },
+  // Thyroid
+  {
+    key: "t4", name: "Total T4", short: "T4", panel: "thyroid", unit: "µg/dL", units: ["µg/dl", "ug/dl", "mcg/dl"],
+    aliases: ["t4", "total t4", "thyroxine", "total thyroxine", "t4 total", "thyroxine (t4)"],
+    range: { low: 5, high: 12 },
+    what: "All of the main thyroid hormone in your blood, bound and free.",
+  },
+  {
+    key: "t3", name: "Total T3", short: "T3", panel: "thyroid", unit: "ng/dL", units: ["ng/dl"],
+    aliases: ["t3", "total t3", "triiodothyronine", "total triiodothyronine", "t3 total", "triiodothyronine (t3)"],
+    range: { low: 80, high: 200 },
+    what: "All of the active thyroid hormone in your blood, bound and free.",
+  },
+  // Blood sugar
+  {
+    key: "homa_ir", name: "HOMA-IR", short: "HOMA-IR", panel: "sugar", unit: "index", units: ["index", "ratio", ""],
+    aliases: ["homa-ir", "homa ir", "insulin resistance index"],
+    range: { high: 2.5 }, derived: true,
+    what: "How hard your body works to keep sugar steady, from fasting glucose and insulin. Higher means more insulin resistance.",
+  },
+  // Cholesterol
+  {
+    key: "apob", name: "Apolipoprotein B", short: "ApoB", panel: "lipids", unit: "mg/dL", units: ["mg/dl", "mg%"],
+    aliases: ["apob", "apo b", "apolipoprotein b", "apo-b", "apolipoprotein b (apo b)"],
+    range: { high: 100 },
+    what: "A count of the particles that carry cholesterol into artery walls; many doctors read it as the sharpest single heart-risk marker.",
+  },
+  {
+    key: "apoa1", name: "Apolipoprotein A1", short: "ApoA1", panel: "lipids", unit: "mg/dL", units: ["mg/dl", "mg%"],
+    aliases: ["apoa1", "apo a1", "apolipoprotein a1", "apo-a1", "apolipoprotein a-i"],
+    what: "The main protein on HDL, the cholesterol that clears the rest.",
+  },
+  {
+    key: "lpa", name: "Lipoprotein(a)", short: "Lp(a)", panel: "lipids", unit: "mg/dL", units: ["mg/dl", "mg%"],
+    aliases: ["lp(a)", "lpa", "lipoprotein a", "lipoprotein (a)", "lipoprotein(a)"],
+    range: { high: 30 },
+    what: "A largely inherited cholesterol particle; one test in life is usually enough, because diet barely moves it.",
+  },
+  {
+    key: "tc_hdl_ratio", name: "Total cholesterol to HDL ratio", short: "TC/HDL", panel: "lipids", unit: "ratio", units: ["ratio", ""],
+    aliases: ["tc/hdl ratio", "total cholesterol/hdl ratio", "chol/hdl ratio", "cholesterol hdl ratio", "tc/hdl"],
+    range: { high: 5 }, derived: true,
+    what: "Total cholesterol over HDL. Lower is better.",
+  },
+  {
+    key: "ldl_hdl_ratio", name: "LDL to HDL ratio", short: "LDL/HDL", panel: "lipids", unit: "ratio", units: ["ratio", ""],
+    aliases: ["ldl/hdl ratio", "ldl hdl ratio", "ldl/hdl"],
+    range: { high: 3.5 }, derived: true,
+    what: "Artery-clogging cholesterol against the cholesterol that clears it. Lower is better.",
+  },
+  {
+    key: "tg_hdl_ratio", name: "Triglyceride to HDL ratio", short: "TG/HDL", panel: "lipids", unit: "ratio", units: ["ratio", ""],
+    aliases: ["tg/hdl ratio", "triglyceride/hdl ratio", "tg hdl ratio", "tg/hdl"],
+    range: { high: 3 }, derived: true,
+    what: "A simple sign of insulin resistance: higher means your body handles sugar and fat less well.",
+  },
+  {
+    key: "apob_apoa1_ratio", name: "ApoB to ApoA1 ratio", short: "ApoB/A1", panel: "lipids", unit: "ratio", units: ["ratio", ""],
+    aliases: ["apob/apoa1 ratio", "apo b/apo a1 ratio", "apob apoa1 ratio"],
+    range: { male: { high: 0.9 }, female: { high: 0.8 } }, derived: true,
+    what: "Particles that clog arteries against the ones that clear them. Lower is better.",
+  },
+  // Liver
+  {
+    key: "bilirubin_direct", name: "Direct bilirubin", short: "D-Bili", panel: "liver", unit: "mg/dL", units: ["mg/dl", "mg%"],
+    aliases: ["bilirubin direct", "direct bilirubin", "conjugated bilirubin", "bilirubin (direct)"],
+    range: { high: 0.3 },
+    what: "Bilirubin the liver has already processed.",
+  },
+  {
+    key: "bilirubin_indirect", name: "Indirect bilirubin", short: "I-Bili", panel: "liver", unit: "mg/dL", units: ["mg/dl", "mg%"],
+    aliases: ["bilirubin indirect", "indirect bilirubin", "unconjugated bilirubin", "bilirubin (indirect)"],
+    range: { high: 1 }, derived: true,
+    what: "Bilirubin on its way to the liver. Mildly high is often harmless (Gilbert's).",
+  },
+  {
+    key: "total_protein", name: "Total protein", short: "Protein", panel: "liver", unit: "g/dL", units: ["g/dl", "gm/dl"],
+    aliases: ["total protein", "serum total protein", "protein total", "total proteins"],
+    range: { low: 6, high: 8.3 },
+    what: "All the protein in your blood, albumin and globulins together.",
+  },
+  {
+    key: "globulin", name: "Globulin", short: "Glob", panel: "liver", unit: "g/dL", units: ["g/dl", "gm/dl"],
+    aliases: ["globulin", "serum globulin", "globulins"],
+    range: { low: 2, high: 3.5 }, derived: true,
+    what: "Proteins that include antibodies.",
+  },
+  {
+    key: "ag_ratio", name: "Albumin to globulin ratio", short: "A/G", panel: "liver", unit: "ratio", units: ["ratio", ""],
+    aliases: ["a/g ratio", "albumin/globulin ratio", "albumin globulin ratio", "a:g ratio"],
+    range: { low: 1, high: 2.2 }, derived: true,
+    what: "The balance between your two main blood proteins.",
+  },
+  // Kidney and minerals
+  {
+    key: "bun_creatinine_ratio", name: "BUN to creatinine ratio", short: "BUN/Cr", panel: "kidney", unit: "ratio", units: ["ratio", ""],
+    aliases: ["bun/creatinine ratio", "bun creatinine ratio", "urea nitrogen/creatinine ratio", "bun/cr"],
+    range: { low: 10, high: 20 }, derived: true,
+    what: "Helps tell dehydration or a high-protein diet apart from a kidney issue.",
+  },
+  {
+    key: "cystatin_c", name: "Cystatin C", short: "Cys C", panel: "kidney", unit: "mg/L", units: ["mg/l"],
+    aliases: ["cystatin c", "cystatin-c", "serum cystatin c"],
+    what: "A kidney marker that, unlike creatinine, isn't pushed up by muscle mass, which helps for lifters.",
+  },
+  {
+    key: "chloride", name: "Chloride", short: "Cl", panel: "minerals", unit: "mmol/L", units: ["mmol/l", "meq/l"],
+    aliases: ["chloride", "serum chloride", "cl", "cl-"],
+    range: { low: 98, high: 107 },
+    what: "Works with sodium to balance your body's fluids.",
+  },
+  {
+    key: "zinc", name: "Zinc", short: "Zn", panel: "minerals", unit: "µg/dL", units: ["µg/dl", "ug/dl", "mcg/dl"],
+    aliases: ["zinc", "serum zinc", "zn"],
+    range: { low: 70, high: 120 },
+    what: "A mineral for immunity, healing and hormones; plant-heavy diets can run low.",
+  },
+  // Hormones
+  {
+    key: "shbg", name: "Sex hormone-binding globulin", short: "SHBG", panel: "hormones", unit: "nmol/L", units: ["nmol/l"],
+    aliases: ["shbg", "sex hormone binding globulin"],
+    what: "Holds testosterone and oestrogen in the blood, controlling how much is free to act.",
+  },
+  {
+    key: "testosterone_free", name: "Free testosterone", short: "Free T", panel: "hormones", unit: "pg/mL", units: ["pg/ml"],
+    aliases: ["free testosterone", "testosterone free", "testosterone, free"],
+    what: "The share of testosterone that's free to act on muscles and mood.",
+  },
+  {
+    key: "fai", name: "Free androgen index", short: "FAI", panel: "hormones", unit: "%", units: ["%", "ratio", ""],
+    aliases: ["fai", "free androgen index"],
+    derived: true,
+    what: "Testosterone against SHBG: a rough guide to how much testosterone is free.",
+  },
+  {
+    key: "estradiol", name: "Estradiol", short: "E2", panel: "hormones", unit: "pg/mL", units: ["pg/ml"],
+    aliases: ["estradiol", "oestradiol", "e2", "estradiol (e2)"],
+    what: "The main oestrogen. In women it changes through the cycle; men need a little too.",
+  },
+  {
+    key: "dhea_s", name: "DHEA sulphate", short: "DHEA-S", panel: "hormones", unit: "µg/dL", units: ["µg/dl", "ug/dl", "mcg/dl"],
+    aliases: ["dhea-s", "dheas", "dhea sulfate", "dhea sulphate", "dehydroepiandrosterone sulfate"],
+    what: "A hormone from the adrenal glands that the body turns into other hormones; it falls with age.",
+  },
+  {
+    key: "lh", name: "Luteinising hormone", short: "LH", panel: "hormones", unit: "mIU/mL", units: ["miu/ml", "iu/l"],
+    aliases: ["lh", "luteinizing hormone", "luteinising hormone"],
+    what: "The brain's signal to the testes or ovaries to make sex hormones.",
+  },
+  {
+    key: "fsh", name: "Follicle-stimulating hormone", short: "FSH", panel: "hormones", unit: "mIU/mL", units: ["miu/ml", "iu/l"],
+    aliases: ["fsh", "follicle stimulating hormone"],
+    what: "The brain's signal for egg and sperm production.",
+  },
+  {
+    key: "prolactin", name: "Prolactin", short: "PRL", panel: "hormones", unit: "ng/mL", units: ["ng/ml"],
+    aliases: ["prolactin", "prl", "serum prolactin"],
+    what: "A hormone best known for milk production; stress and some medicines can raise it.",
+  },
+  {
+    key: "progesterone", name: "Progesterone", short: "P4", panel: "hormones", unit: "ng/mL", units: ["ng/ml"],
+    aliases: ["progesterone", "p4", "serum progesterone"],
+    what: "Rises after ovulation; it depends on the day of the cycle.",
+  },
+  {
+    key: "amh", name: "Anti-Müllerian hormone", short: "AMH", panel: "hormones", unit: "ng/mL", units: ["ng/ml"],
+    aliases: ["amh", "anti mullerian hormone", "anti-mullerian hormone", "anti müllerian hormone"],
+    what: "A guide to the number of eggs left in the ovaries, which falls with age.",
+  },
+  {
+    key: "psa_total", name: "PSA (total)", short: "PSA", panel: "hormones", unit: "ng/mL", units: ["ng/ml"],
+    aliases: ["psa", "psa total", "total psa", "prostate specific antigen", "prostate specific antigen total"],
+    range: { high: 4 },
+    doctor: { above: 4 },
+    what: "A prostate protein that can rise with an enlarged prostate, infection or, less often, cancer.",
+  },
+  {
+    key: "psa_free", name: "PSA (free)", short: "fPSA", panel: "hormones", unit: "ng/mL", units: ["ng/ml"],
+    aliases: ["free psa", "psa free", "prostate specific antigen free"],
+    what: "The part of PSA not bound to proteins; its share of total PSA helps doctors read a raised PSA.",
+  },
 ];
 
 export const MARKER_KEYS = MARKERS.map((m) => m.key) as [string, ...string[]];
+/** What Claude copies off a report: the essential panel minus what we work out in code. */
+export const EXTRACT_MARKERS = MARKERS.filter((m) => !m.derived);
+export const EXTRACT_KEYS = EXTRACT_MARKERS.map((m) => m.key) as [string, ...string[]];
 const BY_KEY = new Map(MARKERS.map((m) => [m.key, m]));
 export const markerDef = (key?: string | null) => (key ? BY_KEY.get(key) : undefined);
 
@@ -388,11 +684,72 @@ export function matchMarkerKey(printedName: string): string | undefined {
   return ALIAS.get(head);
 }
 
-const unitNorm = (u?: string | null) => (u ?? "").toLowerCase().replace(/\s+/g, "").replace("μ", "µ");
+const unitNorm = (u?: string | null) =>
+  (u ?? "").toLowerCase().replace(/\s+/g, "").replace(/μ/g, "µ").replace(/^x/, "").replace("10*", "10^").replace("³", "^3");
 export const sameUnit = (def: MarkerDef, unit?: string | null) => {
   const u = unitNorm(unit);
   return u !== "" && (u === unitNorm(def.unit) || def.units.includes(u));
 };
+
+// Other units labs print, and how to turn each into the catalogue's unit, so the
+// doctor and urgent flags work whichever units a report uses. Standard factors.
+type Conversion = { units: string[]; to: (v: number) => number };
+const perMicrolitre = ["/cumm", "cells/cumm", "/µl", "/ul", "cells/µl", "cells/ul", "/mm3", "/mm^3", "cells/mm3"];
+const lakhs = ["lakhs/cumm", "lakh/cumm", "lakhs/µl", "lakh/µl", "lakhs/ul", "lakhs/mm3"];
+const perLitre9 = ["10^9/l", "10^9/litre", "gi/l"];
+const cholesterol: Conversion[] = [{ units: ["mmol/l"], to: (v) => v * 38.67 }];
+const CONVERSIONS: Record<string, Conversion[]> = {
+  hemoglobin: [{ units: ["g/l", "gm/l"], to: (v) => v / 10 }],
+  platelets: [
+    { units: perMicrolitre, to: (v) => v / 1000 },
+    { units: lakhs, to: (v) => v * 100 },
+    { units: perLitre9, to: (v) => v },
+  ],
+  wbc: [
+    { units: perMicrolitre, to: (v) => v / 1000 },
+    { units: perLitre9, to: (v) => v },
+  ],
+  glucose_fasting: [{ units: ["mmol/l"], to: (v) => v * 18.016 }],
+  hba1c: [{ units: ["mmol/mol"], to: (v) => v / 10.929 + 2.15 }],
+  vitamin_d: [{ units: ["nmol/l"], to: (v) => v / 2.496 }],
+  b12: [{ units: ["pmol/l"], to: (v) => v * 1.355 }],
+  folate: [{ units: ["nmol/l"], to: (v) => v / 2.266 }],
+  ferritin: [{ units: ["pmol/l"], to: (v) => v / 2.247 }],
+  ft4: [{ units: ["pmol/l"], to: (v) => v / 12.87 }],
+  creatinine: [{ units: ["µmol/l", "umol/l"], to: (v) => v / 88.42 }],
+  urea: [{ units: ["mmol/l"], to: (v) => v * 6.006 }],
+  bun: [{ units: ["mmol/l"], to: (v) => v * 2.801 }],
+  uric_acid: [{ units: ["µmol/l", "umol/l"], to: (v) => v / 59.48 }],
+  total_cholesterol: cholesterol,
+  ldl: cholesterol,
+  hdl: cholesterol,
+  non_hdl: cholesterol,
+  triglycerides: [{ units: ["mmol/l"], to: (v) => v * 88.57 }],
+  calcium: [{ units: ["mmol/l"], to: (v) => v * 4.008 }],
+  magnesium: [
+    { units: ["mmol/l"], to: (v) => v * 2.431 },
+    { units: ["meq/l"], to: (v) => v * 1.215 },
+  ],
+  bilirubin_total: [{ units: ["µmol/l", "umol/l"], to: (v) => v / 17.1 }],
+  albumin: [{ units: ["g/l", "gm/l"], to: (v) => v / 10 }],
+  hscrp: [{ units: ["mg/dl"], to: (v) => v * 10 }],
+  crp: [{ units: ["mg/dl"], to: (v) => v * 10 }],
+  iron: [{ units: ["µmol/l", "umol/l"], to: (v) => v * 5.585 }],
+  testosterone_total: [{ units: ["nmol/l"], to: (v) => v * 28.84 }],
+  cortisol: [{ units: ["nmol/l"], to: (v) => v / 27.59 }],
+};
+
+/** The value in the catalogue's unit, or null when the unit isn't one we know. */
+export function toCatalogUnit(def: MarkerDef, value: number, unit?: string | null): number | null {
+  if (sameUnit(def, unit)) return value;
+  const u = unitNorm(unit);
+  if (!u) return null;
+  const c = CONVERSIONS[def.key]?.find((x) => x.units.includes(u));
+  return c ? c.to(value) : null;
+}
+
+/** True when a flag could be checked: the marker has bounds and the unit is known. */
+export const unitKnown = (def: MarkerDef | undefined, unit?: string | null) => !!def && toCatalogUnit(def, 1, unit) != null;
 
 function bySex<T>(v: T | { male: T; female: T } | undefined, sex: Sex): T | undefined {
   if (!v) return undefined;
@@ -424,8 +781,10 @@ export function statusFor(value: number | null | undefined, low?: number | null,
   return "in_range";
 }
 
-export function flagFor(def: MarkerDef | undefined, value: number | null | undefined, unit: string | null | undefined, sex: Sex): MarkerFlag {
-  if (!def || value == null || !sameUnit(def, unit)) return null;
+export function flagFor(def: MarkerDef | undefined, raw: number | null | undefined, unit: string | null | undefined, sex: Sex): MarkerFlag {
+  if (!def || raw == null) return null;
+  const value = toCatalogUnit(def, raw, unit);
+  if (value == null) return null;
   const hit = (b?: Bounds) => !!b && ((b.below != null && value < b.below) || (b.above != null && value > b.above));
   if (hit(def.urgent)) return "urgent";
   // Sex-specific doctor bounds fall back to the more cautious one when sex is unknown.
@@ -438,6 +797,15 @@ export function flagFor(def: MarkerDef | undefined, value: number | null | undef
     return hit({ below: Number.isFinite(b.below) ? b.below : undefined, above: Number.isFinite(b.above) ? b.above : undefined }) ? "doctor" : null;
   }
   return hit(d as Bounds | undefined) ? "doctor" : null;
+}
+
+// White-cell differentials print as a percentage or a count; the unit decides which marker it is.
+const DIFFERENTIALS = ["neutrophils", "lymphocytes", "monocytes", "eosinophils", "basophils"];
+export function differentialKey(key: string | null | undefined, unit: string | null | undefined): string | null | undefined {
+  if (!key) return key;
+  const base = key.replace(/_pct$/, "");
+  if (!DIFFERENTIALS.includes(base)) return key;
+  return unitNorm(unit) === "%" ? `${base}_pct` : unitNorm(unit) ? base : key;
 }
 
 export const isOut = (s: string) => s === "low" || s === "high";

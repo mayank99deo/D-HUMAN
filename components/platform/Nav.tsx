@@ -19,8 +19,9 @@ function Icon({ name }: { name: (typeof TABS)[number]["icon"] }) {
       {name === "home" && <path {...common} d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z" />}
       {name === "fuel" && (
         <g {...common}>
-          <circle cx="12" cy="12" r="7.5" />
-          <path d="M12 4.5V12l5.3 5.3" />
+          {/* A bowl with steam: food, not a clock. */}
+          <path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0Z" />
+          <path d="M9 8c-.8-.9-.8-1.9 0-2.8M12.5 8c-.8-.9-.8-1.9 0-2.8M16 8c-.8-.9-.8-1.9 0-2.8" />
         </g>
       )}
       {name === "upload" && <path {...common} d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4.5 15v4.5h15V15" />}
@@ -82,7 +83,8 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
                     on ? "text-paper" : "text-graphite"
                   }`}
                 >
-                  <span className={upload ? `grid h-9 w-9 place-items-center ${on ? "bg-paper text-ink" : "border border-line-strong"}` : ""}>
+                  {/* Every icon gets the same 36 px slot, so all five labels sit on one line. */}
+                  <span className={`grid h-9 w-9 place-items-center ${upload ? (on ? "bg-paper text-ink" : "border border-line-strong") : ""}`}>
                     <Icon name={t.icon} />
                   </span>
                   <span className={on ? "font-semibold" : ""}>{t.label}</span>

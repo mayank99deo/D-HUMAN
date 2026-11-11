@@ -15,6 +15,34 @@
       "when": 1794198740850,
       "tag": "0001_row_level_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794370872834,
+      "tag": "0002_integrity_and_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794373326492,
+      "tag": "0003_brand_picks",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794380000000,
+      "tag": "0004_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794392525395,
+      "tag": "0005_payment_mode",
+      "breakpoints": true
     }
   ]
 }

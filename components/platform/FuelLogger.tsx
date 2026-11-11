@@ -2,7 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import type { PlanView } from "@/lib/domain/plan";
 import { MealOrbit, type MealRun } from "./MealOrbit";
+import { OFFLINE, send } from "./net";
+import { Paywall, PlanLine } from "./Paywall";
+import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
 import { shrinkImage } from "./shrink";
 
@@ -46,6 +50,10 @@ const hasSpeech = () => {
   return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
 };
 
+// Today's plate. The ring is the day's energy target, split by where the
+// energy came from. Past the target the ring stays full and a thin outer arc
+// carries the extra, with a notch at the top marking where the target sits,
+// so 189% never looks like 100%.
 function Plate({ totals, target }: { totals: Totals; target: number }) {
   const r = 70;
   const c = 2 * Math.PI * r;
@@ -54,21 +62,44 @@ function Plate({ totals, target }: { totals: Totals; target: number }) {
   const f = totals.fatG * 9;
   const sum = p + cb + f || 1;
   const filled = Math.min(1, totals.kcal / target);
+  const over = Math.max(0, totals.kcal / target - 1);
+  // Paper at these strengths keeps each arc at 3:1 or more against the track.
   const arcs = [
     { v: p / sum, label: "Protein", o: 1 },
-    { v: cb / sum, label: "Carbs", o: 0.55 },
-    { v: f / sum, label: "Fat", o: 0.28 },
-  ];
+    { v: cb / sum, label: "Carbs", o: 0.7 },
+    { v: f / sum, label: "Fat", o: 0.45 },
+  ].filter((a) => a.v > 0);
+  const gap = arcs.length > 1 && filled > 0.04 ? 2 : 0;
+  const ro = 84;
+  const co = 2 * Math.PI * ro;
   let offset = 0;
   return (
     <svg viewBox="0 0 180 180" className="h-44 w-44 shrink-0 -rotate-90" aria-hidden>
       <circle cx="90" cy="90" r={r} fill="none" stroke="var(--color-line)" strokeWidth="14" />
       {arcs.map((a) => {
         const len = a.v * filled * c;
-        const el = <circle key={a.label} cx="90" cy="90" r={r} fill="none" stroke="var(--color-paper)" strokeOpacity={a.o} strokeWidth="14" strokeDasharray={`${len} ${c}`} strokeDashoffset={-offset} />;
+        const el = (
+          <circle
+            key={a.label}
+            cx="90"
+            cy="90"
+            r={r}
+            fill="none"
+            stroke="var(--color-paper)"
+            strokeOpacity={a.o}
+            strokeWidth="14"
+            strokeDasharray={`${Math.max(0, len - gap)} ${c}`}
+            strokeDashoffset={-offset}
+          />
+        );
         offset += len;
         return el;
       })}
+      {over > 0 && (
+        <circle cx="90" cy="90" r={ro} fill="none" stroke="var(--color-paper)" strokeWidth="3" strokeLinecap="butt" strokeDasharray={`${Math.min(1, over) * co} ${co}`} />
+      )}
+      {/* The target notch, at twelve o'clock (the svg is turned a quarter). */}
+      <line x1={90 + r - 10} y1="90" x2={90 + (over > 0 ? ro + 4 : r + 10)} y2="90" stroke="var(--color-paper)" strokeWidth="2" />
     </svg>
   );
 }
@@ -85,6 +116,7 @@ export function FuelLogger({
   language,
   facts,
   categories,
+  plan,
 }: {
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
@@ -97,6 +129,7 @@ export function FuelLogger({
   language: string;
   facts: OrbitFact[];
   categories: string[];
+  plan: PlanView;
 }) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
@@ -117,6 +150,7 @@ export function FuelLogger({
   const [editingTypical, setEditingTypical] = useState(!typical);
   const [typicalBusy, setTypicalBusy] = useState(false);
   const [run, setRun] = useState<MealRun | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   function listen() {
     const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
@@ -174,8 +208,14 @@ export function FuelLogger({
     const res = await fetch("/api/food", { method: "POST", body: form }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
+    if (res?.status === 402) {
+      // Out of meal logs: the refreshed page shows the paywall in place of the buttons.
+      setRun(null);
+      setMode(null);
+      return startTransition(() => router.refresh());
+    }
     if (!res?.ok) {
-      const message = ERRORS[data.error] ?? "We couldn't log that. Try again.";
+      const message = data.message || (res ? (ERRORS[data.error] ?? "We couldn't log that. Try again.") : "No connection. Check your signal and try again.");
       setRun((r) => (r ? { ...r, state: "error", error: message } : r));
       return setError(message);
     }
@@ -193,7 +233,11 @@ export function FuelLogger({
   }
 
   async function remove(id: string) {
-    await fetch(`/api/food/${id}`, { method: "DELETE" });
+    setRemoving(id);
+    setError(null);
+    const r = await send(`/api/food/${id}`, { method: "DELETE" });
+    setRemoving(null);
+    if (!r.ok) return setError(r.offline ? `That meal wasn't deleted. ${OFFLINE}` : "That meal wasn't deleted. Try again.");
     if (last?.id === id) setLast(null);
     startTransition(() => router.refresh());
   }
@@ -209,13 +253,22 @@ export function FuelLogger({
       setRun((r) => (r ? { ...r, state: "done", patterns: data.day?.patterns ?? [] } : r));
       startTransition(() => router.refresh());
     } else {
-      const message = "Tell us a little more about a normal day, then save.";
+      const message =
+        data.message ||
+        (!res
+          ? "No connection. Check your signal and try again."
+          : data.error === "rate_limited"
+            ? "That's a lot of tries in an hour. Try again a bit later."
+            : data.error === "ai_off"
+              ? "Food reading isn't switched on yet on this server."
+              : "Tell us a little more about a normal day, then save.");
       setRun((r) => (r ? { ...r, state: "error", error: message } : r));
       setError(message);
     }
   }
 
   const sorted = [...logs].sort((a, b) => MEAL_ORDER.indexOf(a.meal) - MEAL_ORDER.indexOf(b.meal));
+  const kcalOver = overBy(totals.kcal, targets.kcal);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
@@ -226,34 +279,38 @@ export function FuelLogger({
         <div className="relative">
           <Plate totals={totals} target={targets.kcal} />
           <div className="absolute inset-0 grid place-items-center text-center">
-            <div>
-              <p className="display-num text-4xl">{Math.round(totals.kcal).toLocaleString("en-IN")}</p>
-              <p className="text-sm text-graphite">of {targets.kcal.toLocaleString("en-IN")} kcal</p>
+            <div className="max-w-28">
+              <p className="display-num text-3xl">{Math.round(totals.kcal).toLocaleString("en-IN")}</p>
+              <p className="mt-1 text-sm leading-tight text-graphite">of {targets.kcal.toLocaleString("en-IN")} kcal</p>
+              {kcalOver > 0 && <p className="text-sm font-semibold leading-tight">{kcalOver.toLocaleString("en-IN")} over</p>}
             </div>
           </div>
         </div>
         <dl className="grid min-w-56 flex-1 gap-4">
           {[
-            { k: "Protein", v: totals.proteinG, t: targets.proteinG, o: 1 },
-            { k: "Carbs", v: totals.carbsG, t: targets.carbsG, o: 0.55 },
-            { k: "Fat", v: totals.fatG, t: targets.fatG, o: 0.28 },
-            { k: "Fibre", v: totals.fibreG, t: targets.fibreG, o: 1 },
-          ].map((x) => (
-            <div key={x.k}>
-              <div className="flex justify-between text-sm">
-                <dt className="flex items-center gap-2">
-                  <span aria-hidden className="h-2.5 w-2.5 bg-paper" style={{ opacity: x.o }} />
-                  {x.k}
-                </dt>
-                <dd>
-                  <span className="font-bold">{Math.round(x.v)}</span> <span className="text-graphite">/ {x.t} g</span>
-                </dd>
+            { k: "Protein", v: totals.proteinG, t: targets.proteinG, o: 1, ring: true },
+            { k: "Carbs", v: totals.carbsG, t: targets.carbsG, o: 0.7, ring: true },
+            { k: "Fat", v: totals.fatG, t: targets.fatG, o: 0.45, ring: true },
+            { k: "Fibre", v: totals.fibreG, t: targets.fibreG, o: 1, ring: false },
+          ].map((x) => {
+            const extra = overBy(x.v, x.t);
+            return (
+              <div key={x.k}>
+                <div className="flex justify-between gap-3 text-sm">
+                  <dt className="flex items-center gap-2">
+                    {/* Squares are slices of the ring; fibre isn't in it, so it gets a dash. */}
+                    <span aria-hidden className={x.ring ? "h-2.5 w-2.5 bg-paper" : "h-0.5 w-2.5 bg-paper"} style={{ opacity: x.o }} />
+                    {x.k}
+                  </dt>
+                  <dd className="text-right">
+                    <span className="font-bold">{Math.round(x.v)}</span> <span className="text-graphite">/ {x.t} g</span>
+                    {extra > 0 && <span className="font-semibold">, {extra} over</span>}
+                  </dd>
+                </div>
+                <TargetBar value={x.v} target={x.t} opacity={x.o} />
               </div>
-              <div className="mt-1.5 h-1 bg-line" aria-hidden>
-                <div className="h-1 bg-paper" style={{ width: `${Math.min(100, (x.v / x.t) * 100)}%`, opacity: x.o }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </dl>
       </section>
 
@@ -262,81 +319,88 @@ export function FuelLogger({
         <h2 id="log" className="text-2xl font-bold semiwide">
           Log a meal
         </h2>
+        <PlanLine plan={plan} kind="meal" />
         {aiOff && <p className="error-mark mt-3 text-sm">Food reading isn&apos;t switched on yet on this server.</p>}
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <button type="button" onClick={() => camera.current?.click()} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}>
-            <span className="text-lg font-bold semiwide">Snap</span>
-            <span className="text-xs text-graphite">A photo of your plate</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("voice");
-              if (voiceOk && !listening) listen();
-            }}
-            className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
-          >
-            <span className="text-lg font-bold semiwide">Say</span>
-            <span className="text-xs text-graphite">Tell us what you ate</span>
-          </button>
-          <button type="button" onClick={() => setMode("text")} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}>
-            <span className="text-lg font-bold semiwide">Type</span>
-            <span className="text-xs text-graphite">A few words is enough</span>
-          </button>
-        </div>
-        <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => pickPhoto(e.target.files)} />
-
-        {mode && (
-          <div className="mt-5 space-y-4">
-            {mode === "photo" && photo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
-            )}
-            {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
-            <label className="block">
-              <span className="mb-2 block text-sm text-graphite">
-                {mode === "photo" ? "Anything the photo won't show? (optional)" : mode === "voice" ? (listening ? "Listening… speak naturally" : "What you said") : "What did you eat?"}
-              </span>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                maxLength={1000}
-                className="textarea"
-                placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
-              />
-            </label>
-            {mode === "voice" && voiceOk && (
-              <button type="button" onClick={listening ? stop : listen} className="button-ghost h-11">
-                {listening ? "Stop listening" : "Talk again"}
-              </button>
-            )}
-            <fieldset className="flex flex-wrap gap-2">
-              <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
-              {MEALS.map((m) => (
-                <label key={m.id || "auto"} className="choice">
-                  <input type="radio" name="meal" className="sr-only" checked={meal === m.id} onChange={() => setMeal(m.id)} />
-                  {m.label}
-                </label>
-              ))}
-            </fieldset>
-            <div className="flex gap-3">
-              <button type="button" onClick={submit} disabled={busy || (!text.trim() && !(mode === "photo" && photo))} className="button-primary h-13 flex-1 sm:flex-none sm:px-10">
-                {busy ? "Reading your meal…" : "Log this meal"}
+        {plan.mealBlock ? (
+          <Paywall plan={plan} refusal={plan.mealBlock} />
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => camera.current?.click()} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}>
+                <span className="text-lg font-bold semiwide">Snap</span>
+                <span className="text-xs text-graphite">A photo of your plate</span>
               </button>
               <button
                 type="button"
-                className="button-ghost h-13"
                 onClick={() => {
-                  stop();
-                  setMode(null);
-                  setPhoto(null);
-                  setText("");
+                  setMode("voice");
+                  if (voiceOk && !listening) listen();
                 }}
+                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
               >
-                Cancel
+                <span className="text-lg font-bold semiwide">Say</span>
+                <span className="text-xs text-graphite">Tell us what you ate</span>
+              </button>
+              <button type="button" onClick={() => setMode("text")} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}>
+                <span className="text-lg font-bold semiwide">Type</span>
+                <span className="text-xs text-graphite">A few words is enough</span>
               </button>
             </div>
-          </div>
+            <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => pickPhoto(e.target.files)} />
+
+            {mode && (
+              <div className="mt-5 space-y-4">
+                {mode === "photo" && photo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
+                )}
+                {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
+                <label className="block">
+                  <span className="mb-2 block text-sm text-graphite">
+                    {mode === "photo" ? "Anything the photo won't show? (optional)" : mode === "voice" ? (listening ? "Listening… speak naturally" : "What you said") : "What did you eat?"}
+                  </span>
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    maxLength={1000}
+                    className="textarea"
+                    placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
+                  />
+                </label>
+                {mode === "voice" && voiceOk && (
+                  <button type="button" onClick={listening ? stop : listen} className="button-ghost h-11">
+                    {listening ? "Stop listening" : "Talk again"}
+                  </button>
+                )}
+                <fieldset className="flex flex-wrap gap-2">
+                  <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
+                  {MEALS.map((m) => (
+                    <label key={m.id || "auto"} className="choice">
+                      <input type="radio" name="meal" className="sr-only" checked={meal === m.id} onChange={() => setMeal(m.id)} />
+                      {m.label}
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="flex gap-3">
+                  <button type="button" onClick={submit} disabled={busy || (!text.trim() && !(mode === "photo" && photo))} className="button-primary h-13 flex-1 sm:flex-none sm:px-10">
+                    {busy ? "Reading your meal…" : "Log this meal"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-ghost h-13"
+                    onClick={() => {
+                      stop();
+                      setMode(null);
+                      setPhoto(null);
+                      setText("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
         {error && (
           <p role="alert" className="error-mark mt-4 text-sm">
@@ -380,8 +444,8 @@ export function FuelLogger({
                 <div className="text-right">
                   <p className="font-bold">{Math.round(l.kcal)} kcal</p>
                   <p className="text-sm text-graphite">{Math.round(l.proteinG)} g protein</p>
-                  <button type="button" className="link-quiet min-h-11 text-sm" onClick={() => remove(l.id)} aria-label={`Delete ${l.title}`}>
-                    Delete
+                  <button type="button" className="link-quiet min-h-11 text-sm" onClick={() => remove(l.id)} disabled={!!removing} aria-label={`Delete ${l.title}`}>
+                    {removing === l.id ? "Deleting…" : "Delete"}
                   </button>
                 </div>
               </li>

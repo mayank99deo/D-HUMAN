@@ -24,7 +24,10 @@ async function connect(): Promise<Db> {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     // prepare:false keeps it working behind transaction poolers (Neon, Supabase).
-    const client = postgres(url, { max: 5, prepare: false });
+    // Serverless copies sit idle between requests: close a connection after 20 s
+    // idle so warm copies don't hold the pooler's client slots, and replace each
+    // one after 30 minutes so none lives forever.
+    const client = postgres(url, { max: 5, prepare: false, idle_timeout: 20, max_lifetime: 30 * 60 });
     return drizzle(client, { schema }) as unknown as Db;
   }
   if (process.env.VERCEL) {

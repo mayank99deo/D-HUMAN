@@ -9,6 +9,7 @@ import { foodFactsFor } from "@/lib/domain/food-facts";
 import { MICROS, targetsFor } from "@/lib/domain/nutrition";
 import { dietPicture, logsBetween, totalsOf } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
+import { currentPlan } from "@/lib/platform/plan-state";
 import { localDate } from "@/lib/platform/profile";
 
 export const metadata: Metadata = { title: "Fuel" };
@@ -22,7 +23,7 @@ async function Fuel() {
     level: profile.level, archetype: persona.archetype, goals: profile.goals,
   });
   const totals = totalsOf(logs);
-  const picture = await dietPicture(user.id, profile);
+  const [picture, plan] = await Promise.all([dietPicture(user.id, profile), currentPlan(user.id, profile.timezone)]);
   const d = await db();
   const [base] = await d.select().from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, user.id)).limit(1);
   // Facts for the waiting screen, picked by age, height and weight bands, diet and sex. No AI involved.
@@ -52,6 +53,7 @@ async function Fuel() {
       language={profile.language}
       facts={facts}
       categories={categories}
+      plan={plan}
     />
   );
 }

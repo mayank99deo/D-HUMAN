@@ -20,6 +20,7 @@ const DEMO_MARKERS: Extracted["markers"] = [
   ["TSH (Ultrasensitive)", "tsh", "Thyroid", 2.1, "µIU/mL", 0.35, 5.5],
   ["HbA1c", "hba1c", "Diabetes", 5.4, "%", 4, 5.6],
   ["Fasting Blood Sugar", "glucose_fasting", "Diabetes", 92, "mg/dL", 70, 100],
+  ["Total Cholesterol", "total_cholesterol", "Lipid profile", 192, "mg/dL", null, 200],
   ["LDL Cholesterol (Direct)", "ldl", "Lipid profile", 118, "mg/dL", null, 100],
   ["HDL Cholesterol", "hdl", "Lipid profile", 56, "mg/dL", 40, null],
   ["Triglycerides", "triglycerides", "Lipid profile", 96, "mg/dL", null, 150],
@@ -73,7 +74,7 @@ export async function mockRead(input: ReadInput): Promise<{ data: Read; model: s
     data: {
       headline: off.length ? "Strong engine, low reserves." : "Everything's pulling its weight.",
       verdict: { level, line, detail: off.length ? `${off.map((m) => m.name).join(" and ")} sit outside range. Both are fixable in a training block.` : "Nothing on this report holds you back." },
-      summary: `This is a demo read, written without AI. ${input.markers.length} markers came through; ${off.length} sit outside the lab's range.`,
+      summary: `This is a demo read, written without AI. ${input.markers.length} markers came through; ${off.length} sit outside their range.`,
       focus: off.slice(0, 3).map((m) => ({
         marker_key: m.key,
         title: `Lift your ${m.name.toLowerCase()}`,
@@ -83,7 +84,6 @@ export async function mockRead(input: ReadInput): Promise<{ data: Read; model: s
       markers: input.markers.map((m) => ({
         id: m.id,
         note: markerDef(m.key)?.what ?? "A marker on your report.",
-        for_you: m.status === "low" || m.status === "high" ? "act" : m.status.startsWith("edge") ? "watch" : m.status === "in_range" ? "good" : "neutral",
       })),
       wins: input.markers.filter((m) => m.status === "in_range").slice(0, 2).map((m) => `${m.name} is right where it should be.`),
       doctor_questions: flagged ? ["Demo: which of these flagged markers should we look at first?"] : [],

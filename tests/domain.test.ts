@@ -54,9 +54,13 @@ describe("doctor and urgent flags", () => {
     assert.equal(flagFor(def("hemoglobin"), 10.5, "g/dL", "female"), null);
     assert.equal(flagFor(def("hemoglobin"), 10.5, "g/dL", null), "doctor");
   });
-  it("never flags when the unit doesn't match ours", () => {
-    assert.equal(flagFor(def("glucose_fasting"), 18, "mmol/L", "male"), null);
-    assert.equal(flagFor(def("hba1c"), 60, "mmol/mol", "male"), null);
+  it("never flags a unit it can't convert", () => {
+    assert.equal(flagFor(def("glucose_fasting"), 18, "furlongs", "male"), null);
+    assert.equal(flagFor(def("hba1c"), 60, "", "male"), null);
+  });
+  it("converts units it knows before flagging (QA H1)", () => {
+    assert.equal(flagFor(def("glucose_fasting"), 18, "mmol/L", "male"), "urgent");
+    assert.equal(flagFor(def("hba1c"), 60, "mmol/mol", "male"), "doctor");
   });
   it("leaves healthy values alone", () => {
     assert.equal(flagFor(def("ck"), 612, "U/L", "male"), null);

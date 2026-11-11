@@ -9,7 +9,9 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
+import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { isWaitlist } from "@/lib/site-mode";
 
 const TOTAL = 100;
 const DEFICIENT = 76;
@@ -220,9 +222,15 @@ export function VitaminDChart() {
                 )}
                 <p className="mt-3 text-graphite">
                   Which square is you? There&apos;s no way to tell without a test.{" "}
-                  <a href="#join" className="text-paper underline underline-offset-4">
-                    Find your number
-                  </a>
+                  {isWaitlist ? (
+                    <a href="#join" className="text-paper underline underline-offset-4">
+                      Find your number
+                    </a>
+                  ) : (
+                    <Link href="/signin" className="text-paper underline underline-offset-4">
+                      Find your number
+                    </Link>
+                  )}
                 </p>
               </>
             ) : (

@@ -12,6 +12,7 @@ import {
   real,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -112,20 +113,26 @@ export const reports = pgTable(
     reviewStatus: text("review_status").notNull().default("ai_only"),
     error: text("error"),
     createdAt: created(),
+    // When the current read started; a read older than this by many minutes is stale and may be retried.
+    startedAt: timestamp("started_at", { withTimezone: true }),
     analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
   },
   (t) => [index("reports_user_idx").on(t.userId, t.createdAt)],
 ).enableRLS();
 
-export const reportFiles = pgTable("report_files", {
-  id: text("id").primaryKey(),
-  reportId: text("report_id")
-    .notNull()
-    .references(() => reports.id, { onDelete: "cascade" }),
-  position: integer("position").notNull(),
-  mime: text("mime").notNull(),
-  bytes: bytea("bytes").notNull(),
-}).enableRLS();
+export const reportFiles = pgTable(
+  "report_files",
+  {
+    id: text("id").primaryKey(),
+    reportId: text("report_id")
+      .notNull()
+      .references(() => reports.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    mime: text("mime").notNull(),
+    bytes: bytea("bytes").notNull(),
+  },
+  (t) => [index("report_files_report_idx").on(t.reportId, t.position)],
+).enableRLS();
 
 export const markers = pgTable(
   "markers",
@@ -146,7 +153,7 @@ export const markers = pgTable(
     refLow: doublePrecision("ref_low"),
     refHigh: doublePrecision("ref_high"),
     refText: text("ref_text"),
-    rangeSource: text("range_source"), // report | catalog | none
+    rangeSource: text("range_source"), // report | catalog | derived | none
     status: text("status").notNull(), // low | high | in_range | edge_low | edge_high | unknown
     flag: text("flag"), // doctor | urgent | null
     position: integer("position").notNull().default(0),
@@ -154,25 +161,32 @@ export const markers = pgTable(
   (t) => [index("markers_user_key_idx").on(t.userId, t.key), index("markers_report_idx").on(t.reportId)],
 ).enableRLS();
 
-export const analyses = pgTable("analyses", {
-  reportId: text("report_id")
-    .primaryKey()
-    .references(() => reports.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  read: jsonb("read").notNull(),
-  eventId: text("event_id"),
-  createdAt: created(),
-}).enableRLS();
+export const analyses = pgTable(
+  "analyses",
+  {
+    reportId: text("report_id")
+      .primaryKey()
+      .references(() => reports.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    read: jsonb("read").notNull(),
+    eventId: text("event_id"),
+    createdAt: created(),
+  },
+  (t) => [index("analyses_user_idx").on(t.userId)],
+).enableRLS();
 
-// Upcoming events found on the web, shared by everyone with the same activity and region.
+// Upcoming events found on the web for an activity and region. A plain search
+// (query '') is shared by everyone there; a search for an event someone typed
+// keeps that query, and only people who typed the same thing see its results.
 export const events = pgTable(
   "events",
   {
     id: text("id").primaryKey(),
     activity: text("activity").notNull(),
     region: text("region").notNull(),
+    query: text("query").notNull().default(""),
     name: text("name").notNull(),
     kind: text("kind"),
     startsOn: date("starts_on"),
@@ -184,7 +198,8 @@ export const events = pgTable(
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("events_unique_idx").on(t.activity, t.region, t.name, t.startsOn),
+    // NULLS NOT DISTINCT: an event with no date yet is still one row, not one per refresh.
+    unique("events_unique").on(t.activity, t.region, t.query, t.name, t.startsOn).nullsNotDistinct(),
     index("events_lookup_idx").on(t.activity, t.region, t.startsOn),
   ],
 ).enableRLS();
@@ -214,7 +229,7 @@ export const userEvents = pgTable(
     target: boolean("target").notNull().default(true),
     createdAt: created(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.eventId] })],
+  (t) => [primaryKey({ columns: [t.userId, t.eventId] }), index("user_events_event_idx").on(t.eventId)],
 ).enableRLS();
 
 export const foodLogs = pgTable(
@@ -279,14 +294,71 @@ export const stacks = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    reportId: text("report_id").references(() => reports.id, { onDelete: "set null" }),
+    // A stack is built from one report and holds its marker values, so it goes when the report does.
+    reportId: text("report_id").references(() => reports.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("ready"), // building | ready | failed
     plan: jsonb("plan"),
     model: text("model"),
     error: text("error"),
     createdAt: created(),
   },
-  (t) => [index("stacks_user_idx").on(t.userId, t.createdAt)],
+  (t) => [index("stacks_user_idx").on(t.userId, t.createdAt), index("stacks_report_idx").on(t.reportId)],
+).enableRLS();
+
+// Supplement brands found on the web, shared by everyone who gets the same
+// nutrient (and diet variant), refreshed monthly. Keyed like "vitamin_d3:vegan".
+export const brandPicks = pgTable("brand_picks", {
+  key: text("key").primaryKey(),
+  nutrient: text("nutrient").notNull(),
+  brands: jsonb("brands").notNull(),
+  status: text("status").notNull(), // ok | empty | failed
+  model: text("model"),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+// A ₹49 pass: one Razorpay order, paid at most once, unlocking 30 days of reads
+// and meal logs. The row's id is also the order's receipt.
+export const payments = pgTable(
+  "payments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    orderId: text("order_id").notNull().unique(),
+    paymentId: text("payment_id").unique(),
+    amount: integer("amount").notNull(), // paise
+    currency: text("currency").notNull(),
+    status: text("status").notNull().default("created"), // created | paid
+    // Which Razorpay keys made the order: a test-mode pass never counts once live keys are in.
+    mode: text("mode").notNull().default("live"), // test | live
+    method: text("method"),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    // Last time an unpaid order was checked with Razorpay (the fallback when a webhook is missed).
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
+    createdAt: created(),
+  },
+  (t) => [index("payments_user_idx").on(t.userId, t.status, t.endsAt)],
+).enableRLS();
+
+// Every AI use that counts against a plan: a report read or a meal log. Kept when
+// the report or meal is deleted, so deleting doesn't hand back free uses; removed
+// when a read or meal fails, so failures never count.
+export const usage = pgTable(
+  "usage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // read | meal
+    refId: text("ref_id").notNull(),
+    localDate: date("local_date"), // the person's day, for meal logs
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex("usage_kind_ref_idx").on(t.kind, t.refId), index("usage_user_idx").on(t.userId, t.kind, t.createdAt)],
 ).enableRLS();
 
 export type User = typeof users.$inferSelect;

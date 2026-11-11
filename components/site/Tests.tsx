@@ -53,7 +53,7 @@ export function Tests() {
           </h2>
           <p className="max-w-[52ch] text-smoke lg:col-span-6 lg:col-start-7 lg:pt-3">
             Seventeen tests in five groups. Blood, urine, gut and saliva samples are collected at home.
-            Imaging and clinical tests run through licensed partner centres and a reviewing doctor.
+            Imaging and clinical tests run through licensed partner centres.
           </p>
         </div>
 

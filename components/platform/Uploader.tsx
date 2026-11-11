@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Fact } from "@/lib/domain/facts";
+import type { PlanView } from "@/lib/domain/plan";
 import { Orbit, type Stage } from "./Orbit";
+import { Paywall, PlanLine } from "./Paywall";
 import { shrinkImage } from "./shrink";
 
 const MAX_TOTAL = 4 * 1024 * 1024;
@@ -27,7 +29,7 @@ type StatusUpdate = { stage: Stage; error?: string | null };
 async function pollReport(id: string, onUpdate: (u: StatusUpdate) => void, life: { alive: boolean }) {
   for (let i = 0; i < 200 && life.alive; i++) {
     const res = await fetch(`/api/reports/${id}`, { cache: "no-store" }).catch(() => null);
-    const data = res?.ok ? await res.json() : null;
+    const data = res?.ok ? await res.json().catch(() => null) : null;
     if (!life.alive) return;
     if (data?.status === "ready") return onUpdate({ stage: "done" });
     if (data?.status === "failed") return onUpdate({ stage: "error", error: data.error ?? null });
@@ -36,7 +38,21 @@ async function pollReport(id: string, onUpdate: (u: StatusUpdate) => void, life:
   }
 }
 
-export function Uploader({ facts, noun, target, watchId, aiOff }: { facts: Fact[]; noun: string; target: string | null; watchId: string | null; aiOff: boolean }) {
+export function Uploader({
+  facts,
+  noun,
+  target,
+  watchId,
+  aiOff,
+  plan,
+}: {
+  facts: Fact[];
+  noun: string;
+  target: string | null;
+  watchId: string | null;
+  aiOff: boolean;
+  plan: PlanView;
+}) {
   const router = useRouter();
   const [picked, setPicked] = useState<Picked[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -129,10 +145,17 @@ export function Uploader({ facts, noun, target, watchId, aiOff }: { facts: Fact[
     const form = new FormData();
     for (const p of picked) form.append("files", p.file, p.name);
     const res = await fetch("/api/reports", { method: "POST", body: form }).catch(() => null);
-    if (!res || !res.ok) {
-      const data = res ? await res.json().catch(() => ({})) : {};
+    if (res?.status === 402) {
+      // Out of reads: the refreshed page shows the paywall in place of the picker.
       setStage(null);
-      return setError(ERRORS[data.error] ?? "The upload didn't go through. Check your connection and try again.");
+      setPicked([]);
+      return router.refresh();
+    }
+    if (!res || !res.ok) {
+      const data: { error?: string; message?: string } = res ? await res.json().catch(() => ({})) : {};
+      setStage(null);
+      // The server's own words win when it sends them (daily limits, refusals).
+      return setError(data.message || ERRORS[data.error ?? ""] || "The upload didn't go through. Check your connection and try again.");
     }
     await consume(res);
   }
@@ -143,9 +166,17 @@ export function Uploader({ facts, noun, target, watchId, aiOff }: { facts: Fact[
     setFailMessage(null);
     setStage("reading");
     const res = await fetch(`/api/reports/${reportId}/retry`, { method: "POST" }).catch(() => null);
+    if (res?.status === 402) {
+      setStage(null);
+      setPicked([]);
+      return router.refresh();
+    }
     if (!res?.ok) {
+      const data: { error?: string; message?: string } = res ? await res.json().catch(() => ({})) : {};
       setStage("error");
-      return setFailMessage("We couldn't restart the read. Try again in a minute.");
+      return setFailMessage(
+        data.message || (res ? (ERRORS[data.error ?? ""] ?? "We couldn't restart the read. Try again in a minute.") : "No connection. Check your signal and try again."),
+      );
     }
     await consume(res);
   }
@@ -214,63 +245,70 @@ export function Uploader({ facts, noun, target, watchId, aiOff }: { facts: Fact[
       <p className="mt-4 max-w-prose text-lg text-graphite">
         The PDF from your lab works best. Photos work too: flat, in good light, one page per photo, up to {MAX_FILES}.
       </p>
+      <PlanLine plan={plan} kind="read" />
       {aiOff && (
         <p className="error-mark mt-6 border border-line-strong p-4 text-sm">
           Report reading isn&apos;t switched on yet on this server (no AI key). You can still upload; we&apos;ll keep your file.
         </p>
       )}
 
-      <div
-        className="mt-10 grid gap-3 sm:grid-cols-2"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          addFiles(e.dataTransfer.files);
-        }}
-      >
-        <button type="button" onClick={() => pdfInput.current?.click()} className="flex min-h-36 flex-col items-start justify-between border border-line-strong p-5 text-left active:bg-lift">
-          <span className="text-2xl font-bold semiwide">PDF</span>
-          <span className="text-sm text-graphite">From your lab&apos;s email or app. Up to 4 MB.</span>
-        </button>
-        <button type="button" onClick={() => photoInput.current?.click()} className="flex min-h-36 flex-col items-start justify-between border border-line-strong p-5 text-left active:bg-lift">
-          <span className="text-2xl font-bold semiwide">Photos</span>
-          <span className="text-sm text-graphite">Take or choose a photo of each page.</span>
-        </button>
-        <input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(e) => addFiles(e.target.files)} tabIndex={-1} aria-hidden />
-        <input ref={photoInput} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => addFiles(e.target.files)} tabIndex={-1} aria-hidden />
-      </div>
+      {plan.readBlock ? (
+        <Paywall plan={plan} refusal={plan.readBlock} />
+      ) : (
+        <>
+          <div
+            className="mt-10 grid gap-3 sm:grid-cols-2"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              addFiles(e.dataTransfer.files);
+            }}
+          >
+            <button type="button" onClick={() => pdfInput.current?.click()} className="flex min-h-36 flex-col items-start justify-between border border-line-strong p-5 text-left active:bg-lift">
+              <span className="text-2xl font-bold semiwide">PDF</span>
+              <span className="text-sm text-graphite">From your lab&apos;s email or app. Up to 4 MB.</span>
+            </button>
+            <button type="button" onClick={() => photoInput.current?.click()} className="flex min-h-36 flex-col items-start justify-between border border-line-strong p-5 text-left active:bg-lift">
+              <span className="text-2xl font-bold semiwide">Photos</span>
+              <span className="text-sm text-graphite">Take or choose a photo of each page.</span>
+            </button>
+            <input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(e) => addFiles(e.target.files)} tabIndex={-1} aria-hidden />
+            <input ref={photoInput} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => addFiles(e.target.files)} tabIndex={-1} aria-hidden />
+          </div>
 
-      {preparing && <p className="mt-4 text-sm text-graphite">Preparing your photos…</p>}
+          {preparing && <p className="mt-4 text-sm text-graphite">Preparing your photos…</p>}
 
-      {picked.length > 0 && (
-        <section className="mt-8" aria-label="Chosen files">
-          <ul className="flex flex-wrap gap-3">
-            {picked.map((p, i) => (
-              <li key={`${p.name}-${i}`} className="relative">
-                {p.preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.preview} alt={`Page ${i + 1}`} className="h-28 w-20 border border-line object-cover" />
-                ) : (
-                  <div className="flex h-28 w-48 flex-col justify-end border border-line p-3">
-                    <span className="truncate text-sm font-semibold">{p.name}</span>
-                    <span className="text-xs text-graphite">{(p.file.size / 1024 / 1024).toFixed(1)} MB</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPicked((cur) => cur.filter((_, j) => j !== i))}
-                  className="absolute -right-2 -top-2 grid h-8 w-8 place-items-center bg-paper text-sm font-bold text-ink"
-                  aria-label={`Remove ${p.name}`}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={start} disabled={preparing} className="button-primary mt-8 h-13 w-full sm:w-auto sm:px-10">
-            Read my report
-          </button>
-        </section>
+          {picked.length > 0 && (
+            <section className="mt-8" aria-label="Chosen files">
+              <ul className="flex flex-wrap gap-3">
+                {picked.map((p, i) => (
+                  <li key={`${p.name}-${i}`} className="relative">
+                    {p.preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.preview} alt={`Page ${i + 1}`} className="h-28 w-20 border border-line object-cover" />
+                    ) : (
+                      <div className="flex h-28 w-48 flex-col justify-end border border-line p-3">
+                        <span className="truncate text-sm font-semibold">{p.name}</span>
+                        <span className="text-xs text-graphite">{(p.file.size / 1024 / 1024).toFixed(1)} MB</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPicked((cur) => cur.filter((_, j) => j !== i))}
+                      className="absolute -right-2 -top-2 grid h-8 w-8 place-items-center bg-paper text-sm font-bold text-ink"
+                      aria-label={`Remove ${p.name}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={start} disabled={preparing} className="button-primary mt-8 h-13 w-full sm:w-auto sm:px-10">
+                Read my report
+              </button>
+            </section>
+          )}
+        </>
       )}
 
       {error && (

@@ -4,7 +4,7 @@ const PLANS = [
     promise: "Know your numbers",
     includes: [
       "100+ marker blood and urine panel, at home",
-      "Doctor-reviewed report",
+      "AI-analysed report",
       "30-minute consult",
       "Supplement stack advice",
     ],

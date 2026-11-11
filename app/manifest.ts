@@ -1,11 +1,14 @@
 import type { MetadataRoute } from "next";
+import { isWaitlist } from "@/lib/site-mode";
 
 // Lets phones add D-Human to the home screen as a full-screen web app.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "D-Human",
     short_name: "D-Human",
-    description: "Test first. Supplement second. Join the D-Human waitlist.",
+    description: isWaitlist
+      ? "Test first. Supplement second. Join the D-Human waitlist."
+      : "Test first. Supplement second. Start free with D-Human.",
     start_url: "/",
     scope: "/",
     display: "standalone",

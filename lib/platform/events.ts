@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { aiMode } from "@/lib/ai/client";
 import { searchEvents } from "@/lib/ai/events";
 import { mockEvents } from "@/lib/ai/mock";
@@ -7,21 +7,33 @@ import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { EventRow, Profile } from "@/lib/db/schema";
 import type { Persona } from "@/lib/domain/persona";
+import { regionKey } from "@/lib/domain/region";
 import { localDate } from "./profile";
 
-// Events are searched once per (activity, region, named event) and shared by
-// everyone who matches, then refreshed weekly.
-const FRESH_FOR = 7 * 24 * 60 * 60 * 1000;
+// Events are searched once per (activity, region, named event), then refreshed
+// weekly. A plain search (no named event) is shared by everyone in the region.
+// A search for an event someone typed keeps its query on each row, and only people
+// who typed the same thing see those rows: one person's typed text never puts
+// events on someone else's dashboard or into their read.
+// Shared searches are refreshed every two weeks; events don't move faster than that.
+const FRESH_FOR = 14 * 24 * 60 * 60 * 1000;
 const RETRY_FAILED_AFTER = 6 * 60 * 60 * 1000;
 
-export const regionOf = (p: Profile) => (p.city?.trim() || p.country?.trim() || "India").toLowerCase();
+export const regionOf = (p: Profile) => regionKey(p.city, p.country);
+export const eventQueryOf = (p: Pick<Profile, "eventInMind">) => (p.eventInMind ?? "").trim().toLowerCase();
+
+// The rows this person may see: shared ones, plus their own named search's.
+const visibleTo = (p: Profile) => {
+  const query = eventQueryOf(p);
+  return query ? inArray(schema.events.query, ["", query]) : eq(schema.events.query, "");
+};
 
 export async function ensureEvents(profile: Profile, persona: Persona): Promise<void> {
   if (!persona.eventSearch || aiMode() === "off") return;
   const d = await db();
   const activity = persona.archetype;
   const region = regionOf(profile);
-  const query = (profile.eventInMind ?? "").trim().toLowerCase();
+  const query = eventQueryOf(profile);
 
   const [last] = await d
     .select()
@@ -54,25 +66,42 @@ export async function ensureEvents(profile: Profile, persona: Persona): Promise<
             named: profile.eventInMind,
             today: localDate(profile.timezone),
           });
+    // One upsert for the lot. A row can't be updated twice in one statement, so
+    // repeats in the answer (same name and date) are dropped first.
+    const rows = new Map<string, typeof schema.events.$inferInsert>();
     for (const e of found.events) {
+      const name = e.name.trim();
+      rows.set(`${name}\u0000${e.starts_on ?? ""}`, {
+        id: newId(),
+        activity,
+        region,
+        query,
+        name,
+        kind: e.kind,
+        startsOn: e.starts_on,
+        endsOn: e.ends_on,
+        city: e.city,
+        country: e.country,
+        url: e.url,
+        details: e.details,
+      });
+    }
+    if (rows.size) {
       await d
         .insert(schema.events)
-        .values({
-          id: newId(),
-          activity,
-          region,
-          name: e.name.trim(),
-          kind: e.kind,
-          startsOn: e.starts_on,
-          endsOn: e.ends_on,
-          city: e.city,
-          country: e.country,
-          url: e.url,
-          details: e.details,
-        })
+        .values([...rows.values()])
         .onConflictDoUpdate({
-          target: [schema.events.activity, schema.events.region, schema.events.name, schema.events.startsOn],
-          set: { url: e.url, details: e.details, city: e.city, endsOn: e.ends_on, fetchedAt: new Date() },
+          // Matches the events_unique key, which treats a missing date as a value.
+          target: [schema.events.activity, schema.events.region, schema.events.query, schema.events.name, schema.events.startsOn],
+          set: {
+            kind: sql`excluded.kind`,
+            endsOn: sql`excluded.ends_on`,
+            city: sql`excluded.city`,
+            country: sql`excluded.country`,
+            url: sql`excluded.url`,
+            details: sql`excluded.details`,
+            fetchedAt: new Date(),
+          },
         });
     }
     await mark("ok");
@@ -82,21 +111,34 @@ export async function ensureEvents(profile: Profile, persona: Persona): Promise<
   }
 }
 
+// A named search and the shared one often find the same event: show it once,
+// as the copy they picked when there is one, else their own search's.
+const sameEvent = (e: EventRow) => `${e.name.toLowerCase()}\u0000${e.startsOn ?? ""}`;
+function onePerEvent(rows: EventRow[], prefer?: EventRow | null): EventRow[] {
+  const byEvent = new Map<string, EventRow>();
+  for (const e of rows) if (!byEvent.has(sameEvent(e))) byEvent.set(sameEvent(e), e);
+  if (prefer && byEvent.has(sameEvent(prefer))) byEvent.set(sameEvent(prefer), prefer);
+  return [...byEvent.values()];
+}
+
 export async function upcomingEvents(profile: Profile, persona: Persona, limit = 6): Promise<EventRow[]> {
   const d = await db();
   const today = localDate(profile.timezone);
-  return d
+  const rows = await d
     .select()
     .from(schema.events)
     .where(
       and(
         eq(schema.events.activity, persona.archetype),
         eq(schema.events.region, regionOf(profile)),
+        visibleTo(profile),
         or(gte(schema.events.startsOn, today), isNull(schema.events.startsOn)),
       ),
     )
-    .orderBy(asc(schema.events.startsOn))
-    .limit(limit);
+    // Their own search's copy (a non-empty query) sorts ahead of the shared one.
+    .orderBy(asc(schema.events.startsOn), desc(schema.events.query))
+    .limit(limit * 2);
+  return onePerEvent(rows).slice(0, limit);
 }
 
 // Upcoming events, the one they picked and the one the verdict aims at, in one go:
@@ -104,7 +146,7 @@ export async function upcomingEvents(profile: Profile, persona: Persona, limit =
 export async function eventsFor(userId: string, profile: Profile, persona: Persona) {
   const d = await db();
   const today = localDate(profile.timezone);
-  const [pickedRows, upcoming] = await Promise.all([
+  const [pickedRows, found] = await Promise.all([
     d
       .select({ e: schema.events })
       .from(schema.userEvents)
@@ -114,6 +156,7 @@ export async function eventsFor(userId: string, profile: Profile, persona: Perso
     upcomingEvents(profile, persona, 12),
   ]);
   const picked = pickedRows[0]?.e ?? null;
+  const upcoming = onePerEvent(found, picked);
   let target: EventRow | null = picked;
   const named = profile.eventInMind?.trim();
   if (!target && named) {
@@ -131,13 +174,23 @@ export async function targetEvent(userId: string, profile: Profile, persona: Per
   return (await eventsFor(userId, profile, persona)).target;
 }
 
-export async function pickTargetEvent(userId: string, eventId: string | null) {
+// Sets (or, with null, clears) the event someone aims at. Only an event they can
+// see may be picked; anything else returns false and keeps the old pick.
+export async function pickTargetEvent(userId: string, eventId: string | null): Promise<boolean> {
   const d = await db();
-  await d.delete(schema.userEvents).where(eq(schema.userEvents.userId, userId));
-  if (eventId) await d.insert(schema.userEvents).values({ userId, eventId, target: true });
-}
-
-export async function findEventByName(name: string) {
-  const d = await db();
-  return d.select().from(schema.events).where(ilike(schema.events.name, `%${name}%`)).limit(5);
+  if (eventId) {
+    const [found] = await d
+      .select({ query: schema.events.query, eventInMind: schema.profiles.eventInMind })
+      .from(schema.events)
+      .leftJoin(schema.profiles, eq(schema.profiles.userId, userId))
+      .where(eq(schema.events.id, eventId))
+      .limit(1);
+    if (!found || (found.query !== "" && found.query !== eventQueryOf(found))) return false;
+  }
+  // Clearing the old pick and saving the new one happen together.
+  await d.transaction(async (tx) => {
+    await tx.delete(schema.userEvents).where(eq(schema.userEvents.userId, userId));
+    if (eventId) await tx.insert(schema.userEvents).values({ userId, eventId, target: true });
+  });
+  return true;
 }

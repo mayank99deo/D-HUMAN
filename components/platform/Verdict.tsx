@@ -21,9 +21,9 @@ export function VerdictMark({ level }: { level: VerdictLevel }) {
   return <span aria-hidden className="h-4 w-4 rounded-full border-2 border-straw" />;
 }
 
-export function Verdict({ level, line, detail, as: H = "h2" }: { level: VerdictLevel; line: string; detail?: string; as?: "h1" | "h2" }) {
+export function Verdict({ level, line, detail, as: H = "h2", lang }: { level: VerdictLevel; line: string; detail?: string; as?: "h1" | "h2"; lang?: string }) {
   return (
-    <section className="relative isolate" aria-label="Verdict">
+    <section className="relative isolate" aria-label="Verdict" lang={lang}>
       <div aria-hidden className="pointer-events-none absolute -inset-x-16 -inset-y-16 -z-10" style={{ background: `radial-gradient(closest-side at 35% 50%, ${GLOW[level]}, transparent)` }} />
       <p className="flex items-center gap-2 text-sm font-semibold text-graphite">
         <VerdictMark level={level} />

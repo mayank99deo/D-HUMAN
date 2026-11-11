@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { OFFLINE, send } from "./net";
 
 type Card = { kind: string; big: string; label: string; line: string };
 type Story = { id: string; title: string; cards: Card[]; oneThing: string; demo: boolean; made: string };
@@ -118,12 +120,11 @@ export function WrapsClient({ cards, firstName, aiOff }: { cards: PeriodCard[]; 
   async function make(c: PeriodCard) {
     setBusy(c.key);
     setError(null);
-    const res = await fetch("/api/wraps", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ period: c.period, offset: c.offset }) });
-    const data = await res.json().catch(() => ({}));
+    const r = await send<{ id: string; empty: boolean; message: string }>("/api/wraps", { body: { period: c.period, offset: c.offset }, timeoutMs: 60_000 });
     setBusy(null);
-    if (!res.ok) return setError(ERRORS[data.error] ?? "We couldn't make that wrap. Try again.");
-    if (data.empty) return setError(`Nothing logged for ${c.name.toLowerCase()} yet. Log a few meals first.`);
-    setWant(data.id);
+    if (!r.ok) return setError(r.offline ? OFFLINE : r.data.message || (ERRORS[r.data.error ?? ""] ?? "We couldn't make that wrap. Try again."));
+    if (r.data.empty) return setError(`Nothing logged for ${c.name.toLowerCase()} yet. Log a few meals first.`);
+    setWant(r.data.id ?? null);
     startTransition(() => router.refresh());
   }
 
@@ -153,11 +154,18 @@ export function WrapsClient({ cards, firstName, aiOff }: { cards: PeriodCard[]; 
                   Play
                 </button>
               )}
-              {(!c.wrap || c.ongoing) && (
-                <button type="button" onClick={() => make(c)} disabled={!!busy || !c.hasData} className={c.wrap ? "link-quiet min-h-11 text-sm" : "button-ghost h-11"}>
-                  {busy === c.key ? "Making it…" : c.wrap ? "Update with latest" : c.hasData ? "Make my wrap" : "Log meals to unlock"}
+              {(c.wrap && c.ongoing) || (!c.wrap && c.hasData) ? (
+                <button type="button" onClick={() => make(c)} disabled={!!busy} className={c.wrap ? "link-quiet min-h-11 text-sm" : "button-ghost h-11"}>
+                  {busy === c.key ? "Making it…" : c.wrap ? "Update with latest" : "Make my wrap"}
                 </button>
-              )}
+              ) : !c.wrap && c.ongoing ? (
+                // Meals always log to today, so only a period still running can be filled in.
+                <Link href="/fuel" className="button-ghost h-11">
+                  Log a meal to start it
+                </Link>
+              ) : !c.wrap ? (
+                <p className="text-sm text-graphite">Nothing logged {c.period === "week" ? "that week" : c.period === "month" ? "that month" : "that year"}.</p>
+              ) : null}
             </div>
           </li>
         ))}

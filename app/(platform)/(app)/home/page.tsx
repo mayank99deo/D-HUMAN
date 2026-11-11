@@ -5,10 +5,13 @@ import { Bib, type Tone } from "@/components/platform/Bib";
 import { Contour, type ContourMarker } from "@/components/platform/Contour";
 import { EventPicker } from "@/components/platform/EventPicker";
 import { MarkerTile, rangeText } from "@/components/platform/Markers";
+import { retestFrom } from "@/components/platform/retest";
+import { overBy, TargetBar } from "@/components/platform/Target";
 import { Verdict } from "@/components/platform/Verdict";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { dashboard } from "@/lib/platform/dashboard";
 import { requireMember } from "@/lib/platform/member";
+import { localDate } from "@/lib/platform/profile";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -17,6 +20,14 @@ const dateText = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "numer
 function greeting(tz: string | null) {
   const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: tz || "Asia/Kolkata" }).format(new Date()));
   return h < 5 ? "Up late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+// With nothing to take because a doctor comes first, home must not count "0 supplements".
+function stackLine(plan: { items: unknown[]; see_doctor: unknown[] } | null) {
+  const n = plan?.items.length ?? 0;
+  if (!n && plan?.see_doctor.length) return "See a doctor before adding anything. Your stack lists what to ask about.";
+  if (!n) return "Nothing to add. Your markers and your food don't point to any supplement.";
+  return `${n} supplement${n === 1 ? "" : "s"}, each tied to a marker or a gap in what you eat. Nothing else.`;
 }
 
 async function Dashboard() {
@@ -51,7 +62,10 @@ async function Dashboard() {
     }));
 
   const t = data.target;
-  const next = t ? `${t.name}` : read ? `Retest in ${read.retest.weeks} weeks` : "Next: your first blood report";
+  // The retest counts down from the day the blood was taken (or the upload day).
+  const retest =
+    read && data.view ? retestFrom(data.view.collectedOn ?? localDate(profile.timezone, data.view.createdAt), read.retest.weeks, localDate(profile.timezone)) : null;
+  const next = t ? `${t.name}` : retest ? retest.label : "Next: your first blood report";
   const nextDetail = t
     ? [t.startsOn ? dateText(t.startsOn) : "Dates to be announced", data.daysToTarget != null ? `${data.daysToTarget} days out` : null, t.city].filter(Boolean).join(", ")
     : read
@@ -61,6 +75,40 @@ async function Dashboard() {
   const fuel = data.today;
   const isMock = data.view?.model === "mock";
 
+  // Today's fuel changes every day, so it sits right under the verdict.
+  const fuelSection = (
+    <section className="mt-14" aria-labelledby="fuel">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 id="fuel" className="text-2xl font-bold semiwide">
+          Today&apos;s fuel
+        </h2>
+        <Link href="/fuel" className="link-quiet min-h-11 py-2 text-sm">
+          Log a meal
+        </Link>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-x-4 border-t border-line pt-5">
+        {[
+          { label: "kcal", v: fuel.totals.kcal, t: fuel.targets.kcal },
+          { label: "protein, g", v: fuel.totals.proteinG, t: fuel.targets.proteinG },
+          { label: "fibre, g", v: fuel.totals.fibreG, t: fuel.targets.fibreG },
+        ].map((x) => {
+          const extra = overBy(x.v, x.t);
+          return (
+            <div key={x.label} className="min-w-0">
+              <p className="display-num text-[clamp(1.5rem,7vw,1.875rem)]">{Math.round(x.v).toLocaleString("en-IN")}</p>
+              <p className="mt-1 text-sm text-graphite">
+                of {x.t.toLocaleString("en-IN")} {x.label}
+              </p>
+              {extra > 0 && <p className="text-sm font-semibold">{extra.toLocaleString("en-IN")} over</p>}
+              <TargetBar value={x.v} target={x.t} className="mt-3" />
+            </div>
+          );
+        })}
+      </div>
+      {fuel.meals === 0 && <p className="mt-4 text-sm text-graphite">Nothing logged today. Snap a plate, say it, or type it.</p>}
+    </section>
+  );
+
   return (
     <div className="mx-auto grid max-w-6xl gap-x-12 px-4 pb-16 pt-6 sm:px-6 lg:grid-cols-12 lg:pt-10">
       <div className="lg:col-span-5">
@@ -68,7 +116,16 @@ async function Dashboard() {
           <p className="mb-4 text-graphite">
             {greeting(profile.timezone)}, {persona.firstName}.
           </p>
-          <Bib number={persona.bib} name={persona.firstName} label={persona.label} archetype={persona.archetype} next={next} nextDetail={nextDetail} tone={tone} />
+          <Bib
+            number={persona.bib}
+            name={persona.firstName}
+            label={persona.label}
+            archetype={persona.archetype}
+            next={next}
+            nextDetail={nextDetail}
+            retest={t && retest ? retest.label : null}
+            tone={tone}
+          />
           {data.inProgress && (
             <Link href={`/upload?report=${data.inProgress.id}`} className="mt-4 flex min-h-13 items-center justify-between border border-line-strong px-4 text-sm">
               <span>Reading your report now</span>
@@ -81,8 +138,10 @@ async function Dashboard() {
       <div className="mt-12 lg:col-span-7 lg:mt-9">
         {read ? (
           <>
-            <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" />
+            <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={profile.language === "hi" ? "hi" : undefined} />
             {isMock && <p className="mt-4 text-sm text-graphite">Demo read: AI is off on this machine, so this was written from a template.</p>}
+
+            {fuelSection}
 
             <section className="mt-14" aria-labelledby="matter">
               <div className="flex items-baseline justify-between gap-4">
@@ -154,35 +213,7 @@ async function Dashboard() {
             </Link>
           </section>
         )}
-
-        <section className="mt-14" aria-labelledby="fuel">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 id="fuel" className="text-2xl font-bold semiwide">
-              Today&apos;s fuel
-            </h2>
-            <Link href="/fuel" className="link-quiet min-h-11 py-2 text-sm">
-              Log a meal
-            </Link>
-          </div>
-          <div className="mt-4 grid grid-cols-3 border-t border-line pt-5">
-            {[
-              { label: "kcal", v: fuel.totals.kcal, t: fuel.targets.kcal },
-              { label: "protein, g", v: fuel.totals.proteinG, t: fuel.targets.proteinG },
-              { label: "fibre, g", v: fuel.totals.fibreG, t: fuel.targets.fibreG },
-            ].map((x) => (
-              <div key={x.label}>
-                <p className="display-num text-3xl">{Math.round(x.v)}</p>
-                <p className="mt-1 text-sm text-graphite">
-                  of {x.t} {x.label}
-                </p>
-                <div className="mt-3 h-1 bg-line" aria-hidden>
-                  <div className="h-1 bg-paper" style={{ width: `${Math.min(100, (x.v / x.t) * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          {fuel.meals === 0 && <p className="mt-4 text-sm text-graphite">Nothing logged today. Snap a plate, say it, or type it.</p>}
-        </section>
+        {!read && fuelSection}
 
         {data.upcoming.length > 0 && (
           <section className="mt-14" aria-labelledby="events">
@@ -206,7 +237,7 @@ async function Dashboard() {
           </h2>
           <p className="mt-2 max-w-prose text-graphite">
             {data.stack?.status === "ready"
-              ? `${(data.stack.plan as { items: unknown[] } | null)?.items.length ?? 0} supplements, each tied to a marker or a gap in what you eat. Nothing else.`
+              ? stackLine(data.stack.plan as { items: unknown[]; see_doctor: unknown[] } | null)
               : read
                 ? "Built from this report and what you eat. Only what a marker or a real gap points to."
                 : "It appears once your first report is read."}

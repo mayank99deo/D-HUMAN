@@ -37,7 +37,7 @@ export async function focusMarkers(userId: string): Promise<string[]> {
 export async function logMeal(
   userId: string,
   profile: Profile,
-  input: { image?: { mime: string; bytes: Buffer }; text?: string; source: "photo" | "voice" | "text"; meal?: MealKind },
+  input: { id?: string; image?: { mime: string; bytes: Buffer }; text?: string; source: "photo" | "voice" | "text"; meal?: MealKind },
 ): Promise<{ log: FoodLog } | { notFood: true }> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailableError();
@@ -48,7 +48,8 @@ export async function logMeal(
 
   const sum = (k: "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fibre_g") => data.items.reduce((t, i) => t + (i[k] || 0), 0);
   const row = {
-    id: newId(),
+    // The caller's id when given: it is also the meal's entry in the usage ledger.
+    id: input.id ?? newId(),
     userId,
     localDate: localDate(profile.timezone),
     meal: input.meal ?? data.meal_guess ?? mealFromClock(profile.timezone),

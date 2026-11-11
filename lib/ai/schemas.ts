@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { MARKER_KEYS } from "@/lib/domain/markers";
+import { EXTRACT_KEYS } from "@/lib/domain/markers";
 
-// Output shapes Claude must return. Every field is required (nullable where it
-// may be absent): structured outputs work best with closed, explicit schemas.
+// Output shapes Claude must return. Structured-output shapes (extract, read,
+// meal, day, wrap) have every field required, nullable where it may be absent:
+// structured outputs work best with closed, explicit schemas. The web-search
+// shapes (events, stack) are read from free text instead, so they tolerate
+// missing optional keys and drop a bad entry rather than the whole paid reply.
 
 export const ExtractedSchema = z.object({
   is_lab_report: z.boolean(),
@@ -14,14 +17,14 @@ export const ExtractedSchema = z.object({
   markers: z.array(
     z.object({
       printed_name: z.string(),
-      key: z.enum([...MARKER_KEYS, "other"]),
+      key: z.enum([...EXTRACT_KEYS, "other"]),
       panel: z.string().nullable(),
       value: z.number().nullable(),
       value_text: z.string().nullable().describe("Only when the result is not a plain number, e.g. '<0.5' or 'Positive'"),
       unit: z.string().nullable(),
       ref_low: z.number().nullable(),
       ref_high: z.number().nullable(),
-      ref_text: z.string().nullable().describe("The reference range exactly as printed"),
+      ref_text: z.string().nullable().describe("Only when the range can't go in ref_low/ref_high (e.g. 'Negative'): the range as printed. Otherwise null"),
     }),
   ),
   reading_notes: z.string().nullable().describe("Anything that made the report hard to read, e.g. a blurry page"),
@@ -47,13 +50,7 @@ export const ReadSchema = z.object({
       action: z.string().describe("A food-first, practical step"),
     }),
   ),
-  markers: z.array(
-    z.object({
-      id: z.string(),
-      note: z.string(),
-      for_you: z.enum(["good", "watch", "act", "neutral"]),
-    }),
-  ),
+  markers: z.array(z.object({ id: z.string(), note: z.string() })),
   wins: z.array(z.string()),
   doctor_questions: z.array(z.string()),
   retest: z.object({ weeks: z.number(), markers: z.array(z.string()), why: z.string() }),
@@ -125,40 +122,63 @@ export const WrapStorySchema = z.object({
 });
 export type WrapStory = z.infer<typeof WrapStorySchema>;
 
-export const EventsSchema = z.object({
-  events: z.array(
-    z.object({
-      name: z.string(),
-      kind: z.string().nullable(),
-      starts_on: z.string().nullable(),
-      ends_on: z.string().nullable(),
-      city: z.string().nullable(),
-      country: z.string().nullable(),
-      url: z.string().nullable(),
-      details: z.string().nullable(),
-    }),
-  ),
+// ---- Web-search replies (parsed from free text, so lenient) ----
+
+// A string the model may leave out or set to null; always comes back as string | null.
+const maybe = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? null);
+// A string the model may leave out; always comes back as a string.
+const text = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? "");
+// A sentence, even when the model wrote {"marker": "...", "why": "..."} instead of a string.
+const line = z
+  .union([z.string(), z.record(z.string(), z.unknown()).transform((o) => Object.values(o).filter((v): v is string => typeof v === "string").join(": "))])
+  .refine((v) => v.trim() !== "");
+// Keeps the entries that fit and drops the ones that don't. `required` arrays
+// must be present, so a reply in the wrong shape altogether still fails.
+const keep = <T extends z.ZodType>(item: T) => (xs: unknown[] | null | undefined) =>
+  (xs ?? []).flatMap((x) => {
+    const r = item.safeParse(x);
+    return r.success ? [r.data as z.output<T>] : [];
+  });
+const lenientArray = <T extends z.ZodType>(item: T) => z.array(z.unknown()).nullish().transform(keep(item));
+const requiredArray = <T extends z.ZodType>(item: T) => z.array(z.unknown()).transform(keep(item));
+
+export const EventSchema = z.object({
+  name: z.string(),
+  kind: maybe,
+  starts_on: maybe,
+  ends_on: maybe,
+  city: maybe,
+  country: maybe,
+  url: maybe,
+  details: maybe,
 });
 
+export const EventsSchema = z.object({ events: requiredArray(EventSchema) });
+
 export const StackSchema = z.object({
-  items: z.array(
+  items: requiredArray(
     z.object({
-      nutrient: z.string(),
-      why: z.string(),
-      markers: z.array(z.string()),
-      diet_gap: z.string().nullable(),
-      form: z.string(),
-      dose: z.string(),
-      timing: z.string(),
-      duration: z.string(),
-      cautions: z.string().nullable(),
-      brands: z.array(
-        z.object({ brand: z.string(), product: z.string(), url: z.string().nullable(), note: z.string().nullable() }),
-      ),
+      // An item needs at least a nutrient and a dose to be safe to show.
+      nutrient: z.string().min(1),
+      dose: z.string().min(1),
+      why: text,
+      markers: lenientArray(z.string()),
+      diet_gap: maybe,
+      form: text,
+      timing: text,
+      duration: text,
+      cautions: maybe,
+      brands: lenientArray(z.object({ brand: z.string(), product: text, url: maybe, note: maybe })),
     }),
   ),
-  skip: z.array(z.object({ name: z.string(), why: z.string() })),
-  food_first: z.array(z.string()),
-  see_doctor: z.array(z.string()),
+  skip: lenientArray(z.object({ name: z.string(), why: text })),
+  food_first: lenientArray(line),
+  see_doctor: lenientArray(line),
 });
 export type StackPlan = z.infer<typeof StackSchema>;

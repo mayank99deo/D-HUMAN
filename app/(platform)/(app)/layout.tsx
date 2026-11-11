@@ -18,7 +18,8 @@ async function NavWithUser() {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh pb-24 lg:pb-0 lg:pl-24">
+    // clip, not hidden: wide glows (the verdict's) can't widen the page, and sticky still works.
+    <div className="min-h-dvh overflow-x-clip pb-24 lg:pb-0 lg:pl-24">
       <Suspense fallback={<NavView initial="" path="" />}>
         <NavWithUser />
       </Suspense>

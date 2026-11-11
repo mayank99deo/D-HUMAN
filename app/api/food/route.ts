@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { AiUnavailableError } from "@/lib/ai/client";
+import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { apiUser } from "@/lib/auth/session";
+import { newId } from "@/lib/auth/crypto";
 import { logMeal } from "@/lib/platform/food";
 import { json, sniffMime, unauthorized } from "@/lib/platform/http";
-import { getProfile } from "@/lib/platform/profile";
+import { claimMeal, planLimit, releaseUse } from "@/lib/platform/plan";
+import { getProfile, localDate } from "@/lib/platform/profile";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 120;
@@ -41,13 +43,26 @@ export async function POST(request: Request) {
   }
   if (!image && !parsed.data.text) return json({ error: "empty" }, 400);
 
+  // Counts against the plan (lib/domain/plan.ts) under the meal's own id; handed back if the meal isn't logged.
+  const use = newId();
+  const refusal = await claimMeal(user.id, use, localDate(profile.timezone));
+  if (refusal) return planLimit(refusal);
+  let logged = false;
   try {
-    const result = await logMeal(user.id, profile, { ...parsed.data, image });
+    const result = await logMeal(user.id, profile, { ...parsed.data, image, id: use });
     if ("notFood" in result) return json({ error: "not_food" }, 422);
+    logged = true;
     return json({ log: result.log });
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: "ai_off" }, 503);
+    // A decline isn't about photo quality: suggest the other way in.
+    if (error instanceof AiRefusalError) {
+      const message = image ? "We couldn't log this photo. Try telling us what you ate in a few words." : "We couldn't log that. Try describing the meal differently.";
+      return json({ error: "refused", message }, 422);
+    }
     console.error("[food]", error);
     return json({ error: "failed" }, 500);
+  } finally {
+    if (!logged) await releaseUse("meal", use).catch((e) => console.error("[food] Couldn't release the use", e));
   }
 }

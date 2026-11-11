@@ -10,6 +10,8 @@ export async function POST(request: Request) {
   if (!user) return unauthorized();
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ error: "invalid" }, 400);
-  await pickTargetEvent(user.id, parsed.data.eventId);
+  // False when the event doesn't exist or belongs to someone else's private search.
+  const saved = await pickTargetEvent(user.id, parsed.data.eventId);
+  if (!saved) return json({ error: "not_found" }, 404);
   return json({ status: "saved" });
 }

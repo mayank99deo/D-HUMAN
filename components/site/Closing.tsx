@@ -1,5 +1,7 @@
 import { SignalField } from "@/components/signal-field/SignalField";
 import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
+import { isWaitlist } from "@/lib/site-mode";
+import { StartForm } from "./StartForm";
 
 export function Closing() {
   return (
@@ -18,10 +20,12 @@ export function Closing() {
           Know your numbers before you buy another bottle.
         </h2>
         <p className="mt-6 max-w-[44ch] text-graphite">
-          Join the waitlist for early access and launch pricing.
+          {isWaitlist
+            ? "Join the waitlist for early access and launch pricing."
+            : "Start with a blood report you already have."}
         </p>
         <div className="mt-10 max-w-xl">
-          <WaitlistForm source="closing" />
+          {isWaitlist ? <WaitlistForm source="closing" /> : <StartForm />}
         </div>
       </div>
     </section>

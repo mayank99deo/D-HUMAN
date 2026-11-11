@@ -51,12 +51,12 @@ const PRIORITY: Record<Archetype, string[]> = {
 
 const GOAL_MARKERS: Partial<Record<GoalId, string[]>> = {
   energy: ["ferritin", "hemoglobin", "b12", "vitamin_d", "tsh"],
-  fat_loss: ["hba1c", "triglycerides", "tsh", "insulin_fasting"],
+  fat_loss: ["hba1c", "triglycerides", "tsh", "insulin_fasting", "homa_ir", "tg_hdl_ratio"],
   muscle: ["testosterone_total", "vitamin_d", "creatinine"],
   performance: ["ferritin", "hemoglobin", "vitamin_d"],
   sleep: ["vitamin_d", "magnesium", "cortisol", "tsh"],
   stress: ["cortisol", "magnesium", "tsh"],
-  longevity: ["hba1c", "ldl", "hscrp", "homocysteine", "triglycerides"],
+  longevity: ["hba1c", "ldl", "apob", "lpa", "hscrp", "homocysteine", "triglycerides"],
   deficiency: ["vitamin_d", "b12", "ferritin", "folate"],
 };
 

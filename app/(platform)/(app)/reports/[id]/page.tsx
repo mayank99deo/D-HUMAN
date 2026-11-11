@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DeleteReport } from "@/components/platform/DeleteReport";
 import { MarkerRow } from "@/components/platform/Markers";
+import { retestFrom } from "@/components/platform/retest";
 import { Verdict } from "@/components/platform/Verdict";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { reportView } from "@/lib/platform/dashboard";
 import { requireMember } from "@/lib/platform/member";
+import { localDate } from "@/lib/platform/profile";
 
 export const metadata: Metadata = { title: "Report" };
 
@@ -33,6 +35,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
   const otherName =
     view.nameOnReport && profile.name && !view.nameOnReport.toLowerCase().includes(profile.name.trim().split(/\s+/)[0].toLowerCase()) ? view.nameOnReport : null;
   const out = markers.filter((m) => m.status === "low" || m.status === "high").length;
+  const retest = retestFrom(view.collectedOn ?? localDate(profile.timezone, view.createdAt), read.retest.weeks, localDate(profile.timezone));
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
@@ -44,19 +47,19 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
       </p>
       <p className="mt-1 inline-flex items-center gap-2 text-sm text-graphite">
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-graphite" />
-        {view.model === "mock" ? "Demo read, written from a template" : "Read by AI. Not a diagnosis, and not yet reviewed by a doctor."}
+        {view.model === "mock" ? "Demo read, written from a template" : "AI-analysed report. Not a diagnosis."}
       </p>
       {otherName && <p className="error-mark mt-4 text-sm">This report is printed for {otherName}. Your read assumes it&apos;s yours.</p>}
 
       <div className="mt-8">
-        <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" />
+        <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={profile.language === "hi" ? "hi" : undefined} />
       </div>
 
       <section className="mt-12">
         <h2 className="text-3xl font-bold wide">{read.headline}</h2>
         <p className="mt-3 max-w-prose text-lg leading-relaxed">{read.summary}</p>
         <p className="mt-4 text-sm text-graphite">
-          {markers.length} markers, {out} outside the lab&apos;s range.
+          {markers.length} markers, {out} outside their range.
         </p>
       </section>
 
@@ -127,8 +130,11 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
 
       <section className="mt-12" aria-labelledby="retest">
         <h2 id="retest" className="text-xl font-bold semiwide">
-          Retest in {read.retest.weeks} weeks
+          <time dateTime={retest.dueOn}>{retest.label}</time>
         </h2>
+        <p className="mt-1 text-sm text-graphite">
+          {read.retest.weeks} weeks from {view.collectedOn ? "the day this blood was taken" : "the day you uploaded this report"}.
+        </p>
         <p className="mt-2 text-graphite">{read.retest.why}</p>
         {read.retest.markers.length > 0 && (
           <p className="mt-2">{read.retest.markers.map((k) => markerDef(k)?.name ?? k).join(", ")}</p>

@@ -24,7 +24,7 @@ export default function SignInPage() {
       </Link>
       <div className="mt-auto pt-16">
         <h1 className="headline text-[clamp(2.25rem,8vw,3.25rem)]">Your body speaks data.</h1>
-        <p className="mt-4 text-graphite">Sign in with your email. We send a 6-digit code; no password to remember.</p>
+        <p className="mt-4 text-graphite">Start free or sign in with your email. We send a 6-digit code; no password to remember.</p>
         <SignInForm />
       </div>
       <p className="mt-10 text-sm text-graphite">

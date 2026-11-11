@@ -16,6 +16,10 @@ export type FoodContext = { language: string; diet: string | null; focus: string
 const contextLine = (c: FoodContext) =>
   `Their diet: ${c.diet ?? "not given"}. What their blood report says to watch: ${c.focus.join(", ") || "nothing specific yet"}.`;
 
+// The food route stops at 120 s. Two tries of at most 50 s each end well before that,
+// so a slow call fails cleanly and the meal's use is handed back.
+const MEAL_DEADLINE = { timeout: 50_000, maxRetries: 1 };
+
 export async function estimateMeal(input: {
   image?: { mime: string; bytes: Buffer };
   text?: string;
@@ -51,7 +55,7 @@ Title: a short name for the meal, as they'd say it. Tip: one short, specific nud
       output_config: { effort: "low", format: betaZodOutputFormat(MealSchema) },
       system: `${VOICE}\n\n${FOOD_RULES}`,
       messages: [{ role: "user", content }],
-    })
+    }, MEAL_DEADLINE)
     .finalMessage();
   logUsage("meal", message, t0);
   assertComplete(message);

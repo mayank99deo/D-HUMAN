@@ -2,14 +2,19 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Settings } from "@/components/platform/Settings";
 import { requireMember } from "@/lib/platform/member";
+import { paidPasses } from "@/lib/platform/plan";
+import { currentPlan } from "@/lib/platform/plan-state";
 
 export const metadata: Metadata = { title: "Settings" };
 
 async function Content() {
   const { user, profile } = await requireMember();
+  const [plan, passes] = await Promise.all([currentPlan(user.id, profile.timezone, { reconcile: true }), paidPasses(user.id, profile.timezone)]);
   return (
     <Settings
       email={user.email}
+      plan={plan}
+      passes={passes}
       profile={{
         name: profile.name ?? "",
         birthYear: profile.birthYear ? String(profile.birthYear) : "",

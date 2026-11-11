@@ -1,5 +1,7 @@
 import { SignalField } from "@/components/signal-field/SignalField";
 import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
+import { isWaitlist } from "@/lib/site-mode";
+import { StartForm } from "./StartForm";
 
 export function Hero() {
   return (
@@ -18,13 +20,23 @@ export function Hero() {
           <span className="block">speaks data.</span>
         </h1>
         <p className="semiwide mt-5 text-lead font-medium sm:mt-7">Hack your health.</p>
-        <p className="mt-8 max-w-[48ch] text-graphite sm:mt-10">
-          D-Human tests your blood, gut and body, has a doctor review the results, and recommends
-          supplements only where your markers point. Then we retest to show what moved.
-        </p>
-        {/* "Join the waitlist" links land here while the closing section is hidden. */}
+        {isWaitlist ? (
+          <p className="mt-8 max-w-[48ch] text-graphite sm:mt-10">
+            D-Human tests your blood, gut and body, analyses the results with AI, and recommends
+            supplements only where your markers point. Then we retest to show what moved.
+          </p>
+        ) : (
+          // Open mode says what "Start free" gives today: a read of a report the person brings.
+          <p className="mt-8 max-w-[48ch] text-graphite sm:mt-10">
+            Upload a recent blood report. D-Human analyses it with AI for the way you train, puts food
+            first, and recommends supplements only where your markers point. Then retest to see what
+            moved.
+          </p>
+        )}
+        {/* "Join the waitlist" links land here while the closing section is hidden. Open mode keeps
+            the anchor so old links to /#join still reach the start form. */}
         <div id="join" className="mt-9 max-w-xl">
-          <WaitlistForm source="hero" />
+          {isWaitlist ? <WaitlistForm source="hero" /> : <StartForm />}
         </div>
       </div>
     </section>

@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo } from "next/font/google";
+import { Anek_Devanagari, Archivo } from "next/font/google";
+import { Suspense } from "react";
+import { Vitals } from "@/components/Vitals";
+import { isWaitlist } from "@/lib/site-mode";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -10,8 +13,19 @@ const archivo = Archivo({
   display: "swap",
 });
 
-const description =
-  "Test first. Supplement second. D-Human tests your blood, gut and body, has a doctor review the results, and recommends supplements only where your markers point. Join the waitlist.";
+// Hindi reads only. Not preloaded: the browser fetches the Devanagari file only
+// when a page shows Devanagari text, so English pages don't pay for it.
+const devanagari = Anek_Devanagari({
+  subsets: ["devanagari"],
+  axes: ["wdth"],
+  variable: "--font-devanagari",
+  display: "swap",
+  preload: false,
+});
+
+const description = isWaitlist
+  ? "Test first. Supplement second. D-Human tests your blood, gut and body, analyses the results with AI, and recommends supplements only where your markers point. Join the waitlist."
+  : "Test first. Supplement second. Upload a blood report and D-Human analyses it with AI for the way you train, then recommends supplements only where your markers point. Start free.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl() ?? "http://localhost:3000"),
@@ -46,8 +60,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-IN" className={archivo.variable} data-scroll-behavior="smooth">
-      <body>{children}</body>
+    <html lang="en-IN" className={`${archivo.variable} ${devanagari.variable}`} data-scroll-behavior="smooth">
+      <body>
+        {children}
+        {/* It reads the URL, so it waits in its own Suspense boundary instead of holding up the page. */}
+        <Suspense fallback={null}>
+          <Vitals />
+        </Suspense>
+      </body>
     </html>
   );
 }

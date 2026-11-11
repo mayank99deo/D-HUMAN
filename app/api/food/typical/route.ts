@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AiUnavailableError } from "@/lib/ai/client";
+import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { apiUser } from "@/lib/auth/session";
 import { saveTypicalDay } from "@/lib/platform/food";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     return json({ day });
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: "ai_off" }, 503);
+    if (error instanceof AiRefusalError) return json({ error: "refused", message: "We couldn't read that description. Try listing what you eat, meal by meal." }, 422);
     console.error("[typical-day]", error);
     return json({ error: "failed" }, 500);
   }

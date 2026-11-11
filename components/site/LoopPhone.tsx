@@ -11,11 +11,11 @@ const CHAPTERS = [
     body: "Blood, urine, gut and more. Most of it from home.",
     start: 0,
     still: "test",
-    alt: "The Tests screen: blood, urine, gut and body marked collected, and a notification that the report is in, reviewed by a doctor.",
+    alt: "The Tests screen: blood, urine, gut and body marked collected, and a notification that the AI-analysed report is in.",
   },
   {
     title: "Read",
-    body: "A doctor-reviewed report in plain words.",
+    body: "An AI-analysed report in plain words.",
     start: 3.65,
     still: "read",
     alt: "Vitamin D in plain words: 14 ng/mL, below the 30 to 100 range. Candidate: vitamin D3, often with K2. Retest at 3 to 4 months.",
@@ -183,7 +183,7 @@ export function LoopPhone() {
         </figcaption>
         {!still && (
           <p className="sr-only">
-            A phone plays D-Human&apos;s app: tests collected at home, a doctor-reviewed report with three
+            A phone plays D-Human&apos;s app: tests collected at home, an AI-analysed report with three
             markers flagged, vitamin D explained in plain words, a stack of three supplements matched to
             those markers from clean-label brands, and a retest where two markers are back in range.
           </p>
