@@ -2,6 +2,7 @@ import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
+import type { MealWords } from "@/lib/domain/speech";
 import { DaySchema, MealSchema, type Day, type Meal } from "./schemas";
 
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
@@ -20,11 +21,28 @@ const contextLine = (c: FoodContext) =>
 // so a slow call fails cleanly and the meal's use is handed back.
 const MEAL_DEADLINE = { timeout: 50_000, maxRetries: 1 };
 
-export async function estimateMeal(input: {
-  image?: { mime: string; bytes: Buffer };
-  text?: string;
-  context: FoodContext;
-}): Promise<{ data: Meal; model: string }> {
+// The person's words for the prompt. When the browser translated them, Claude gets
+// both: the English to work from and their own words to check odd food names against.
+function wordsLine(words: MealWords, voice: boolean): string {
+  if (!words.said) return "";
+  const heard = voice ? " (spoken, so speech recognition may have misheard a word)" : "";
+  if (!words.english) return ` In my words${heard}: "${words.said}"`;
+  return ` In my words, in ${words.saidIn.name}${heard}: "${words.said}"
+My browser translated that into English: "${words.english}"
+Browser translations can get Indian food names wrong; where the two differ, go by my words.`;
+}
+
+type MealRequest = { image?: { mime: string; bytes: Buffer }; words: MealWords; voice: boolean; context: FoodContext };
+
+/** The text part of the meal request. Exported for tests. */
+export function mealPrompt(input: MealRequest): string {
+  return `${input.image ? "Here's a photo of what I ate." : ""}${wordsLine(input.words, input.voice)}
+
+${contextLine(input.context)}
+Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. Write the title and the tip in ${input.words.reply.name}. ${languageRule(input.words.reply.id)} Keep food names as Indians say them (e.g. "rajma chawal").`;
+}
+
+export async function estimateMeal(input: MealRequest): Promise<{ data: Meal; model: string }> {
   const content: BetaContentBlockParam[] = [];
   if (input.image) {
     content.push({
@@ -36,13 +54,7 @@ export async function estimateMeal(input: {
       },
     });
   }
-  content.push({
-    type: "text",
-    text: `${input.image ? "Here's a photo of what I ate." : ""}${input.text ? ` In my words: "${input.text}"` : ""}
-
-${contextLine(input.context)}
-Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. ${languageRule(input.context.language)} Keep food names as Indians say them (e.g. "rajma chawal").`,
-  });
+  content.push({ type: "text", text: mealPrompt(input) });
 
   const t0 = Date.now();
   const message = await anthropic()

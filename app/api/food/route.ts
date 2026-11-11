@@ -6,15 +6,24 @@ import { logMeal } from "@/lib/platform/food";
 import { json, sniffMime, unauthorized } from "@/lib/platform/http";
 import { claimMeal, planLimit, releaseUse } from "@/lib/platform/plan";
 import { getProfile, localDate } from "@/lib/platform/profile";
+import { MEAL_ENGLISH_MAX, MEAL_WORDS_MAX, SPOKEN_IDS } from "@/lib/domain/speech";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 120;
 
+// `text` is what gets read: the browser's English translation when it made one (then
+// `original` holds the person's own words), else their words. The reply language is
+// worked out here from their words and, for voice, `spoken` (lib/domain/speech.ts).
 const fields = z.object({
-  text: z.string().trim().max(1000).optional(),
+  text: z.string().trim().max(MEAL_ENGLISH_MAX).optional(),
+  original: z.string().trim().max(MEAL_WORDS_MAX).optional(),
+  // Ignored, not refused, when unknown: a tab left open may still offer a language we've dropped.
+  spoken: z.enum(SPOKEN_IDS).optional().catch(undefined),
   source: z.enum(["photo", "voice", "text"]),
   meal: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
-});
+})
+  // Their own words fit the box; only a translation may run longer.
+  .refine((f) => f.original || (f.text?.length ?? 0) <= MEAL_WORDS_MAX);
 
 export async function POST(request: Request) {
   const user = await apiUser();
@@ -27,6 +36,8 @@ export async function POST(request: Request) {
   if (!form) return json({ error: "invalid" }, 400);
   const parsed = fields.safeParse({
     text: form.get("text") || undefined,
+    original: form.get("original") || undefined,
+    spoken: form.get("spoken") || undefined,
     source: form.get("source"),
     meal: form.get("meal") || undefined,
   });
@@ -41,7 +52,7 @@ export async function POST(request: Request) {
     if (!mime || mime === "application/pdf") return json({ error: "unsupported_type" }, 415);
     image = { mime, bytes };
   }
-  if (!image && !parsed.data.text) return json({ error: "empty" }, 400);
+  if (!image && !parsed.data.text && !parsed.data.original) return json({ error: "empty" }, 400);
 
   // Counts against the plan (lib/domain/plan.ts) under the meal's own id; handed back if the meal isn't logged.
   const use = newId();

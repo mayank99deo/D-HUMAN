@@ -1,202 +1,150 @@
-import { Fragment, type CSSProperties } from "react";
-import { MICROS } from "@/lib/domain/nutrition";
-import { PlayOnView } from "./PlayOnView";
+import { SPOKEN, type SpokenId } from "@/lib/domain/speech";
+import { LanguageTabs } from "./LanguageTabs";
+import { nativeStyle } from "./native";
 
-// Fuel, the calorie and protein tracker, told the way the app shows it: the
-// three ways in (the same Snap, Say and Type tiles as components/platform/
-// FuelLogger.tsx), what you said, the estimate card, and the day so far.
-// Every number in the example is illustrative and labelled so.
+// Slide 2: Fuel, the calorie and protein tracker. One meal, said in five of the
+// languages people can log in (lib/domain/speech.ts), comes back with the same
+// numbers every time. The labels around it stay English, as the app's do.
+// Marker names stay in English inside every language, as the app's language rule
+// asks. Every number is illustrative and labelled so.
 
-// What the person said, revealed word by word as speech recognition fills it in.
-const SAID = "2 rotis, dal, bhindi sabzi and a katori of curd".split(" ");
+type MealIn = { id: SpokenId; lang?: string; said: string; title: string; tip: string };
 
-const MEAL = {
-  title: "Dal, roti, bhindi and curd",
-  kcal: 590,
-  protein: 23,
-  items: ["Roti, 2 medium", "dal, 1 katori", "bhindi sabzi, 1 katori", "curd, 1 katori"],
-  // The tip follows what the person's blood report flagged. Same note as the languages section.
-  tip: "Ferritin was low on your report. Squeeze lemon on the dal: vitamin C helps your body absorb its iron.",
-};
-
-// The day after this meal, against an illustrative person's targets.
-const DAY = { kcal: 1240, kcalTarget: 2150, protein: 49, proteinTarget: 84, carbs: 168, fat: 38 };
-
-// The ring from Fuel's "today" panel: the day's energy target, split by where the energy came from.
-const R = 70;
-const C = 2 * Math.PI * R;
-const RING = (() => {
-  const parts = [
-    { kcal: DAY.protein * 4, opacity: 1 },
-    { kcal: DAY.carbs * 4, opacity: 0.7 },
-    { kcal: DAY.fat * 9, opacity: 0.45 },
-  ];
-  const sum = parts.reduce((t, p) => t + p.kcal, 0);
-  const filled = Math.min(1, DAY.kcal / DAY.kcalTarget) * C;
-  let offset = 0;
-  return parts.map((p) => {
-    const len = (p.kcal / sum) * filled;
-    const arc = { dash: `${Math.max(0, len - 2).toFixed(2)} ${C.toFixed(2)}`, offset: (-offset).toFixed(2), opacity: p.opacity };
-    offset += len;
-    return arc;
-  });
-})();
-
-// Hidden while armed; on play, each piece arrives after its own delay (--d).
-const REVEAL =
-  "motion-safe:group-data-[play=armed]/play:opacity-0 motion-safe:group-data-[play=armed]/play:translate-y-1.5 group-data-[play=on]/play:transition group-data-[play=on]/play:duration-500 group-data-[play=on]/play:ease-out group-data-[play=on]/play:[transition-delay:var(--d)]";
-const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
-
-const WAYS = [
-  { title: "Snap", body: "A photo of your plate" },
-  { title: "Say", body: "Tell us what you ate", on: true },
-  { title: "Type", body: "A few words is enough" },
-];
-
-const GETS = [
+const MEAL_IN: MealIn[] = [
   {
-    title: "Today's plate",
-    body: "Your day against targets set from your height, weight, age, training and goal. Vitamin and mineral needs follow India's ICMR-NIN 2020 allowances.",
+    id: "en",
+    said: "2 rotis, dal, bhindi sabzi and a katori of curd",
+    title: "Dal, roti, bhindi and curd",
+    tip: "Your ferritin was low. Squeeze lemon on the dal: vitamin C helps you absorb its iron.",
   },
-  { title: "Your biggest gaps", body: "What runs short across your last two weeks of meals." },
   {
-    title: "How you usually eat",
-    body: "Not one for logging every meal? Describe a normal day once, and we work from that until you've logged a few days.",
+    id: "hinglish",
+    said: "Do roti, dal, bhindi ki sabzi aur ek katori dahi",
+    title: "Dal, roti, bhindi aur dahi",
+    tip: "Aapka ferritin low tha. Dal pe nimbu nichod lo: vitamin C se iron better absorb hota hai.",
   },
-  { title: "Tips that know your report", body: "Add a blood report, and each meal's tip follows the markers it flagged." },
+  {
+    id: "hi",
+    lang: "hi",
+    said: "दो रोटी, दाल, भिंडी की सब्ज़ी और एक कटोरी दही",
+    title: "दाल, रोटी, भिंडी और दही",
+    tip: "आपका ferritin कम था। दाल पर नींबू निचोड़ें: विटामिन C से शरीर आयरन बेहतर सोखता है।",
+  },
+  {
+    id: "ta",
+    lang: "ta",
+    said: "இரண்டு சப்பாத்தி, பருப்பு, வெண்டைக்காய் பொரியல், ஒரு கிண்ணம் தயிர்",
+    title: "சப்பாத்தி, பருப்பு, வெண்டைக்காய், தயிர்",
+    tip: "உங்கள் ferritin குறைவாக இருந்தது. பருப்பில் எலுமிச்சை பிழியுங்கள்: வைட்டமின் C இரும்புச்சத்தை உடல் உறிஞ்ச உதவும்.",
+  },
+  {
+    id: "bn",
+    lang: "bn",
+    said: "দুটো রুটি, ডাল, ঢেঁড়সের তরকারি আর এক বাটি দই",
+    title: "ডাল, রুটি, ঢেঁড়স আর দই",
+    tip: "আপনার ferritin কম ছিল। ডালে লেবু চিপে নিন: ভিটামিন C শরীরকে আয়রন শোষণ করতে সাহায্য করে।",
+  },
 ];
+const MEAL = { kcal: 590, protein: 23 };
 
-const num = (n: number) => n.toLocaleString("en-IN");
+const labelOf = (id: SpokenId) => SPOKEN.find((s) => s.id === id)?.label ?? id;
+const TABS = MEAL_IN.map((m) => ({ id: m.id, label: labelOf(m.id), lang: m.lang, style: nativeStyle(m.lang) }));
+// The rest of the languages people can log in, named in their own scripts.
+const MORE = SPOKEN.filter((s) => !MEAL_IN.some((m) => m.id === s.id));
+const LANG_CODE: Partial<Record<SpokenId, string>> = { mr: "mr", te: "te", gu: "gu", kn: "kn", ml: "ml", pa: "pa", ur: "ur" };
+
+// Each language is a layer in one grid cell; the active one shows (see LanguageTabs).
+// Written out in full so Tailwind can see every class.
+const SHOW = [
+  "group-data-[active=0]/rot:visible group-data-[active=0]/rot:opacity-100",
+  "group-data-[active=1]/rot:visible group-data-[active=1]/rot:opacity-100",
+  "group-data-[active=2]/rot:visible group-data-[active=2]/rot:opacity-100",
+  "group-data-[active=3]/rot:visible group-data-[active=3]/rot:opacity-100",
+  "group-data-[active=4]/rot:visible group-data-[active=4]/rot:opacity-100",
+];
+const LAYER =
+  "invisible col-start-1 row-start-1 opacity-0 transition-[opacity,visibility] duration-300 motion-reduce:transition-none";
+
+function Rotating({ field, className }: { field: "said" | "title" | "tip"; className: string }) {
+  return (
+    <div className="grid">
+      {MEAL_IN.map((m, i) => (
+        <p key={m.id} lang={m.lang} style={nativeStyle(m.lang)} className={`${LAYER} ${SHOW[i]} ${className}`}>
+          {m[field]}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+const DETAILS = [
+  { title: "Targets", body: "Set for your body and training. Vitamins and minerals per ICMR-NIN 2020." },
+  { title: "Gaps", body: "What runs short over two weeks of meals." },
+  { title: "Usual day", body: "Won't log every meal? Describe a normal day once." },
+  { title: "Your report", body: "Add a blood report, and each tip follows its flags." },
+];
 
 export function Fuel() {
   return (
-    <section id="fuel" aria-labelledby="fuel-title" className="border-t border-paper/15 py-24 sm:py-32">
-      {/* Phones read intro, example, then the details; wide screens put the example beside both. */}
-      <div className="mx-auto grid max-w-[1280px] gap-14 px-5 sm:px-8 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-0">
-        <div className="lg:col-span-5 lg:row-start-1">
+    <section
+      id="fuel"
+      aria-labelledby="fuel-title"
+      className="flex min-h-[calc(100svh-5rem)] snap-start flex-col justify-center border-t border-paper/15 py-16 lg:py-12"
+    >
+      <div className="mx-auto grid w-full max-w-[1280px] gap-10 px-5 sm:px-8 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-10">
+        <div className="lg:col-span-5">
           <p className="text-sm font-semibold text-graphite">Calorie tracking</p>
-          <h2 id="fuel-title" className="semiwide mt-4 text-title font-bold">
-            <span className="block">Snap it.</span> <span className="block">Say it.</span>{" "}
-            <span className="block">Type it.</span>
+          <h2 id="fuel-title" className="semiwide mt-3 max-w-[12ch] text-title font-bold">
+            Snap it. Say it. Type it.
           </h2>
-          <p className="mt-8 max-w-[44ch]">
-            Log a meal whichever way suits you. AI estimates it in Indian household portions: calories,
-            protein, carbs, fat and fibre, plus {MICROS.length} vitamins and minerals.
+          <p className="mt-6 max-w-[40ch]">
+            AI estimates your meal in Indian portions. Say or type it in any of {SPOKEN.length} languages, and the
+            note comes back in yours.
           </p>
         </div>
 
-        <figure className="lg:col-span-6 lg:col-start-7 lg:row-span-2 lg:row-start-1">
-          <PlayOnView className="border border-line-strong bg-lift p-4 sm:p-6">
-            <p className="semiwide text-xl font-bold">Log a meal</p>
-
-            {/* The three ways in, as the app draws them. A picture of the screen, not controls. */}
-            <ul className="mt-4 grid grid-cols-3 gap-2" aria-label="Three ways to log a meal">
-              {WAYS.map((w) => (
-                <li
-                  key={w.title}
-                  className={`flex min-h-24 flex-col items-start justify-between gap-2 border p-3 sm:p-4 ${
-                    w.on ? "border-paper" : "border-line-strong"
-                  }`}
-                >
-                  <span className="semiwide text-lg font-bold">{w.title}</span>
-                  <span className="text-xs leading-snug text-graphite">{w.body}</span>
-                </li>
-              ))}
-            </ul>
-
-            {/* While the words come in, the label reads as it does in the app while listening. */}
-            <div className="mt-5 grid text-sm text-graphite">
-              <span
-                aria-hidden="true"
-                className="col-start-1 row-start-1 opacity-0 group-data-[play=armed]/play:opacity-100 group-data-[play=on]/play:transition-opacity group-data-[play=on]/play:delay-[1000ms] group-data-[play=on]/play:duration-300"
-              >
-                Listening… speak naturally
-              </span>
-              <span className="col-start-1 row-start-1 motion-safe:group-data-[play=armed]/play:opacity-0 group-data-[play=on]/play:transition-opacity group-data-[play=on]/play:delay-[1000ms] group-data-[play=on]/play:duration-300">
-                What you said
-              </span>
-            </div>
-            <p className="mt-2 border border-paper/40 px-4 py-3.5">
-              {SAID.map((word, i) => (
-                <Fragment key={i}>
-                  <span className={`inline-block ${REVEAL}`} style={delay(200 + i * 80)}>
-                    {word}
-                  </span>{" "}
-                </Fragment>
-              ))}
-            </p>
-
-            {/* The estimate, laid out like the "Logged" card in Fuel. */}
-            <div className={`mt-4 border border-paper p-5 ${REVEAL}`} style={delay(1200)}>
-              <p className="text-sm text-graphite">Logged</p>
-              <p className="mt-1 text-xl font-bold">{MEAL.title}</p>
-              {/* Each number keeps its unit on narrow phones. */}
-              <p className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
-                <span className="whitespace-nowrap">
-                  <span className="display-num text-3xl">{MEAL.kcal}</span> <span className="text-graphite">kcal</span>
-                </span>
-                <span className="whitespace-nowrap">
-                  <span className="display-num text-3xl">{MEAL.protein}</span> <span className="text-graphite">g protein</span>
-                </span>
-              </p>
-              <p className="mt-2 text-sm text-graphite">{MEAL.items.join("; ")}</p>
-              <p className="mt-3">{MEAL.tip}</p>
-            </div>
-
-            {/* The day so far, as the ring at the top of Fuel shows it. */}
-            <div className={`mt-5 flex items-center gap-5 ${REVEAL}`} style={delay(1500)}>
-              <div className="relative shrink-0">
-                <svg viewBox="0 0 180 180" className="h-24 w-24 -rotate-90 sm:h-28 sm:w-28" aria-hidden="true">
-                  <circle cx="90" cy="90" r={R} fill="none" stroke="var(--color-line)" strokeWidth="14" />
-                  {RING.map((a, i) => (
-                    <circle
-                      key={i}
-                      cx="90"
-                      cy="90"
-                      r={R}
-                      fill="none"
-                      stroke="var(--color-paper)"
-                      strokeOpacity={a.opacity}
-                      strokeWidth="14"
-                      strokeDasharray={a.dash}
-                      strokeDashoffset={a.offset}
-                    />
-                  ))}
-                  <line x1={90 + R - 10} y1="90" x2={90 + R + 10} y2="90" stroke="var(--color-paper)" strokeWidth="2" />
-                </svg>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-graphite">Today</p>
-                <p className="mt-1">
-                  <span className="display-num text-2xl">{num(DAY.kcal)}</span>{" "}
-                  <span className="text-sm text-graphite">of {num(DAY.kcalTarget)} kcal</span>
-                </p>
-                <div className="mt-3 flex justify-between gap-3 text-sm">
-                  <span>Protein</span>
-                  <span>
-                    <span className="font-bold">{DAY.protein}</span>{" "}
-                    <span className="text-graphite">/ {DAY.proteinTarget} g</span>
+        <figure className="lg:col-span-6 lg:col-start-7 lg:row-span-2 lg:self-center">
+          <LanguageTabs tabs={TABS} idBase="meal-lang" label="Language of the example meal">
+            <div className="border border-line-strong bg-lift p-5 sm:p-6">
+              <p className="text-sm text-graphite">What you said</p>
+              <Rotating field="said" className="mt-1 text-lg leading-snug" />
+              <div className="mt-5 border-t border-line pt-5">
+                <p className="text-sm text-graphite">Logged</p>
+                <Rotating field="title" className="mt-1 text-xl font-bold leading-snug" />
+                {/* The same numbers in every language: it's the same meal. */}
+                <p className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                  <span className="whitespace-nowrap">
+                    <span className="display-num text-4xl">{MEAL.kcal}</span> <span className="text-graphite">kcal</span>
                   </span>
-                </div>
-                <div className="relative mt-1.5 h-1 bg-line" aria-hidden="true">
-                  <div
-                    className="absolute inset-y-0 left-0 bg-paper"
-                    style={{ width: `${((DAY.protein / DAY.proteinTarget) * 100).toFixed(1)}%` }}
-                  />
-                </div>
+                  <span className="whitespace-nowrap">
+                    <span className="display-num text-4xl">{MEAL.protein}</span> <span className="text-graphite">g protein</span>
+                  </span>
+                </p>
+                <Rotating field="tip" className="mt-4 leading-normal" />
               </div>
             </div>
-          </PlayOnView>
+          </LanguageTabs>
           <figcaption className="mt-4 text-sm text-graphite">
-            Illustrative example. Meal numbers are estimates from your photo or words, not lab measurements.
+            <span className="block">
+              Also{" "}
+              {MORE.map((s, i) => (
+                <span key={s.id}>
+                  <bdi lang={LANG_CODE[s.id]} style={nativeStyle(s.id)}>
+                    {s.label}
+                  </bdi>
+                  {i < MORE.length - 1 ? ", " : "."}
+                </span>
+              ))}
+            </span>
+            <span className="mt-1 block">Illustrative. Meal numbers are estimates, not lab measurements.</span>
           </figcaption>
         </figure>
 
-        <dl className="max-w-[44ch] border-t border-line lg:col-span-5 lg:row-start-2 lg:mt-10">
-          {GETS.map((g) => (
-            <div key={g.title} className="border-b border-line py-5">
-              <dt className="font-semibold">{g.title}</dt>
-              <dd className="mt-1 text-graphite">{g.body}</dd>
+        <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-sm sm:gap-x-8 lg:col-span-5 lg:row-start-2 lg:self-start">
+          {DETAILS.map((d) => (
+            <div key={d.title} className="border-t border-line pt-3">
+              <dt className="font-semibold">{d.title}</dt>
+              <dd className="mt-0.5 text-graphite">{d.body}</dd>
             </div>
           ))}
         </dl>

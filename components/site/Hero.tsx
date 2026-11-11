@@ -1,12 +1,15 @@
 import { SignalField } from "@/components/signal-field/SignalField";
 import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
 import { isWaitlist } from "@/lib/site-mode";
-import { Hindi } from "./Hindi";
 import { StartForm } from "./StartForm";
 
 export function Hero() {
   return (
-    <section id="top" className="relative isolate flex min-h-svh flex-col justify-end overflow-hidden pt-28 pb-14 sm:pb-20">
+    <section
+      id="top"
+      // Open mode's first slide is a snap point too (app/page.tsx); waitlist mode's class is unchanged.
+      className={`relative isolate flex min-h-svh flex-col justify-end overflow-hidden pt-28 pb-14 sm:pb-20${isWaitlist ? "" : " snap-start"}`}
+    >
       <SignalField className="absolute inset-0 -z-20 h-full w-full" focus={[0.72, 0.62]} />
       {/* Keeps the copy readable where it sits over the field. */}
       <div
@@ -28,23 +31,12 @@ export function Hero() {
           </p>
         ) : (
           // Open mode leads with Fuel, the pilot's everyday habit; the blood report read comes second.
-          // The languages sit on a line of their own: when the Devanagari font swaps in, it can't
-          // re-wrap the paragraph and shift the headline.
           <>
-            <p className="mt-8 max-w-[44ch] text-pretty font-medium sm:mt-10 sm:text-xl">
-              Calorie and protein tracking, made for Indian meals. Snap your plate, say what you ate, or
-              type a few words.
+            <p className="mt-8 max-w-[40ch] text-pretty font-medium sm:mt-10 sm:text-xl">
+              Calorie and protein tracking for Indian meals.
             </p>
-            <p className="mt-4 max-w-[48ch] text-pretty text-graphite">
-              AI estimates every roti and katori, and writes back in your language. Add a blood report and
-              it reads that too, for the way you train.
-            </p>
-            <p className="mt-5 flex flex-wrap gap-x-3 text-sm font-semibold">
-              <span>English</span>
-              <span aria-hidden="true" className="text-graphite">/</span>
-              <Hindi>हिंदी</Hindi>
-              <span aria-hidden="true" className="text-graphite">/</span>
-              <span>Hinglish</span>
+            <p className="mt-3 max-w-[44ch] text-pretty text-graphite">
+              Snap, say or type what you ate, in your language. Add a blood report and AI reads that too.
             </p>
           </>
         )}

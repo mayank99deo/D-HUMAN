@@ -25,7 +25,7 @@ const devanagari = Anek_Devanagari({
 
 const description = isWaitlist
   ? "Test first. Supplement second. D-Human tests your blood, gut and body, analyses the results with AI, and recommends supplements only where your markers point. Join the waitlist."
-  : "Track calories and protein in Indian meals from a photo, your voice or a few words, in English, Hindi or Hinglish. Add a blood report and D-Human's AI reads it for the way you train. Start free.";
+  : "Track calories and protein in Indian meals from a photo, your voice or a few words, in English, Hinglish, Hindi and 9 more Indian languages. Add a blood report and D-Human's AI reads it for the way you train. Start free.";
 
 // Waitlist mode keeps its old title; the open site leads with calorie tracking.
 const title = isWaitlist ? "D-Human | Your body speaks data" : "D-Human | Calorie tracking for Indian meals";

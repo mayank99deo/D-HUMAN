@@ -1,5 +1,6 @@
 import "server-only";
 import { markerDef } from "@/lib/domain/markers";
+import type { MealWords, SpokenId } from "@/lib/domain/speech";
 import type { Day, Extracted, Meal, Read, StackPlan, WrapStory } from "./schemas";
 import type { ReadInput } from "./report";
 import type { FoundEvent } from "./events";
@@ -117,19 +118,41 @@ const MEALS: [RegExp, string, number, number, number, number, number][] = [
   [/chicken/i, "Chicken curry with rice", 640, 38, 70, 22, 4],
 ];
 
-export async function mockMeal(text: string | undefined): Promise<{ data: Meal; model: string }> {
+const NO_MATCH: (typeof MEALS)[number] = [/./, "", 450, 15, 60, 15, 5];
+
+// "Your meal" in each reply language, so demo meals show the language a live reply would use.
+const YOUR_MEAL: Record<SpokenId, string> = {
+  en: "Your meal",
+  hinglish: "Aapka khana",
+  hi: "आपका खाना",
+  bn: "আপনার খাবার",
+  mr: "तुमचे जेवण",
+  te: "మీ భోజనం",
+  ta: "உங்கள் உணவு",
+  gu: "તમારું ભોજન",
+  kn: "ನಿಮ್ಮ ಊಟ",
+  ml: "നിങ്ങളുടെ ഭക്ഷണം",
+  pa: "ਤੁਹਾਡਾ ਖਾਣਾ",
+  ur: "آپ کا کھانا",
+};
+
+export async function mockMeal(words: Pick<MealWords, "said" | "english" | "reply">): Promise<{ data: Meal; model: string }> {
   await wait(1200);
-  const hit = MEALS.find(([re]) => re.test(text ?? "")) ?? [/./, text?.slice(0, 40) || "Your meal", 450, 15, 60, 15, 5];
-  const [, title, kcal, protein_g, carbs_g, fat_g, fibre_g] = hit;
+  const heard = `${words.said} ${words.english ?? ""}`;
+  const hit = MEALS.find(([re]) => re.test(heard));
+  const [, matched, kcal, protein_g, carbs_g, fat_g, fibre_g] = hit ?? NO_MATCH;
+  const food = hit ? matched : words.said.slice(0, 40) || "Your meal";
+  const local = words.reply.id === "en" ? null : YOUR_MEAL[words.reply.id];
+  const title = local ? (hit ? `${local}: ${food}` : local) : food;
   return {
     data: {
       is_food: true,
-      title: String(title),
+      title,
       meal_guess: null,
-      items: [{ name: String(title), portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g }],
+      items: [{ name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g }],
       micros: { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2, folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 },
       confidence: "low",
-      tip: "Demo estimate. The live version reads your photo or words properly.",
+      tip: `Demo estimate. The live version reads your photo or words properly${local ? ` and answers in ${words.reply.name}` : ""}.`,
     },
     model: MOCK_MODEL,
   };

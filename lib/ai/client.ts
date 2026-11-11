@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlock, BetaMessage, BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import { spokenOf } from "@/lib/domain/speech";
 
 // Every Claude call in the platform goes through here.
 // - Models: each job gets the cheapest model that does it well (see MODELS).
@@ -82,9 +83,12 @@ export class AiUnavailableError extends Error {
   }
 }
 
+// Written out rather than as a parameter property, so plain Node (the tests) can load this file.
 export class AiRefusalError extends Error {
-  constructor(public category: string | null) {
+  readonly category: string | null;
+  constructor(category: string | null) {
     super(`Claude declined the request${category ? ` (${category})` : ""}`);
+    this.category = category;
   }
 }
 
@@ -165,11 +169,16 @@ function logSearches(job: string, message: BetaMessage) {
 
 export { extractJson } from "./json";
 
+// Reads, wraps and stacks pass the app language (en, hi or hinglish). Meals can
+// also pass any language from lib/domain/speech.ts, to answer in the one spoken.
 export function languageRule(language?: string | null) {
   if (language === "hi")
     return "Write every sentence meant for the person in simple, everyday Hindi (Devanagari). Keep marker names, units, numbers and brand names in English.";
   if (language === "hinglish")
     return "Write every sentence meant for the person in Hinglish: Hindi in Latin script mixed with English, the way people text in India. Keep it simple.";
+  const other = spokenOf(language);
+  if (other && other.id !== "en")
+    return `Write every sentence meant for the person in simple, everyday ${other.name}, in ${other.script} script. Keep marker names, units and brand names in English, and numbers as digits.`;
   return "Write in plain, simple English that someone in a small Indian town would follow easily. Short sentences, no jargon.";
 }
 

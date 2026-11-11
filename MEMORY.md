@@ -64,6 +64,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
+- **Scrolling chip rows:** hidden radios (`sr-only`, absolutely placed) inside a sideways-scrolling row widen the page unless the scroller is `relative`.
 - **Function size on Vercel:** files reachable from server code are traced into every function. PGlite (62 MB) and the local `.data` folder were, until `outputFileTracingExcludes` in `next.config.ts`. Check sizes with the `.nft.json` files under `.next/server/app` after a build.
 - **Drizzle journal times:** migrations run if their journal `when` is later than the last one applied, so a hand-written entry must sit in time order or databases that ran a later one skip it. `tests/migrations.test.ts` checks the order. Hand-written migrations also need a snapshot: generate with drizzle-kit, then rewrite its SQL to be safe to run twice.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
@@ -76,6 +77,9 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Footer says imaging and clinical tests are run by licensed partner centres; check that's still true now that people upload their own reports
 - [ ] Refunds don't take a pass away yet; decide whether they should
 - [ ] Landing follow-ups: a native speaker to check the Hindi and Hinglish examples in `components/site/Languages.tsx`; confirm the open-mode footer line; re-render or reframe the loop video (it shows home test booking and a clean-label bar); cut Anek Devanagari (726 KB) down to the weights used, for Hindi users in the app; local Lighthouse mobile was 85–87 before and after the redesign, so the 93–95 in the Snapshot is out of date
+- [ ] Native-speaker check of the landing card's rotation texts (Hinglish, Hindi, Tamil, Bengali in `components/site/LanguageTabs.tsx` / `native.ts`) and of a few real meal replies in each language
+- [ ] Typed Marathi gets a Hindi reply (both use Devanagari); spoken Marathi is right. Fix: send the remembered "Speaking in" pick as a hint for typed Devanagari
+- [ ] Open mode still downloads about 65 KB of unused waitlist-page JavaScript (vitamin D chart, phone video, Motion) because `app/page.tsx` imports both trees
 - [ ] Tour: "once" means finished or skipped; closing the tab mid-tour shows it again. Mayank to confirm, or mark it done when it opens
 - [ ] Decide: free reads left unused are lost when someone buys a pass (history counts after it ends); deleting an account resets the free allowance and erases payment records (DPDP and accounting both matter here)
 - [ ] Run `tests/billing.test.ts` once against real Postgres: PGlite runs one query at a time, so it can't prove the locks under real parallel load
@@ -96,7 +100,27 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-11
-- **Fuel-first landing page, first-run tour, "tests coming soon" (Mayank's requests), not committed yet:**
+- **Meals in 12 Indian languages, and a 4-slide landing page (Mayank's request), not committed yet:**
+  - **Voice (staff engineer):** Fuel's Say has a "Speaking in" row with 12 languages (`lib/domain/speech.ts`): English, Hinglish, हिंदी, বাংলা, मराठी, తెలుగు, தமிழ், ગુજરાતી, ಕನ್ನಡ, മലയാളം, ਪੰਜਾਬੀ, اردو.
+    - It defaults to the app language and remembers the last pick (`dh-spoken`).
+    - Speech recognition listens in that language; a refusal says to type instead.
+    - Where Chrome's on-device Translator already has the language (desktop only, rare), the words go to English in the browser (`components/platform/translate.ts`, 2.5 s limit, never starts a download). The server sends Claude their words plus that English.
+    - The meal's title and tip come back in the language spoken. Typed meals go by script; Latin script or no words falls back to the app language. `input_text` keeps their own words.
+    - Reads, wraps and stacks stay en/hi/hinglish.
+    - Fixed on the way: transcripts over 1000 characters, late speech refilling the box, and listening errors showing off screen.
+    - A line under the row says browsers may use their maker's servers to turn voice into words. In Chrome they do, so "transcribed in the browser itself" isn't literally true.
+  - **Landing (designer), 4 slides in open mode:**
+    1. Hero.
+    2. Fuel, with a calorie card rotating through English, Hinglish, हिंदी, தமிழ், বাংলা every 3.5 s. Tabs can be tapped; it pauses on hover and focus, and stays still with reduced motion.
+    3. Blood reports: the 76% figure, Upload, Read, Stack and Retest, and "Coming soon: blood tests through D-Human".
+    4. Start free plus the footer.
+    - The page is 3,869 px tall at 390 px, down from 8,076. Local Lighthouse mobile 82–89 (was 82–86), LCP 3.5 s (was 4.1).
+    - Languages, TestsSoon, PlayOnView and Hindi components were folded in and deleted.
+    - System fonts are used for Devanagari and Bengali, so the 726 KB Anek file isn't fetched.
+    - Waitlist mode was compared by pixels and is still identical.
+  - **Checked:** typecheck, lint, 165 tests (25 new), the production build (functions still about 3 MB), and the voice screens in demo mode with a stand-in recogniser and translator. Not checked: a real microphone, the real Translator, a live Claude call in other languages, and which language tags real browsers accept (`pa-Guru-IN` and `ur-IN` are least certain).
+- **Push `93c7b23`:** the Fuel-first landing page, the tour, "tests coming soon" and the loading fix, live in about 50 s (migration `0006` ran on Supabase). Checked live: the new title and sections on `/`, no waitlist wording, the tour and billing routes give 401 signed out, and a function's first response after the deploy took 0.45 s (1.15 s before), then 0.21 s.
+- **Fuel-first landing page, first-run tour, "tests coming soon" (Mayank's requests):**
   - **Landing, open mode (crew designer):**
     - Hero leads with calorie and protein tracking for Indian meals and shows English / हिंदी / Hinglish.
     - New `Fuel` section: Snap, Say, Type, a logged-meal card and a Today ring, all labelled illustrative, playing once in view through `PlayOnView`.
@@ -114,7 +138,7 @@ Newest first. One entry per change; pushes carry their commit hash.
     - `@source not "../video"` in `globals.css`, because Turbopack crashed scanning an unreadable video file in `video/assets`.
   - **Coming soon:** "Blood tests through D-Human" on the landing page, the upload page and the tour's upload stop. The landing's "Test" step says tests through D-Human are coming soon, which also squares the loop video's booked-test screen.
   - **Checked:** typecheck, lint, 140 tests, the production build, the new section and tour stop at 390 px, and no overflow.
-- **Home stuck on its skeleton (Mayank, after sign-in), not committed yet:**
+- **Home stuck on its skeleton (Mayank, after sign-in), pushed in `93c7b23`:**
   - **Measured locally:** sign-in to dashboard took 0.5 to 0.9 s in dev, and the production build gave 0.35 to 0.47 s for a full load and 0.33 s for a client navigation. Not reproducible locally, so the cause is production-only.
   - **Found:** every deployed function shipped 65 MB, 62 MB of it PGlite, which production never uses. Cold starts paid for all of it. `outputFileTracingExcludes` now leaves out PGlite and `.data`, so functions are about 3 MB.
   - **Postgres:** idle connections now last 120 s instead of 20, so a reader tapping on after a pause doesn't reconnect every time. Connecting gives up after 10 s instead of 30.

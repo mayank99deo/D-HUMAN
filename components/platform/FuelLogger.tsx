@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { PlanView } from "@/lib/domain/plan";
+import { MEAL_ENGLISH_MAX, MEAL_WORDS_MAX, SPOKEN, spokenById, spokenForAppLanguage, spokenOf, translateSource, type Spoken, type SpokenId } from "@/lib/domain/speech";
 import { MealOrbit, type MealRun } from "./MealOrbit";
 import { OFFLINE, send } from "./net";
 import { Paywall, PlanLine } from "./Paywall";
 import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
 import { shrinkImage } from "./shrink";
+import { toEnglish } from "./translate";
 
 type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number };
 type Log = { id: string; meal: string; title: string; source: string; kcal: number; proteinG: number; confidence: string | null; tip: string | null; items: string[]; demo: boolean };
@@ -39,6 +41,7 @@ type Recognition = {
   continuous: boolean;
   start: () => void;
   stop: () => void;
+  abort: () => void;
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
@@ -49,6 +52,33 @@ const hasSpeech = () => {
   const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
   return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
 };
+
+// The last "Speaking in" pick, remembered in this browser.
+const SPOKEN_KEY = "dh-spoken";
+function savedSpoken(): SpokenId | null {
+  try {
+    return spokenOf(localStorage.getItem(SPOKEN_KEY))?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+function rememberSpoken(id: SpokenId) {
+  try {
+    localStorage.setItem(SPOKEN_KEY, id);
+  } catch {
+    /* private mode or blocked storage: the pick still holds for this visit */
+  }
+}
+
+// What to say when the browser stops listening. Errors not listed (no speech, aborted) say nothing.
+function listenError(error: string, lang: Spoken): string | null {
+  if (error === "not-allowed") return "Allow the microphone to talk, or type instead.";
+  if (error === "language-not-supported" || error === "service-not-allowed")
+    return `This browser can't listen in ${lang.name}. Type it in the box below, or use the mic on your keyboard.`;
+  if (error === "audio-capture") return "We couldn't find a microphone. Type what you ate instead.";
+  if (error === "network") return "Listening needs a connection. Check your signal, or type instead.";
+  return null;
+}
 
 // Today's plate. The ring is the day's energy target, split by where the
 // energy came from. Past the target the ring stays full and a thin outer arc
@@ -141,10 +171,19 @@ export function FuelLogger({
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<Log | null>(null);
   const [listening, setListening] = useState(false);
+  // Why the browser stopped listening, shown by the language row rather than under the buttons.
+  const [heardProblem, setHeardProblem] = useState<string | null>(null);
   const voiceSupported = useSyncExternalStore(noop, hasSpeech, () => true);
   const [voiceFailed, setVoiceFailed] = useState(false);
   const voiceOk = voiceSupported && !voiceFailed;
   const rec = useRef<Recognition | null>(null);
+  // "Speaking in": this visit's pick, else the one remembered here, else the app language.
+  // The saved pick is read after hydration, so server and browser render the same.
+  const [picked, setPicked] = useState<SpokenId | null>(null);
+  const saved = useSyncExternalStore(noop, savedSpoken, () => null);
+  const spokenId = picked ?? saved ?? spokenForAppLanguage(language);
+  const spoken = spokenById(spokenId);
+  const langRow = useRef<HTMLDivElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
   const [editingTypical, setEditingTypical] = useState(!typical);
@@ -152,34 +191,73 @@ export function FuelLogger({
   const [run, setRun] = useState<MealRun | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  function listen() {
+  // The browser can't tell languages apart by itself, so it listens in the one picked.
+  // Only the current recognition may write: one replaced or dropped stays quiet.
+  function listen(lang: Spoken) {
     const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Ctor) return setVoiceFailed(true);
+    rec.current?.abort();
     const r = new Ctor();
-    r.lang = language === "hi" ? "hi-IN" : "en-IN";
+    r.lang = lang.speech;
     r.interimResults = true;
     r.continuous = true;
-    const before = text ? `${text.trim()} ` : "";
+    const before = text.trim() ? `${text.trim()} ` : "";
     r.onresult = (e) => {
+      if (rec.current !== r) return;
       let s = "";
       for (let i = 0; i < e.results.length; i++) s += e.results[i][0].transcript;
-      setText(before + s);
+      // The box's maxLength doesn't cap what code puts in it.
+      setText((before + s).slice(0, MEAL_WORDS_MAX));
     };
-    r.onend = () => setListening(false);
+    r.onend = () => {
+      if (rec.current === r) setListening(false);
+    };
     r.onerror = (e) => {
+      if (rec.current !== r) return;
       setListening(false);
-      if (e.error === "not-allowed") setError("Allow the microphone to talk, or type instead.");
+      setHeardProblem(listenError(e.error, lang));
     };
     rec.current = r;
-    r.start();
-    setListening(true);
+    setHeardProblem(null);
+    try {
+      r.start();
+      setListening(true);
+    } catch {
+      rec.current = null;
+      setListening(false);
+    }
   }
 
+  // Stop listening but keep the last words, which can arrive just after.
   function stop() {
     rec.current?.stop();
     setListening(false);
   }
+
+  // Stop listening and drop anything still on its way (on log, cancel or leaving voice).
+  function quiet() {
+    rec.current?.abort();
+    rec.current = null;
+    setListening(false);
+    setHeardProblem(null);
+  }
+
+  useEffect(() => () => rec.current?.abort(), []);
+
+  function pickSpoken(next: Spoken) {
+    setPicked(next.id);
+    rememberSpoken(next.id);
+    setHeardProblem(null);
+    if (listening) listen(next);
+  }
+
+  // Show the picked language when the row opens, even if it's off to the side on a phone.
+  useEffect(() => {
+    const row = langRow.current;
+    const chip = row?.querySelector<HTMLElement>("[data-picked]");
+    if (row && chip) row.scrollLeft += chip.getBoundingClientRect().left - row.getBoundingClientRect().left - 16;
+  }, [mode]);
 
   async function pickPhoto(files: FileList | null) {
     const f = files?.[0];
@@ -195,16 +273,25 @@ export function FuelLogger({
   }
 
   async function submit() {
-    if (listening) stop();
+    quiet();
     setBusy(true);
     setError(null);
-    const form = new FormData();
-    form.append("source", mode === "photo" ? "photo" : mode === "voice" ? "voice" : "text");
-    if (text.trim()) form.append("text", text.trim());
-    if (meal) form.append("meal", meal);
-    if (mode === "photo" && photo) form.append("photo", photo.file, "meal.jpg");
+    const words = text.trim();
+    const speaking = mode === "voice" && voiceOk ? spokenId : null;
     const startedAt = Date.now();
     setRun({ kind: "meal", startedAt, state: "running" });
+    // Into English on this device when the browser can; if not, their words go as they are.
+    // The server answers in the language they spoke either way.
+    const english = await toEnglish(words, translateSource(words, speaking), { maxLength: MEAL_ENGLISH_MAX });
+    const form = new FormData();
+    form.append("source", mode === "photo" ? "photo" : mode === "voice" ? "voice" : "text");
+    if (english) {
+      form.append("text", english);
+      form.append("original", words);
+    } else if (words) form.append("text", words);
+    if (speaking) form.append("spoken", speaking);
+    if (meal) form.append("meal", meal);
+    if (mode === "photo" && photo) form.append("photo", photo.file, "meal.jpg");
     const res = await fetch("/api/food", { method: "POST", body: form }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
@@ -326,7 +413,14 @@ export function FuelLogger({
         ) : (
           <>
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => camera.current?.click()} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  quiet();
+                  camera.current?.click();
+                }}
+                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}
+              >
                 <span className="text-lg font-bold semiwide">Snap</span>
                 <span className="text-xs text-graphite">A photo of your plate</span>
               </button>
@@ -334,14 +428,21 @@ export function FuelLogger({
                 type="button"
                 onClick={() => {
                   setMode("voice");
-                  if (voiceOk && !listening) listen();
+                  if (voiceOk && !listening) listen(spoken);
                 }}
                 className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
               >
                 <span className="text-lg font-bold semiwide">Say</span>
                 <span className="text-xs text-graphite">Tell us what you ate</span>
               </button>
-              <button type="button" onClick={() => setMode("text")} className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  quiet();
+                  setMode("text");
+                }}
+                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}
+              >
                 <span className="text-lg font-bold semiwide">Type</span>
                 <span className="text-xs text-graphite">A few words is enough</span>
               </button>
@@ -355,20 +456,59 @@ export function FuelLogger({
                   <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
                 )}
                 {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
+                {mode === "voice" && voiceOk && (
+                  // min-w-0: a fieldset otherwise grows to fit its widest row, which would widen the page.
+                  <fieldset className="min-w-0">
+                    <legend className="mb-2 text-sm text-graphite">Speaking in</legend>
+                    {/* One row that scrolls sideways on phones, inside its own box; it wraps on wider screens.
+                        relative: the hidden radios are absolutely placed, and would otherwise widen the page. */}
+                    <div ref={langRow} className="relative -mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
+                      <div className="flex w-max gap-2 pb-1 sm:w-auto sm:flex-wrap">
+                        {SPOKEN.map((s) => (
+                          <label
+                            key={s.id}
+                            className="choice shrink-0"
+                            lang={s.translateFrom ?? "en"}
+                            dir={s.id === "ur" ? "rtl" : undefined}
+                            data-picked={spoken.id === s.id ? "" : undefined}
+                          >
+                            <input type="radio" name="spoken" className="sr-only" checked={spoken.id === s.id} onChange={() => pickSpoken(s)} />
+                            {s.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    {heardProblem && (
+                      <p role="alert" className="error-mark mt-3 text-sm">
+                        {heardProblem}
+                      </p>
+                    )}
+                    {/* True for Chrome and most phones: speech recognition runs on the browser maker's servers. */}
+                    <p className="mt-2 text-xs text-graphite">Your browser turns your voice into words; some browsers use their maker&apos;s servers for this. We only receive the words.</p>
+                  </fieldset>
+                )}
                 <label className="block">
                   <span className="mb-2 block text-sm text-graphite">
-                    {mode === "photo" ? "Anything the photo won't show? (optional)" : mode === "voice" ? (listening ? "Listening… speak naturally" : "What you said") : "What did you eat?"}
+                    {mode === "photo"
+                      ? "Anything the photo won't show? (optional)"
+                      : mode === "voice"
+                        ? listening
+                          ? `Listening in ${spoken.name}… speak naturally`
+                          : "What you said"
+                        : "What did you eat?"}
                   </span>
                   <textarea
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    maxLength={1000}
+                    maxLength={MEAL_WORDS_MAX}
+                    dir="auto"
+                    lang={mode === "voice" && voiceOk ? (spoken.translateFrom ?? undefined) : undefined}
                     className="textarea"
                     placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
                   />
                 </label>
                 {mode === "voice" && voiceOk && (
-                  <button type="button" onClick={listening ? stop : listen} className="button-ghost h-11">
+                  <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
                     {listening ? "Stop listening" : "Talk again"}
                   </button>
                 )}
@@ -389,7 +529,7 @@ export function FuelLogger({
                     type="button"
                     className="button-ghost h-13"
                     onClick={() => {
-                      stop();
+                      quiet();
                       setMode(null);
                       setPhoto(null);
                       setText("");

@@ -8,6 +8,7 @@ import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
 import { MICROS, emptyMicros, targetsFor, type MicroKey, type Micros } from "@/lib/domain/nutrition";
+import { mealWords, type SpokenId } from "@/lib/domain/speech";
 import { localDate, personaFor } from "./profile";
 
 export type MealKind = "breakfast" | "lunch" | "dinner" | "snack";
@@ -34,16 +35,32 @@ export async function focusMarkers(userId: string): Promise<string[]> {
   return rows.filter((m) => m.status !== "in_range" && m.status !== "unknown").map((m) => `${m.name} (${m.status.replace("_", " ")})`);
 }
 
-export async function logMeal(
-  userId: string,
-  profile: Profile,
-  input: { id?: string; image?: { mime: string; bytes: Buffer }; text?: string; source: "photo" | "voice" | "text"; meal?: MealKind },
-): Promise<{ log: FoodLog } | { notFood: true }> {
+export type MealInput = {
+  id?: string;
+  image?: { mime: string; bytes: Buffer };
+  /** The words to read: the browser's English translation when there is one, else what the person said or typed. */
+  text?: string;
+  /** What the person said or typed, sent only when the browser translated it. */
+  original?: string;
+  /** The language chosen for speaking; counts only for meals logged by voice. */
+  spoken?: SpokenId;
+  source: "photo" | "voice" | "text";
+  meal?: MealKind;
+};
+
+export async function logMeal(userId: string, profile: Profile, input: MealInput): Promise<{ log: FoodLog } | { notFood: true }> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailableError();
+  // The reply comes back in the language they spoke or wrote (lib/domain/speech.ts).
+  const words = mealWords({
+    text: input.text,
+    original: input.original,
+    spoken: input.source === "voice" ? input.spoken : null,
+    appLanguage: profile.language,
+  });
   const context = { language: profile.language, diet: profile.diet, focus: await focusMarkers(userId) };
   const { data, model }: { data: Meal; model: string } =
-    mode === "mock" ? await mockMeal(input.text) : await estimateMeal({ image: input.image, text: input.text, context });
+    mode === "mock" ? await mockMeal(words) : await estimateMeal({ image: input.image, words, voice: input.source === "voice", context });
   if (!data.is_food || data.items.length === 0) return { notFood: true };
 
   const sum = (k: "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fibre_g") => data.items.reduce((t, i) => t + (i[k] || 0), 0);
@@ -54,7 +71,8 @@ export async function logMeal(
     localDate: localDate(profile.timezone),
     meal: input.meal ?? data.meal_guess ?? mealFromClock(profile.timezone),
     source: input.source,
-    inputText: input.text ?? null,
+    // Their own words, so the log shows what they said, not the translation.
+    inputText: words.said || null,
     title: data.title,
     items: data.items,
     kcal: sum("kcal"),
