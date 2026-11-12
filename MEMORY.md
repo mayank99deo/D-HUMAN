@@ -39,6 +39,13 @@ The running record of this project: where things stand, why they are the way the
 - **Chart picker:** each of the 100 squares is a fixed person (seeded, so the same on server and browser) with five markers: vitamin D follows the chart, the others (B12, ferritin, magnesium, hsCRP) are illustrative, and the flagged ones become their stack. Squares can be tapped; keyboards use the button.
 - **Contour field architecture:** drawn in a Web Worker on an OffscreenCanvas (`renderer.ts` + `field.worker.ts`), started only after load, at idle, and when near the screen; 30 fps cap; a still frame on software rendering or reduced motion. Falls back to the main thread where workers can't run WebGL (e.g. Safari 16.4).
 - **Touch:** hover styles only under `(hover: hover)`, pressed (`:active`) feedback instead, tap targets of at least 44 px, email keyboard shows "Send".
+- **Devices (2026-11-12, Mayank asked for the best experience on phone, tablet and laptop):**
+  - **Phones:** one column, tab bar at the bottom.
+  - **Phones turned sideways:** the `short` variant in `globals.css` (landscape, at most 32rem tall). The app's top bar scrolls away and the tab bar is compact, icon beside label, so the page keeps the height. Use `short:max-lg:` so laptops in a short window keep the rail.
+  - **Tablets, from `md` (768 px):** the home bib and verdict sit side by side, everything else full width below. Onboarding's buttons follow the question instead of sitting at the bottom of a tall screen.
+  - **Laptops, from `lg` (1024 px):** the side rail. Home keeps the bib pinned on the left; Fuel keeps today's ring pinned on the left while meals are logged on the right. Home's markers pair up only from `xl` (1280 px).
+  - **Kept as one reading column:** the report, Stack, Settings and Upload (`max-w-2xl`/`3xl`), because they read as documents and forms.
+  - **Headlines that sit in a column are sized to the column** with container units (`@container`, `cqi`), not to the window: the verdict (a smaller size when over 60 characters) and the landing's "Test first. Supplement second." beside the phone.
 - **Waitlist:** email only up front, then optional questions. Bots are caught by a honeypot field and a best-effort limit of 5 attempts a minute per IP (kept in memory, so per server instance).
 - **Apps Script:** escapes values that could run as formulas or lose leading zeros; `setup()` builds and formats the tab and never deletes data.
 - **Google Form (2026-11-01):** one list, two ways in. Answers land in the `Waitlist` tab; Google's `Form responses` tab is only the raw record. Same optional questions and labels as the site, matched by question ID so wording can change. An email already on the list keeps its row and first Source, and the form fills blanks only, because unlike the site it can't prove who is typing. It has no honeypot or rate limit, and each new address it accepts gets a welcome email.
@@ -62,6 +69,7 @@ The running record of this project: where things stand, why they are the way the
 - **Rotating SVG groups:** `transform-box: fill-box` spins a group around its own bounding box, which for text on part of a circle is off-centre; the orbit uses `view-box`.
 - **PGlite:** it won't create its parent folder (`lib/db/index.ts` does), and two processes must never open the same data folder; give a second server its own `PGLITE_DIR`.
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
+- **Full-page screenshots lie about screen-sized slides:** stretching the emulated window to the page's height (how `cdp.mjs` takes a full page) makes every `svh`/`dvh` slide that tall too, so the landing looked 19,000 px long in landscape. Judge those pages from screen-sized shots taken while scrolling.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
 - **Headless Chrome and the mic:** `getUserMedia` never resolves headlessly on this Mac even with permission granted, so real mic levels can't be tested here; use a synthetic stream or a device.
@@ -100,7 +108,29 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-12
+- **Every screen fitted to phones, phones turned sideways, tablets and laptops (Mayank's request):**
+  - **Audit first:** every app screen and the landing at 360, 390, 844×390, 932×430, 768, 820, 1024, 1180, 1280, 1440 and 1920 px. Nothing scrolled sideways anywhere, and form fields were already 16 px, so iPhones don't zoom in on them.
+  - **What was wrong:**
+    - Sideways phones: the two bars took nearly a third of the height, and the bib filled the screen.
+    - Portrait tablets: the phone layout stretched, with a 720 px bib.
+    - Landscape iPad (1024): the verdict ran to 8 lines and the marker cards were squeezed into pairs.
+    - Laptops: Fuel was a narrow column.
+    - Landing: "Supplement" in the loop slide's headline touched the phone at 1024 px and ran under it at 1920.
+    - Tap targets: हिंदी's tab was 23 px wide; contour dots were 29 px on a 360 px phone.
+  - **Fixed:**
+    - `short` variant: on sideways phones the top bar scrolls away and the tab bar is compact. Settings' save bar sits exactly on the tab bar in both sizes (it floated 23 px above it).
+    - Home: bib and verdict side by side from 768 px; markers pair up only from 1280 px.
+    - Fuel: two columns on laptops (`FuelLogger.tsx`; the diff is mostly re-indenting).
+    - Verdict and the landing's loop headline: sized to their column. The verdict on the landscape iPad went from 8 lines to 5, and the loop headline now clears the phone by 60–98 px at 1024 to 1920.
+    - Wraps: story numbers are bounded by screen height too, so every slide fits sideways.
+    - Onboarding: buttons follow the question on tablets and laptops.
+    - Tap targets: language tabs at least 44 px wide; contour dots as large as the gap to their neighbours allows (33 px with 20 markers at 360 px).
+  - **Checked:** typecheck, lint, 185 tests and the production build, then screen-sized shots at 390, 844×390, 768, 1024 and 1440 px of home, Fuel, Settings, wraps, onboarding and the tour. No sideways scroll at any size. Waitlist mode is untouched (only open-mode components changed).
+  - **Not checked:** real devices (iPad Safari, Android Chrome in landscape) and the home-screen app with its safe areas.
+
 ### 2026-11-11
+- **Push `d617370`:** the voice logging upgrade.
 - **Voice logging: live mic, auto-log after a pause, reply in the language actually spoken (Mayank's request):**
   - **Mic bars** (`components/platform/VoiceMeter.tsx`) sit beside "Listening in…".
     - Real levels come from a second mic stream only on desktop Chromium, once the recogniser has the mic and permission is already granted, within 1.2 s, and never again after an `audio-capture` error.

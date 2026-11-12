@@ -15,7 +15,10 @@ export function Loop({ slide = false }: { slide?: boolean }) {
           <LoopPhone
             intro={
               <>
-                <h2 id="loop-title" className="semiwide max-w-[18ch] text-title font-bold">
+                {/* Beside the phone, the column stops growing at 1280 px while the title size
+                    keeps growing with the window: from 1024 px it follows the column instead, so
+                    "Supplement" never runs under the phone. */}
+                <h2 id="loop-title" className="semiwide max-w-[18ch] text-title font-bold lg:text-[length:min(var(--text-title),15cqi)] lg:leading-none">
                   Test first. Supplement second.
                 </h2>
                 <p className="mt-4 max-w-[46ch] text-smoke">

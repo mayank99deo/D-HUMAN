@@ -23,6 +23,10 @@
   --text-lead--line-height: 1.15;
 }
 
+/* A phone turned sideways: little height, so the app's bars shrink or scroll away. Tablets
+   and laptops are never this short, so they keep the full bars. */
+@custom-variant short (@media (orientation: landscape) and (max-height: 32rem));
+
 /* Archivo's width axis echoes the extended stance of the wordmark. */
 @utility wide {
   font-variation-settings: "wdth" 125;

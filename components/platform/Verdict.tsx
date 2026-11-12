@@ -23,13 +23,15 @@ export function VerdictMark({ level }: { level: VerdictLevel }) {
 
 export function Verdict({ level, line, detail, as: H = "h2", lang }: { level: VerdictLevel; line: string; detail?: string; as?: "h1" | "h2"; lang?: string }) {
   return (
-    <section className="relative isolate" aria-label="Verdict" lang={lang}>
+    // Sized to its own column, not the window: beside the bib on a tablet or laptop the column
+    // is far narrower than the screen. Long lines (a long event name) step down a size.
+    <section className="@container relative isolate" aria-label="Verdict" lang={lang}>
       <div aria-hidden className="pointer-events-none absolute -inset-x-16 -inset-y-16 -z-10" style={{ background: `radial-gradient(closest-side at 35% 50%, ${GLOW[level]}, transparent)` }} />
       <p className="flex items-center gap-2 text-sm font-semibold text-graphite">
         <VerdictMark level={level} />
         {WORDS[level]}
       </p>
-      <H className="verdict-type mt-3 text-[clamp(2.25rem,6.5vw,3.75rem)]">{line}</H>
+      <H className={`verdict-type mt-3 ${line.length > 60 ? "text-[clamp(1.875rem,8.5cqi,3rem)]" : "text-[clamp(2.25rem,11cqi,3.75rem)]"}`}>{line}</H>
       {detail && <p className="mt-4 max-w-prose text-lg text-graphite">{detail}</p>}
     </section>
   );

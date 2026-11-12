@@ -151,6 +151,9 @@ export function Contour({ markers, onSelectLabel = "Tap a marker to see it" }: {
 
   const selected = markers.find((m) => m.id === sel) ?? null;
   const outer = R0 + (RINGS - 1) * STEP + 30;
+  // Tap areas as big as the room between neighbours allows: 44 units at the least, 66 at most.
+  // The drawing shrinks on phones (about 0.67 px a unit at 360 px), so 44 alone came out 29 px.
+  const hit = Math.round(Math.min(66, Math.max(44, (2 * Math.PI * outer) / Math.max(1, markers.length))));
 
   return (
     <div>
@@ -192,13 +195,13 @@ export function Contour({ markers, onSelectLabel = "Tap a marker to see it" }: {
                   {m.short.length > 9 ? `${m.short.slice(0, 8)}…` : m.short}
                 </text>
               )}
-              <foreignObject x={+(x - 22).toFixed(2)} y={+(y - 22).toFixed(2)} width={44} height={44}>
+              <foreignObject x={+(x - hit / 2).toFixed(2)} y={+(y - hit / 2).toFixed(2)} width={hit} height={hit}>
                 <button
                   type="button"
                   aria-pressed={on}
                   aria-label={`${m.name}: ${m.value ?? m.valueText ?? ""} ${m.unit ?? ""}, ${statusText(m.status).toLowerCase()}`}
                   onClick={() => setSel(on ? null : m.id)}
-                  className="h-11 w-11 rounded-full"
+                  className="h-full w-full rounded-full"
                 />
               </foreignObject>
             </g>

@@ -197,7 +197,9 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
         <Field label="Language for your reads">
           <Chips name="language" options={LANGUAGES} value={p.language} onChange={(v) => set("language", v)} />
         </Field>
-        <div className="sticky bottom-20 z-10 flex items-center gap-4 border-t border-line bg-ink py-4 lg:bottom-0">
+        {/* Sits right on top of the tab bar (56 px, or 44 px on a phone turned sideways, plus its
+            border and the home-indicator inset); at the very bottom beside the rail. */}
+        <div className="sticky bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] z-10 flex items-center gap-4 border-t border-line bg-ink py-4 short:max-lg:bottom-[calc(2.75rem+1px+env(safe-area-inset-bottom))] lg:bottom-0">
           <button type="button" onClick={save} disabled={saved === "saving"} className="button-primary h-12 px-8">
             {saved === "saving" ? "Saving…" : "Save changes"}
           </button>

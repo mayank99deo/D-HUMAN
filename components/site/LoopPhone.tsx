@@ -182,7 +182,8 @@ export function LoopPhone({ intro }: { intro?: ReactNode }) {
   return (
     <div className={k.grid}>
       {/* First in the DOM so phones read the headline before the phone. */}
-      {intro !== undefined && <div className="lg:col-span-4 lg:row-start-1">{intro}</div>}
+      {/* A size container, so the headline can fit its column on wide screens. */}
+      {intro !== undefined && <div className="@container lg:col-span-4 lg:row-start-1">{intro}</div>}
       <figure className={k.figure}>
         <div
           ref={phoneRef}

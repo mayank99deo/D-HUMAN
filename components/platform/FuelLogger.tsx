@@ -498,381 +498,389 @@ export function FuelLogger({
   const kcalOver = overBy(totals.kcal, targets.kcal);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
+    // Laptops: today's ring and macros stay in view on the left while meals are logged on the
+    // right, so each one lands where you can see it. One column on phones and tablets.
+    <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:grid lg:max-w-6xl lg:grid-cols-12 lg:gap-x-12 lg:pt-12">
       {run && <MealOrbit run={run} facts={facts} categories={categories} onClose={() => setRun(null)} />}
-      <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Fuel</h1>
+      <div className="lg:col-span-5">
+        <div className="lg:sticky lg:top-20">
+          <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Fuel</h1>
 
-      <section className={`mt-8 flex flex-wrap items-center gap-8 ${refreshing ? "opacity-70" : ""}`} aria-label="Today so far">
-        <div className="relative">
-          <Plate totals={totals} target={targets.kcal} />
-          <div className="absolute inset-0 grid place-items-center text-center">
-            <div className="max-w-28">
-              <p className="display-num text-3xl">{Math.round(totals.kcal).toLocaleString("en-IN")}</p>
-              <p className="mt-1 text-sm leading-tight text-graphite">of {targets.kcal.toLocaleString("en-IN")} kcal</p>
-              {kcalOver > 0 && <p className="text-sm font-semibold leading-tight">{kcalOver.toLocaleString("en-IN")} over</p>}
-            </div>
-          </div>
-        </div>
-        <dl className="grid min-w-56 flex-1 gap-4">
-          {[
-            { k: "Protein", v: totals.proteinG, t: targets.proteinG, o: 1, ring: true },
-            { k: "Carbs", v: totals.carbsG, t: targets.carbsG, o: 0.7, ring: true },
-            { k: "Fat", v: totals.fatG, t: targets.fatG, o: 0.45, ring: true },
-            { k: "Fibre", v: totals.fibreG, t: targets.fibreG, o: 1, ring: false },
-          ].map((x) => {
-            const extra = overBy(x.v, x.t);
-            return (
-              <div key={x.k}>
-                <div className="flex justify-between gap-3 text-sm">
-                  <dt className="flex items-center gap-2">
-                    {/* Squares are slices of the ring; fibre isn't in it, so it gets a dash. */}
-                    <span aria-hidden className={x.ring ? "h-2.5 w-2.5 bg-paper" : "h-0.5 w-2.5 bg-paper"} style={{ opacity: x.o }} />
-                    {x.k}
-                  </dt>
-                  <dd className="text-right">
-                    <span className="font-bold">{Math.round(x.v)}</span> <span className="text-graphite">/ {x.t} g</span>
-                    {extra > 0 && <span className="font-semibold">, {extra} over</span>}
-                  </dd>
+          <section className={`mt-8 flex flex-wrap items-center gap-8 ${refreshing ? "opacity-70" : ""}`} aria-label="Today so far">
+            <div className="relative">
+              <Plate totals={totals} target={targets.kcal} />
+              <div className="absolute inset-0 grid place-items-center text-center">
+                <div className="max-w-28">
+                  <p className="display-num text-3xl">{Math.round(totals.kcal).toLocaleString("en-IN")}</p>
+                  <p className="mt-1 text-sm leading-tight text-graphite">of {targets.kcal.toLocaleString("en-IN")} kcal</p>
+                  {kcalOver > 0 && <p className="text-sm font-semibold leading-tight">{kcalOver.toLocaleString("en-IN")} over</p>}
                 </div>
-                <TargetBar value={x.v} target={x.t} opacity={x.o} />
               </div>
-            );
-          })}
-        </dl>
-      </section>
-
-      {/* Log a meal */}
-      <section className="mt-12" aria-labelledby="log">
-        <h2 id="log" className="text-2xl font-bold semiwide">
-          Log a meal
-        </h2>
-        <PlanLine plan={plan} kind="meal" />
-        {aiOff && <p className="error-mark mt-3 text-sm">Food reading isn&apos;t switched on yet on this server.</p>}
-        {plan.mealBlock ? (
-          <Paywall plan={plan} refusal={plan.mealBlock} />
-        ) : (
-          <>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  quiet();
-                  camera.current?.click();
-                }}
-                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}
-              >
-                <span className="text-lg font-bold semiwide">Snap</span>
-                <span className="text-xs text-graphite">A photo of your plate</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("voice");
-                  if (voiceOk && !listening) listen(spoken);
-                }}
-                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
-              >
-                <span className="text-lg font-bold semiwide">Say</span>
-                <span className="text-xs text-graphite">Tell us what you ate</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  quiet();
-                  setMode("text");
-                }}
-                className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}
-              >
-                <span className="text-lg font-bold semiwide">Type</span>
-                <span className="text-xs text-graphite">A few words is enough</span>
-              </button>
             </div>
-            <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => pickPhoto(e.target.files)} />
-
-            {mode && (
-              <div className="mt-5 space-y-4">
-                {mode === "photo" && photo && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
-                )}
-                {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
-                {mode === "voice" && voiceOk && (
-                  // min-w-0: a fieldset otherwise grows to fit its widest row, which would widen the page.
-                  <fieldset className="min-w-0">
-                    <legend className="mb-2 text-sm text-graphite">Speaking in</legend>
-                    {/* One row that scrolls sideways on phones, inside its own box; it wraps on wider screens.
-                        relative: the hidden radios are absolutely placed, and would otherwise widen the page. */}
-                    <div ref={langRow} className="relative -mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
-                      <div className="flex w-max gap-2 pb-1 sm:w-auto sm:flex-wrap">
-                        {SPOKEN.map((s) => (
-                          <label
-                            key={s.id}
-                            className="choice shrink-0"
-                            lang={s.translateFrom ?? "en"}
-                            dir={s.id === "ur" ? "rtl" : undefined}
-                            data-picked={spoken.id === s.id ? "" : undefined}
-                          >
-                            <input type="radio" name="spoken" className="sr-only" checked={spoken.id === s.id} onChange={() => pickSpoken(s)} />
-                            {s.label}
-                          </label>
-                        ))}
-                      </div>
+            <dl className="grid min-w-56 flex-1 gap-4">
+              {[
+                { k: "Protein", v: totals.proteinG, t: targets.proteinG, o: 1, ring: true },
+                { k: "Carbs", v: totals.carbsG, t: targets.carbsG, o: 0.7, ring: true },
+                { k: "Fat", v: totals.fatG, t: targets.fatG, o: 0.45, ring: true },
+                { k: "Fibre", v: totals.fibreG, t: targets.fibreG, o: 1, ring: false },
+              ].map((x) => {
+                const extra = overBy(x.v, x.t);
+                return (
+                  <div key={x.k}>
+                    <div className="flex justify-between gap-3 text-sm">
+                      <dt className="flex items-center gap-2">
+                        {/* Squares are slices of the ring; fibre isn't in it, so it gets a dash. */}
+                        <span aria-hidden className={x.ring ? "h-2.5 w-2.5 bg-paper" : "h-0.5 w-2.5 bg-paper"} style={{ opacity: x.o }} />
+                        {x.k}
+                      </dt>
+                      <dd className="text-right">
+                        <span className="font-bold">{Math.round(x.v)}</span> <span className="text-graphite">/ {x.t} g</span>
+                        {extra > 0 && <span className="font-semibold">, {extra} over</span>}
+                      </dd>
                     </div>
-                    {heardProblem && (
-                      <p role="alert" className="error-mark mt-3 text-sm">
-                        {heardProblem}
-                      </p>
-                    )}
-                    {/* A quiet offer, never a switch: with English picked, Hindi comes out in Latin letters. */}
-                    {suggestHindi && (
-                      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-graphite">
-                        Sounds like Hindi?
-                        <button type="button" className="link-quiet min-h-11 text-paper" onClick={() => pickSpoken(spokenById("hi"), true)}>
-                          Listen in <span lang="hi">हिंदी</span>
-                        </button>
-                      </p>
-                    )}
-                    {/* True for Chrome and most phones: speech recognition runs on the browser maker's servers. */}
-                    <p className="mt-2 text-xs text-graphite">Your browser turns your voice into words; some browsers use their maker&apos;s servers for this. We only receive the words.</p>
-                  </fieldset>
-                )}
-                <label className="block">
-                  <span className="mb-2 flex items-center gap-2 text-sm text-graphite">
-                    {mode === "voice" && listening && <VoiceMeter active activity={activity} />}
-                    {mode === "photo"
-                      ? "Anything the photo won't show? (optional)"
-                      : mode === "voice"
-                        ? listening
-                          ? `Listening in ${spoken.name}… speak naturally`
-                          : "What you said"
-                        : "What did you eat?"}
-                  </span>
-                  <textarea
-                    ref={box}
-                    value={text}
-                    onChange={(e) => {
-                      // Their typing wins: stop listening, and don't log by itself.
-                      if (listening) quiet();
-                      else drive({ type: "hold" });
-                      setText(e.target.value);
-                    }}
-                    maxLength={MEAL_WORDS_MAX}
-                    dir="auto"
-                    lang={mode === "voice" && voiceOk ? (spoken.translateFrom ?? undefined) : undefined}
-                    className="textarea"
-                    placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
-                  />
-                </label>
-                {mode === "voice" && voiceOk && (
-                  <div className="flex flex-wrap gap-3">
-                    {autoView.kind === "counting" ? (
-                      // Here, not only on the Log button: on a phone that button is below the fold.
-                      <div className="w-full">
-                        <p className="text-sm font-semibold">Logging in {autoView.left}…</p>
-                        {/* With reduced motion the countdown is the words alone. */}
-                        {!reduced && (
-                          <span aria-hidden className="mt-2 block h-0.5 w-full bg-line">
-                            <span ref={drain} className="block h-full origin-left bg-paper" />
-                          </span>
-                        )}
-                        <div className="mt-3 flex gap-3">
-                          <button type="button" onClick={keepTalking} className="button-ghost h-11">
-                            Keep talking
-                          </button>
-                          <button type="button" onClick={editWords} className="button-ghost h-11">
-                            Edit
-                          </button>
+                    <TargetBar value={x.v} target={x.t} opacity={x.o} />
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        </div>
+      </div>
+
+      <div className="lg:col-span-7">
+        {/* Log a meal */}
+        <section className="mt-12 lg:mt-0" aria-labelledby="log">
+          <h2 id="log" className="text-2xl font-bold semiwide">
+            Log a meal
+          </h2>
+          <PlanLine plan={plan} kind="meal" />
+          {aiOff && <p className="error-mark mt-3 text-sm">Food reading isn&apos;t switched on yet on this server.</p>}
+          {plan.mealBlock ? (
+            <Paywall plan={plan} refusal={plan.mealBlock} />
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    quiet();
+                    camera.current?.click();
+                  }}
+                  className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}
+                >
+                  <span className="text-lg font-bold semiwide">Snap</span>
+                  <span className="text-xs text-graphite">A photo of your plate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("voice");
+                    if (voiceOk && !listening) listen(spoken);
+                  }}
+                  className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
+                >
+                  <span className="text-lg font-bold semiwide">Say</span>
+                  <span className="text-xs text-graphite">Tell us what you ate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    quiet();
+                    setMode("text");
+                  }}
+                  className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}
+                >
+                  <span className="text-lg font-bold semiwide">Type</span>
+                  <span className="text-xs text-graphite">A few words is enough</span>
+                </button>
+              </div>
+              <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => pickPhoto(e.target.files)} />
+
+              {mode && (
+                <div className="mt-5 space-y-4">
+                  {mode === "photo" && photo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
+                  )}
+                  {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
+                  {mode === "voice" && voiceOk && (
+                    // min-w-0: a fieldset otherwise grows to fit its widest row, which would widen the page.
+                    <fieldset className="min-w-0">
+                      <legend className="mb-2 text-sm text-graphite">Speaking in</legend>
+                      {/* One row that scrolls sideways on phones, inside its own box; it wraps on wider screens.
+                          relative: the hidden radios are absolutely placed, and would otherwise widen the page. */}
+                      <div ref={langRow} className="relative -mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
+                        <div className="flex w-max gap-2 pb-1 sm:w-auto sm:flex-wrap">
+                          {SPOKEN.map((s) => (
+                            <label
+                              key={s.id}
+                              className="choice shrink-0"
+                              lang={s.translateFrom ?? "en"}
+                              dir={s.id === "ur" ? "rtl" : undefined}
+                              data-picked={spoken.id === s.id ? "" : undefined}
+                            >
+                              <input type="radio" name="spoken" className="sr-only" checked={spoken.id === s.id} onChange={() => pickSpoken(s)} />
+                              {s.label}
+                            </label>
+                          ))}
                         </div>
                       </div>
-                    ) : (
-                      <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
-                        {listening ? "Stop listening" : "Talk again"}
-                      </button>
-                    )}
+                      {heardProblem && (
+                        <p role="alert" className="error-mark mt-3 text-sm">
+                          {heardProblem}
+                        </p>
+                      )}
+                      {/* A quiet offer, never a switch: with English picked, Hindi comes out in Latin letters. */}
+                      {suggestHindi && (
+                        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-graphite">
+                          Sounds like Hindi?
+                          <button type="button" className="link-quiet min-h-11 text-paper" onClick={() => pickSpoken(spokenById("hi"), true)}>
+                            Listen in <span lang="hi">हिंदी</span>
+                          </button>
+                        </p>
+                      )}
+                      {/* True for Chrome and most phones: speech recognition runs on the browser maker's servers. */}
+                      <p className="mt-2 text-xs text-graphite">Your browser turns your voice into words; some browsers use their maker&apos;s servers for this. We only receive the words.</p>
+                    </fieldset>
+                  )}
+                  <label className="block">
+                    <span className="mb-2 flex items-center gap-2 text-sm text-graphite">
+                      {mode === "voice" && listening && <VoiceMeter active activity={activity} />}
+                      {mode === "photo"
+                        ? "Anything the photo won't show? (optional)"
+                        : mode === "voice"
+                          ? listening
+                            ? `Listening in ${spoken.name}… speak naturally`
+                            : "What you said"
+                          : "What did you eat?"}
+                    </span>
+                    <textarea
+                      ref={box}
+                      value={text}
+                      onChange={(e) => {
+                        // Their typing wins: stop listening, and don't log by itself.
+                        if (listening) quiet();
+                        else drive({ type: "hold" });
+                        setText(e.target.value);
+                      }}
+                      maxLength={MEAL_WORDS_MAX}
+                      dir="auto"
+                      lang={mode === "voice" && voiceOk ? (spoken.translateFrom ?? undefined) : undefined}
+                      className="textarea"
+                      placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
+                    />
+                  </label>
+                  {mode === "voice" && voiceOk && (
+                    <div className="flex flex-wrap gap-3">
+                      {autoView.kind === "counting" ? (
+                        // Here, not only on the Log button: on a phone that button is below the fold.
+                        <div className="w-full">
+                          <p className="text-sm font-semibold">Logging in {autoView.left}…</p>
+                          {/* With reduced motion the countdown is the words alone. */}
+                          {!reduced && (
+                            <span aria-hidden className="mt-2 block h-0.5 w-full bg-line">
+                              <span ref={drain} className="block h-full origin-left bg-paper" />
+                            </span>
+                          )}
+                          <div className="mt-3 flex gap-3">
+                            <button type="button" onClick={keepTalking} className="button-ghost h-11">
+                              Keep talking
+                            </button>
+                            <button type="button" onClick={editWords} className="button-ghost h-11">
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
+                          {listening ? "Stop listening" : "Talk again"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <p role="status" className="sr-only">
+                    {counting ? `Logging this meal in ${COUNTDOWN_MS / 1000} seconds. Choose Keep talking or Edit to stop it.` : ""}
+                  </p>
+                  <fieldset className="flex flex-wrap gap-2">
+                    <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
+                    {MEALS.map((m) => (
+                      <label key={m.id || "auto"} className="choice">
+                        <input type="radio" name="meal" className="sr-only" checked={meal === m.id} onChange={() => setMeal(m.id)} />
+                        {m.label}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={submit}
+                      disabled={busy || (!text.trim() && !(mode === "photo" && photo))}
+                      className="button-primary h-13 flex-1 sm:flex-none sm:px-10"
+                    >
+                      {busy ? "Reading your meal…" : counting ? "Log now" : "Log this meal"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button-ghost h-13"
+                      onClick={() => {
+                        quiet();
+                        setMode(null);
+                        setPhoto(null);
+                        setText("");
+                      }}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                )}
-                <p role="status" className="sr-only">
-                  {counting ? `Logging this meal in ${COUNTDOWN_MS / 1000} seconds. Choose Keep talking or Edit to stop it.` : ""}
-                </p>
-                <fieldset className="flex flex-wrap gap-2">
-                  <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
-                  {MEALS.map((m) => (
-                    <label key={m.id || "auto"} className="choice">
-                      <input type="radio" name="meal" className="sr-only" checked={meal === m.id} onChange={() => setMeal(m.id)} />
-                      {m.label}
-                    </label>
-                  ))}
-                </fieldset>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={busy || (!text.trim() && !(mode === "photo" && photo))}
-                    className="button-primary h-13 flex-1 sm:flex-none sm:px-10"
-                  >
-                    {busy ? "Reading your meal…" : counting ? "Log now" : "Log this meal"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button-ghost h-13"
-                    onClick={() => {
-                      quiet();
-                      setMode(null);
-                      setPhoto(null);
-                      setText("");
-                    }}
-                  >
-                    Cancel
-                  </button>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-        {error && (
-          <p role="alert" className="error-mark mt-4 text-sm">
-            {error}
-          </p>
-        )}
-
-        {last && (
-          <article className="fact-in mt-6 border border-paper p-5" aria-live="polite">
-            <p className="text-sm text-graphite">Logged{last.demo ? " (demo estimate)" : ""}</p>
-            <h3 lang={last.lang} className="mt-1 text-xl font-bold">
-              {last.title}
-            </h3>
-            <p className="mt-2">
-              <span className="display-num text-3xl">{Math.round(last.kcal)}</span> <span className="text-graphite">kcal</span>
-              <span className="ml-5 display-num text-3xl">{Math.round(last.proteinG)}</span> <span className="text-graphite">g protein</span>
+              )}
+            </>
+          )}
+          {error && (
+            <p role="alert" className="error-mark mt-4 text-sm">
+              {error}
             </p>
-            <p className="mt-2 text-sm text-graphite">{last.items.join("; ")}</p>
-            {last.tip && (
-              <p lang={last.lang} className="mt-3">
-                {last.tip}
-              </p>
-            )}
-          </article>
-        )}
-      </section>
+          )}
 
-      {/* Today's meals */}
-      <section className="mt-12" aria-labelledby="today">
-        <h2 id="today" className="text-2xl font-bold semiwide">
-          Today
-        </h2>
-        {sorted.length === 0 ? (
-          <p className="mt-3 text-graphite">Nothing yet. Your first meal sets the day&apos;s picture.</p>
-        ) : (
-          <ul className="mt-3">
-            {sorted.map((l) => (
-              <li key={l.id} className="grid grid-cols-[1fr_auto] gap-x-4 border-t border-line py-4">
-                <div className="min-w-0">
-                  <p className="text-sm text-graphite">
-                    {l.meal[0].toUpperCase() + l.meal.slice(1)}, by {l.source === "photo" ? "photo" : l.source === "voice" ? "voice" : "text"}
-                    {l.confidence === "low" ? ", rough estimate" : ""}
-                  </p>
-                  {/* Titles in an Indian script get their language; the rest inherit the page's. */}
-                  <p lang={langTag(scriptLanguage(l.title), l.title)} className="font-semibold">
-                    {l.title}
-                  </p>
-                  <p className="truncate text-sm text-graphite">{l.items.join("; ")}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">{Math.round(l.kcal)} kcal</p>
-                  <p className="text-sm text-graphite">{Math.round(l.proteinG)} g protein</p>
-                  <button type="button" className="link-quiet min-h-11 text-sm" onClick={() => remove(l.id)} disabled={!!removing} aria-label={`Delete ${l.title}`}>
-                    {removing === l.id ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        {sorted.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-graphite">Micronutrients today, as a share of your daily need</h3>
-            <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-              {micros.map((m) => (
-                <li key={m.label}>
-                  <div className="flex justify-between text-sm">
-                    <span>{m.label}</span>
-                    <span className="text-graphite">{m.pct}%</span>
+          {last && (
+            <article className="fact-in mt-6 border border-paper p-5" aria-live="polite">
+              <p className="text-sm text-graphite">Logged{last.demo ? " (demo estimate)" : ""}</p>
+              <h3 lang={last.lang} className="mt-1 text-xl font-bold">
+                {last.title}
+              </h3>
+              <p className="mt-2">
+                <span className="display-num text-3xl">{Math.round(last.kcal)}</span> <span className="text-graphite">kcal</span>
+                <span className="ml-5 display-num text-3xl">{Math.round(last.proteinG)}</span> <span className="text-graphite">g protein</span>
+              </p>
+              <p className="mt-2 text-sm text-graphite">{last.items.join("; ")}</p>
+              {last.tip && (
+                <p lang={last.lang} className="mt-3">
+                  {last.tip}
+                </p>
+              )}
+            </article>
+          )}
+        </section>
+
+        {/* Today's meals */}
+        <section className="mt-12" aria-labelledby="today">
+          <h2 id="today" className="text-2xl font-bold semiwide">
+            Today
+          </h2>
+          {sorted.length === 0 ? (
+            <p className="mt-3 text-graphite">Nothing yet. Your first meal sets the day&apos;s picture.</p>
+          ) : (
+            <ul className="mt-3">
+              {sorted.map((l) => (
+                <li key={l.id} className="grid grid-cols-[1fr_auto] gap-x-4 border-t border-line py-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-graphite">
+                      {l.meal[0].toUpperCase() + l.meal.slice(1)}, by {l.source === "photo" ? "photo" : l.source === "voice" ? "voice" : "text"}
+                      {l.confidence === "low" ? ", rough estimate" : ""}
+                    </p>
+                    {/* Titles in an Indian script get their language; the rest inherit the page's. */}
+                    <p lang={langTag(scriptLanguage(l.title), l.title)} className="font-semibold">
+                      {l.title}
+                    </p>
+                    <p className="truncate text-sm text-graphite">{l.items.join("; ")}</p>
                   </div>
-                  <div className="mt-1 h-1 bg-line" aria-hidden>
-                    <div className="h-1 bg-paper" style={{ width: `${Math.min(100, m.pct)}%` }} />
+                  <div className="text-right">
+                    <p className="font-bold">{Math.round(l.kcal)} kcal</p>
+                    <p className="text-sm text-graphite">{Math.round(l.proteinG)} g protein</p>
+                    <button type="button" className="link-quiet min-h-11 text-sm" onClick={() => remove(l.id)} disabled={!!removing} aria-label={`Delete ${l.title}`}>
+                      {removing === l.id ? "Deleting…" : "Delete"}
+                    </button>
                   </div>
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-      </section>
-
-      {/* Gaps */}
-      {gaps.length > 0 && (
-        <section className="mt-12" aria-labelledby="gaps">
-          <h2 id="gaps" className="text-2xl font-bold semiwide">
-            Your biggest gaps
-          </h2>
-          <p className="mt-2 text-graphite">{gapSource === "logs" ? "Averaged over your logged days in the last two weeks." : "From how you said you usually eat. Logging meals makes this sharper."}</p>
-          <ul className="mt-4">
-            {gaps.map((g) => (
-              <li key={g.label} className="flex items-baseline justify-between border-t border-line py-3">
-                <span className="font-semibold">{g.label}</span>
-                <span>
-                  <span className="display-num text-2xl">{g.pct}%</span> <span className="text-sm text-graphite">of your need</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Typical day */}
-      <section className="mt-12 border border-line-strong p-5" aria-labelledby="typical">
-        <h2 id="typical" className="text-2xl font-bold semiwide">
-          How you usually eat
-        </h2>
-        {editingTypical ? (
-          <>
-            <p className="mt-2 text-graphite">Describe a normal day, morning to night. We use it until you&apos;ve logged a few days.</p>
-            <textarea
-              value={typicalText}
-              onChange={(e) => setTypicalText(e.target.value)}
-              maxLength={2000}
-              className="textarea mt-4 min-h-32"
-              placeholder="e.g. Chai and 2 biscuits at 7. Poha at 9. Office lunch: 3 rotis, dal, sabzi. Evening chai with namkeen. Dinner rice, dal, curd."
-            />
-            <button type="button" onClick={saveTypical} disabled={typicalBusy || typicalText.trim().length < 10} className="button-primary mt-3 h-12">
-              {typicalBusy ? "Reading…" : "Save my usual day"}
-            </button>
-          </>
-        ) : (
-          typical && (
-            <>
-              <ul className="mt-3 space-y-2">
-                {typical.patterns.map((p, i) => (
-                  <li key={i}>{p}</li>
+          )}
+          {sorted.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-graphite">Micronutrients today, as a share of your daily need</h3>
+              <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                {micros.map((m) => (
+                  <li key={m.label}>
+                    <div className="flex justify-between text-sm">
+                      <span>{m.label}</span>
+                      <span className="text-graphite">{m.pct}%</span>
+                    </div>
+                    <div className="mt-1 h-1 bg-line" aria-hidden>
+                      <div className="h-1 bg-paper" style={{ width: `${Math.min(100, m.pct)}%` }} />
+                    </div>
+                  </li>
                 ))}
               </ul>
-              <button type="button" className="link-quiet mt-3 min-h-11 text-sm" onClick={() => setEditingTypical(true)}>
-                Change it
+            </div>
+          )}
+        </section>
+
+        {/* Gaps */}
+        {gaps.length > 0 && (
+          <section className="mt-12" aria-labelledby="gaps">
+            <h2 id="gaps" className="text-2xl font-bold semiwide">
+              Your biggest gaps
+            </h2>
+            <p className="mt-2 text-graphite">{gapSource === "logs" ? "Averaged over your logged days in the last two weeks." : "From how you said you usually eat. Logging meals makes this sharper."}</p>
+            <ul className="mt-4">
+              {gaps.map((g) => (
+                <li key={g.label} className="flex items-baseline justify-between border-t border-line py-3">
+                  <span className="font-semibold">{g.label}</span>
+                  <span>
+                    <span className="display-num text-2xl">{g.pct}%</span> <span className="text-sm text-graphite">of your need</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Typical day */}
+        <section className="mt-12 border border-line-strong p-5" aria-labelledby="typical">
+          <h2 id="typical" className="text-2xl font-bold semiwide">
+            How you usually eat
+          </h2>
+          {editingTypical ? (
+            <>
+              <p className="mt-2 text-graphite">Describe a normal day, morning to night. We use it until you&apos;ve logged a few days.</p>
+              <textarea
+                value={typicalText}
+                onChange={(e) => setTypicalText(e.target.value)}
+                maxLength={2000}
+                className="textarea mt-4 min-h-32"
+                placeholder="e.g. Chai and 2 biscuits at 7. Poha at 9. Office lunch: 3 rotis, dal, sabzi. Evening chai with namkeen. Dinner rice, dal, curd."
+              />
+              <button type="button" onClick={saveTypical} disabled={typicalBusy || typicalText.trim().length < 10} className="button-primary mt-3 h-12">
+                {typicalBusy ? "Reading…" : "Save my usual day"}
               </button>
             </>
-          )
-        )}
-      </section>
+          ) : (
+            typical && (
+              <>
+                <ul className="mt-3 space-y-2">
+                  {typical.patterns.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+                <button type="button" className="link-quiet mt-3 min-h-11 text-sm" onClick={() => setEditingTypical(true)}>
+                  Change it
+                </button>
+              </>
+            )
+          )}
+        </section>
 
-      <details className="mt-10 text-sm text-graphite">
-        <summary className="min-h-11 cursor-pointer py-3">How we set your targets</summary>
-        <ul className="mt-2 space-y-1">
-          {targets.basis.map((b) => (
-            <li key={b}>{b}</li>
-          ))}
-          {targets.estimated && <li>Add your height and weight in Settings for targets that fit you.</li>}
-          <li>Meal numbers are estimates from your photo or words, not lab measurements.</li>
-        </ul>
-      </details>
+        <details className="mt-10 text-sm text-graphite">
+          <summary className="min-h-11 cursor-pointer py-3">How we set your targets</summary>
+          <ul className="mt-2 space-y-1">
+            {targets.basis.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+            {targets.estimated && <li>Add your height and weight in Settings for targets that fit you.</li>}
+            <li>Meal numbers are estimates from your photo or words, not lab measurements.</li>
+          </ul>
+        </details>
+      </div>
     </main>
   );
 }

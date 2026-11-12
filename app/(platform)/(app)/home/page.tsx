@@ -109,8 +109,11 @@ async function Dashboard() {
   );
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-x-12 px-4 pb-16 pt-6 sm:px-6 lg:grid-cols-12 lg:pt-10">
-      <div className="lg:col-span-5">
+    // Phones: one column. Tablets (and phones turned sideways): the bib and the verdict side by
+    // side, everything else full width below. Laptops: the bib stays put on the left while the
+    // rest scrolls on the right.
+    <div className="mx-auto grid max-w-6xl px-4 pb-16 pt-6 sm:px-6 md:grid-cols-2 md:gap-x-8 lg:grid-cols-12 lg:gap-x-12 lg:pt-10">
+      <div className="lg:col-span-5 lg:row-span-2">
         <div className="lg:sticky lg:top-20">
           <p className="mb-4 text-graphite">
             {greeting(profile.timezone)}, {persona.firstName}.
@@ -134,14 +137,33 @@ async function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-12 lg:col-span-7 lg:mt-9">
+      <div className="mt-12 md:mt-9 lg:col-span-7">
         {read ? (
           <>
             <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={profile.language === "hi" ? "hi" : undefined} />
             {isMock && <p className="mt-4 text-sm text-graphite">Demo read: AI is off on this machine, so this was written from a template.</p>}
+          </>
+        ) : (
+          <section aria-labelledby="first" className="@container">
+            <h1 id="first" className="verdict-type text-[clamp(2.25rem,11cqi,3.75rem)]">
+              Your bib needs a verdict.
+            </h1>
+            <p className="mt-4 max-w-prose text-lg text-graphite">
+              Upload a blood report, PDF or photos. We read every marker, weigh it for how you train, and tell you where you stand
+              {t ? ` for ${t.name}` : ""}.
+            </p>
+            {data.lastFailed?.error && <p className="error-mark mt-4 text-sm">{data.lastFailed.error}</p>}
+            <Link href="/upload" className="button-primary mt-8 h-13 w-full sm:w-auto">
+              Upload a blood report
+            </Link>
+          </section>
+        )}
+      </div>
 
-            {fuelSection}
-
+      <div className="md:col-span-2 lg:col-span-7 lg:col-start-6">
+        {fuelSection}
+        {read && (
+          <>
             <section className="mt-14" aria-labelledby="matter">
               <div className="flex items-baseline justify-between gap-4">
                 <h2 id="matter" className="text-2xl font-bold semiwide">
@@ -151,9 +173,10 @@ async function Dashboard() {
                   Full report
                 </Link>
               </div>
-              <div className="mt-4 grid gap-x-8 sm:grid-cols-2">
+              {/* Pairs where there's room: not in the laptop's narrower right column until 1280 px. */}
+              <div className="mt-4 grid gap-x-8 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {matter.slice(0, 3).map((m, i) => (
-                  <div key={m.id} className={i === 0 ? "sm:col-span-2" : ""}>
+                  <div key={m.id} className={i === 0 ? "sm:col-span-2 lg:col-span-1 xl:col-span-2" : ""}>
                     <MarkerTile m={m} note={notes.get(m.id)} before={m.key ? data.prev.get(m.key) : undefined} />
                   </div>
                 ))}
@@ -197,22 +220,7 @@ async function Dashboard() {
               </section>
             )}
           </>
-        ) : (
-          <section aria-labelledby="first">
-            <h1 id="first" className="verdict-type text-[clamp(2.25rem,6.5vw,3.75rem)]">
-              Your bib needs a verdict.
-            </h1>
-            <p className="mt-4 max-w-prose text-lg text-graphite">
-              Upload a blood report, PDF or photos. We read every marker, weigh it for how you train, and tell you where you stand
-              {t ? ` for ${t.name}` : ""}.
-            </p>
-            {data.lastFailed?.error && <p className="error-mark mt-4 text-sm">{data.lastFailed.error}</p>}
-            <Link href="/upload" className="button-primary mt-8 h-13 w-full sm:w-auto">
-              Upload a blood report
-            </Link>
-          </section>
         )}
-        {!read && fuelSection}
 
         {data.upcoming.length > 0 && (
           <section className="mt-14" aria-labelledby="events">
@@ -256,8 +264,8 @@ async function Dashboard() {
 // loading line, and a reload offer if it drags on. Never just grey boxes.
 function Skeleton() {
   return (
-    <div className="mx-auto grid max-w-6xl gap-12 px-4 pt-6 sm:px-6 lg:grid-cols-12 lg:pt-10">
-      <div className="h-[28rem] bg-lift lg:col-span-5" aria-hidden />
+    <div className="mx-auto grid max-w-6xl gap-12 px-4 pt-6 sm:px-6 md:grid-cols-2 md:gap-8 lg:grid-cols-12 lg:gap-12 lg:pt-10">
+      <div className="h-[28rem] bg-lift md:h-80 lg:col-span-5 lg:h-[28rem]" aria-hidden />
       <div className="lg:col-span-7">
         <p className="text-sm text-graphite" role="status" aria-live="polite">
           Loading your dashboard…

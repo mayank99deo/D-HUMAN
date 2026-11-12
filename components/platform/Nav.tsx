@@ -52,8 +52,8 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
   const active = (href: string) => path === href || (href !== "/home" && path.startsWith(href)) || (href === "/home" && path.startsWith("/reports"));
   return (
     <>
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-ink/90 px-4 backdrop-blur sm:px-6">
+      {/* Top bar. On a phone turned sideways it scrolls away, leaving the height to the page. */}
+      <header className="sticky top-0 z-30 flex h-14 short:max-lg:static items-center justify-between border-b border-line bg-ink/90 px-4 backdrop-blur sm:px-6">
         <Link href="/home" className="flex h-11 items-center" aria-label="D-Human home">
           <Wordmark className="h-3.5 w-auto" />
         </Link>
@@ -66,12 +66,12 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
         </Link>
       </header>
 
-      {/* Rail on wide screens, tab bar on phones */}
+      {/* Rail on wide screens, tab bar on phones and tablets: compact, icon beside label, on a phone turned sideways */}
       <nav
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ink/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:inset-y-0 lg:left-0 lg:right-auto lg:w-24 lg:border-r lg:border-t-0 lg:pt-20"
       >
-        <ul className="mx-auto grid max-w-lg grid-cols-5 lg:flex lg:max-w-none lg:flex-col lg:gap-2">
+        <ul className="mx-auto grid max-w-lg grid-cols-5 short:max-lg:max-w-2xl lg:flex lg:max-w-none lg:flex-col lg:gap-2">
           {TABS.map((t) => {
             const on = active(t.href);
             const upload = t.icon === "upload";
@@ -81,12 +81,12 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
                   href={t.href}
                   aria-current={on ? "page" : undefined}
                   data-tour={t.icon}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[0.6875rem] transition-colors lg:min-h-18 ${
+                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[0.6875rem] transition-colors short:max-lg:min-h-11 short:max-lg:flex-row short:max-lg:gap-1.5 short:max-lg:text-xs lg:min-h-18 ${
                     on ? "text-paper" : "text-graphite"
                   }`}
                 >
                   {/* Every icon gets the same 36 px slot, so all five labels sit on one line. */}
-                  <span className={`grid h-9 w-9 place-items-center ${upload ? (on ? "bg-paper text-ink" : "border border-line-strong") : ""}`}>
+                  <span className={`grid h-9 w-9 place-items-center short:max-lg:h-8 short:max-lg:w-8 ${upload ? (on ? "bg-paper text-ink" : "border border-line-strong") : ""}`}>
                     <Icon name={t.icon} />
                   </span>
                   <span className={on ? "font-semibold" : ""}>{t.label}</span>

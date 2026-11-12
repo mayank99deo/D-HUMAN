@@ -262,7 +262,7 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
           if (canGo) go(1);
         }}
       >
-        <div key={step.id} className="fact-in pt-12 sm:pt-16">
+        <div key={step.id} className="fact-in pt-12 sm:pt-16 md:pt-[max(4rem,12svh)]">
           <h1 ref={heading} tabIndex={-1} className="headline text-[clamp(2rem,7vw,3rem)] outline-none">
             {step.ask(d)}
           </h1>
@@ -272,7 +272,9 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
           </div>
         </div>
 
-        <div className="mt-auto pt-10">
+        {/* At the bottom on phones, where the thumb is; right under the question on tablets and
+            laptops, rather than a long way down a tall screen. */}
+        <div className="mt-auto pt-10 md:mt-0">
           {error && (
             <p role="alert" className="error-mark mb-3 text-sm">
               {error}

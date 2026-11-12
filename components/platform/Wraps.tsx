@@ -74,19 +74,20 @@ function Viewer({ story, onClose }: { story: Story; onClose: () => void }) {
       </div>
 
       <div
-        className="relative mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 pb-16"
+        className="relative mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 pb-16 short:pb-6"
         onPointerDown={() => setPaused(true)}
         onPointerUp={() => setPaused(false)}
         onPointerCancel={() => setPaused(false)}
       >
         <div key={i} className="fact-in">
           {s.kind === "title" ? (
-            <p className="verdict-type text-[clamp(2.75rem,11vw,5rem)]">{s.big}</p>
+            <p className="verdict-type text-[clamp(2.25rem,min(11vw,15svh),5rem)]">{s.big}</p>
           ) : (
             <>
               {s.label && <p className={`text-lg font-semibold ${paper ? "text-smoke" : "text-graphite"}`}>{s.label}</p>}
-              <p className={`mt-2 display-num ${s.big.length > 8 ? "text-[clamp(3rem,13vw,5.5rem)]" : "text-[clamp(5rem,26vw,10rem)]"}`}>{s.big}</p>
-              <p className="mt-6 max-w-md text-xl leading-snug">{s.line}</p>
+              {/* Bounded by height too, so a phone turned sideways still fits the whole slide. */}
+              <p className={`mt-2 display-num ${s.big.length > 8 ? "text-[clamp(2.5rem,min(13vw,18svh),5.5rem)]" : "text-[clamp(3.5rem,min(26vw,30svh),10rem)]"}`}>{s.big}</p>
+              <p className="mt-6 max-w-md text-xl leading-snug short:mt-3 short:text-lg">{s.line}</p>
             </>
           )}
         </div>

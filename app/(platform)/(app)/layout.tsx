@@ -30,7 +30,7 @@ async function TourForUser() {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     // clip, not hidden: wide glows (the verdict's) can't widen the page, and sticky still works.
-    <div className="min-h-dvh overflow-x-clip pb-24 lg:pb-0 lg:pl-24">
+    <div className="min-h-dvh overflow-x-clip pb-24 short:max-lg:pb-16 lg:pb-0 lg:pl-24">
       <Suspense fallback={<NavView initial="" path="" />}>
         <NavWithUser />
       </Suspense>

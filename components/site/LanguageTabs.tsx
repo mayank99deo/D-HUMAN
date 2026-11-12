@@ -90,7 +90,8 @@ export function LanguageTabs({
               tabIndex={on ? 0 : -1}
               onClick={() => pick(i)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={`relative min-h-11 pt-3 text-sm font-semibold transition-colors active:opacity-60 ${
+              // At least 44 px wide too: हिंदी alone sets only about 23 px of text.
+              className={`relative min-h-11 min-w-11 pt-3 text-left text-sm font-semibold transition-colors active:opacity-60 ${
                 on ? c.on : c.off
               }`}
             >
