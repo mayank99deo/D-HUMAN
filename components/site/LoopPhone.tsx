@@ -2,6 +2,7 @@
 
 import { useInView } from "motion/react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { isWaitlist } from "@/lib/site-mode";
 
@@ -289,6 +290,14 @@ export function LoopPhone({ intro }: { intro?: ReactNode }) {
             ? "Food and sleep come first. Brands in the stack have to clear a clean-label bar: third-party tested, every ingredient and dose on the label, FSSAI licensed and traceable by batch."
             : "Food and sleep come first. Brands in a stack are found on merit: D-Human has no brand partners and earns nothing from them."}
         </p>
+        {/* Open mode's slide links to the guide; waitlist mode's section is unchanged. */}
+        {intro !== undefined && (
+          <p className="mt-2">
+            <Link href="/supplements-from-blood-test" className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 active:opacity-60">
+              Supplements from your blood test
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

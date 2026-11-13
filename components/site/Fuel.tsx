@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SPOKEN, type SpokenId } from "@/lib/domain/speech";
 import { LanguageTabs } from "./LanguageTabs";
 import { nativeStyle } from "./native";
@@ -100,6 +101,16 @@ export function Fuel() {
           <p className="mt-6 max-w-[40ch]">
             AI estimates your meal in Indian portions. Say or type it in any of {SPOKEN.length} languages, and the
             note comes back in yours.
+          </p>
+          {/* Into the guides (app/(guides)), for readers who want the detail and for search.
+              Short labels, so both fit one row and the slide still fits a 1024 x 768 screen. */}
+          <p className="mt-3 flex flex-wrap gap-x-6">
+            <Link href="/calorie-tracker" className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 active:opacity-60">
+              Calorie tracker
+            </Link>
+            <Link href="/protein-tracker" className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 active:opacity-60">
+              Protein targets
+            </Link>
           </p>
         </div>
 

@@ -13,6 +13,11 @@ The running record of this project: where things stand, why they are the way the
 - **Stack:** Next.js 16.4.2 (App Router, Cache Components on), React 19.3, Tailwind CSS 4, Motion 14.6, zod 4, resend 6.34. Platform: drizzle-orm 0.45 (Postgres via `postgres` 4.1, or embedded `@electric-sql/pglite` 0.5 locally), `@anthropic-ai/sdk` 1.6 (Haiku 5.5 and Sonnet 5.5 per job, see Decisions). Node 24 via fnm.
 - **Signups:** browser → `/api/waitlist` → Google Apps Script web app (`google-apps-script/Code.gs`) → the `Waitlist` tab of the Google Sheet (13 columns). The optional follow-up answers go to `/api/waitlist/details` with an HMAC token. Second source: a Google Form, built by `setupForm()` in the same script. Its trigger files each answer in the `Waitlist` tab with Source `google-form` and calls `/api/waitlist/form` (authorised with the webhook secret) for the welcome email and Resend contact.
 - **Email:** Resend. `dhuman.fit` is verified there (DKIM, plus MX and SPF on `send.dhuman.fit`; no DMARC yet). The sender defaults to `D-Human <hello@dhuman.fit>`. The welcome email template is `lib/waitlist/welcome-email.ts`; preview it in dev at `/api/email-preview`.
+- **Search (2026-11-13):**
+  - One canonical host, `https://www.dhuman.fit` (`SITE_ORIGIN` in `lib/site-url.ts`). Page requests on dhuman.fit, www.d-human.fit, d-human.fit and d-human.vercel.app get a 308 there (`next.config.ts`); `/api`, `/_next` and `/_vercel` are left alone.
+  - `app/robots.ts` and `app/sitemap.ts` (6 URLs); structured data and per-page metadata in `lib/seo.ts`.
+  - Five guides in `app/(guides)/`: calorie tracker, protein tracker, blood report analysis, supplements from your blood test, sources and safety. Every number is sourced in `components/site/sources.ts`.
+  - Strategy and Mayank's checklist: `docs/team/seo/STRATEGY.md`.
 - **Domains:** as of 2026-10-27 `dhuman.fit` points at Vercel and 308-redirects to `www.dhuman.fit`, which serves the site. Mail for `@dhuman.fit` runs on Google Workspace. Links and images use `lib/site-url.ts` (`NEXT_PUBLIC_SITE_URL`, else Vercel's production domain); share previews still point at `d-human.vercel.app` (see Open items).
 - **Launch film:** in the studio, `~/Projects/studio/projects/d-human-launch` (16:9) and `d-human-launch-reel` (9:16); notes in each `REVIEW.md`. New video work goes in the studio, not this repo.
 - **Video:** two HyperFrames projects, each with `SPEC.md` and `REVIEW.md`. `video/intro/` is the 13 s product intro. `video/loop/` is the 20 s phone-screen loop (600 x 1296) that plays in the "Test first" section; its web copy and stills live in `public/media/loop/` (re-encode steps in its `REVIEW.md`). Preview with the plugin CLI's `preview`, render with `render`; caches and `renders/` are git-ignored.
@@ -22,7 +27,7 @@ The running record of this project: where things stand, why they are the way the
 
 ## Decisions
 
-- **The crew (2026-11-11):** nine role agents in `.claude/agents/`, run by the main session as orchestrator (agents can't start agents). They are AI roles, not people; medical review, legal and money decisions stay with Mayank and qualified humans.
+- **The crew (2026-11-11; the SEO lead joined 2026-11-13):** ten role agents in `.claude/agents/`, run by the main session as orchestrator (agents can't start agents). They are AI roles, not people; medical review, legal and money decisions stay with Mayank and qualified humans.
 
 - **Brand:** monochrome only, true `#000` and `#fff` ("white pack, black ink"). Archivo with its width axis, set wide to echo the logo. The primary button's cut top-left corner borrows the notch in the logo's D. No accent colour; errors are marked with a "!" glyph.
 - **Page scope (2026-11-11, pilot):** the open landing page leads with Fuel (calorie tracking) and the three languages, then blood reports, then "blood tests through D-Human, coming soon", then a closing Start free. Waitlist mode keeps the 2026-10-28 page (hero, vitamin D, loop). Tests and Plans stay hidden.
@@ -127,7 +132,19 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Platform next: doctor review of reads, phone/WhatsApp sign-in, Hindi app labels, speech-to-text for browsers without the Web Speech API, uploads over 4 MB
 
 - [ ] Add DMARC: TXT on `_dmarc.dhuman.fit` with `v=DMARC1; p=none;`
-- [ ] Share previews: set `NEXT_PUBLIC_SITE_URL` to `https://www.dhuman.fit` in Vercel (or delete it so the production domain is used) and redeploy; the og:image still points at `d-human.vercel.app`
+- [x] Share previews: fixed in code on 2026-11-13. `siteUrl()` reads any of the site's own hosts as the canonical one, so og:image and links use www.dhuman.fit. Setting `NEXT_PUBLIC_SITE_URL=https://www.dhuman.fit` in Vercel, or deleting it, is now just tidying.
+- [ ] SEO, Mayank's checklist (`docs/team/seo/STRATEGY.md` §11):
+  - Search Console: a Domain property for dhuman.fit verified by DNS TXT, submit the sitemap, request indexing for `/` and the 5 guides.
+  - Bing Webmaster Tools.
+  - Point the Apps Script and the future Razorpay webhook at www.dhuman.fit.
+  - About, Contact, Privacy, Terms and Refund pages.
+- [ ] SEO decisions for Mayank:
+  - Make "Calorie and protein tracking for Indian meals." the landing H1, keeping "Your body speaks data." visible as it is.
+  - Allow or block AI training crawlers (all allowed now).
+  - A named doctor, and ideally a dietitian, to review health pages; marker explainers wait for this.
+  - Whether IFCT 2017 values may be published, for food pages.
+  - Author and team details for About.
+- [ ] Check `lib/domain/nutrition.ts`: 2.5 µg B12 for adults and 13.2 mg zinc for women, where ICMR-NIN's 2020 brief note (tables 3 and 4) gives 2.2 µg and 13.0 mg. The guides leave both out until settled.
 - [ ] Set the git name and email so commits link to the GitHub account
 - [ ] Optional: a Resend segment "Waitlist" and `RESEND_SEGMENT_ID`
 - [ ] Later: reverse-engineer the architecture of other sites and platforms
@@ -137,6 +154,32 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-13
+- **SEO Phase 1 by the `seo-lead` (Mayank's request), reviewed by the orchestrator:**
+  - **Found:** robots.txt and the sitemap returned 404; three hosts served duplicate copies with no canonical; no structured data; the only public page had no search terms in its H1.
+  - **Built:**
+    - The canonical host and redirects (`lib/site-url.ts`, `next.config.ts`).
+    - `app/robots.ts` (app routes and `/api` disallowed; `/signin` crawlable so its noindex is seen) and `app/sitemap.ts`.
+    - `lib/seo.ts`: the guide list, metadata, and Organization, WebSite, WebApplication (₹0 and ₹49 offers), FAQPage and BreadcrumbList data.
+    - Five guides in `app/(guides)/`, built from `components/site/Guide.tsx` in the site's own design, with facts imported from the domain code.
+    - Links to the guides from Fuel, Reports and the phone slide (open mode only).
+    - Guide links in the footer on guide pages.
+    - A `subpage` header.
+    - `tests/seo.test.ts` (11 tests).
+    - `docs/team/seo/STRATEGY.md`.
+  - **Not changed:** the hero line "Your body speaks data.". Waitlist mode is pixel-identical.
+  - **Checked by the seo-lead:**
+    - Lighthouse mobile on a production build: SEO and Accessibility 100 on all 6 pages; Performance 87–89 (LCP held back by the two preloaded Archivo files, not new).
+    - JSON-LD parses; one H1 per page; titles 58–62 characters.
+    - No sideways scroll at 320–1440 px.
+    - Redirects tested with Host headers locally.
+  - **Checked by the orchestrator:**
+    - Typecheck, lint, 207 tests, the build (all guides static).
+    - The copy: no diagnosis claims, no brand names, "no doctor reviews reads".
+    - The screenshots.
+- **A tenth crew member, `seo-lead` (Mayank's request):** `.claude/agents/seo-lead.md`, added to `docs/team/CREW.md` (it shapes anything public before it's built) and `CLAUDE.md`. It covers search strategy, India-first keyword research, technical SEO, structured data, health content to Google's standard for medical topics, and organic growth.
+  - Mayank described the role as 12 years in SEO, with Google, Microsoft and Amazon behind it and a Harvard degree. The file sets that working standard but claims no employers or degrees, per the crew rule against claiming real credentials.
+  - New agent files load only when a session starts, so this session ran it as a general agent working from its role file.
+- **Push `621a727`:** the touch frame. Live about 30 s later on both domains (the CSS has the `pointer: coarse` frame rules); `/signin` 200.
 - **The touch frame: screens scroll inside a fixed frame on phones and tablets (Mayank: the Wraps title still hid under the top bar on his iPhone 17).**
   - **Found:** the page was at its top, but the Google app's address bar covered its first 57 px. This is an iOS 26 in-app browser behaviour that the earlier scroll fix couldn't reach (details in Gotchas).
   - **Changed:**

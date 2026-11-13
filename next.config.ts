@@ -1,7 +1,25 @@
 import type { NextConfig } from "next";
+import { LEGACY_HOSTS, SITE_ORIGIN } from "./lib/site-url.ts";
+
+// Page requests on any other host that serves this deployment go to the canonical
+// host (lib/site-url.ts) with a 308, path and query kept, so search engines see one
+// site instead of four copies. Left alone: /api (open tabs, the Google Apps Script
+// and payment webhooks call it on whatever host they were given), /_next (assets of
+// pages already open) and /_vercel (analytics). The host value is a regex, anchored
+// by Next, so its dots are escaped.
+const HOST_REDIRECT_SOURCE = "/:path((?!(?:api|_next|_vercel)(?:/|$)).*)";
+const hostRedirects = LEGACY_HOSTS.map((host) => ({
+  source: HOST_REDIRECT_SOURCE,
+  has: [{ type: "host" as const, value: host.replace(/\./g, "\\.") }],
+  destination: `${SITE_ORIGIN}/:path`,
+  permanent: true,
+}));
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  async redirects() {
+    return hostRedirects;
+  },
   partialPrefetching: true,
   // The embedded dev database ships WebAssembly that has to load from node_modules.
   serverExternalPackages: ["@electric-sql/pglite"],

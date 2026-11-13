@@ -13,4 +13,4 @@
 
 ## The crew
 
-Nine specialist agents live in `.claude/agents/` (product and engineering lead, chief of staff, staff engineer, systems and data engineer, AI efficiency lead, product designer, UX and retention designer, graphic designer, QA and security engineer). `docs/team/CREW.md` says who does what and how work flows. The main session orchestrates: agents can't start other agents, so dispatch them from the plan, then log their work here and commit only after Mayank agrees.
+Ten specialist agents live in `.claude/agents/` (product and engineering lead, chief of staff, staff engineer, systems and data engineer, AI efficiency lead, product designer, UX and retention designer, graphic designer, QA and security engineer, SEO lead). `docs/team/CREW.md` says who does what and how work flows. The main session orchestrates: agents can't start other agents, so dispatch them from the plan, then log their work here and commit only after Mayank agrees.

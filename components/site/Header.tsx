@@ -14,7 +14,9 @@ function subscribe(onChange: () => void) {
 }
 
 // Transparent over the hero; a solid black band once content scrolls beneath it.
-export function Header() {
+// `subpage`: on the guides, the wordmark goes home and the waitlist button to the
+// form on the landing page. The landing page renders exactly as before.
+export function Header({ subpage = false }: { subpage?: boolean }) {
   const scrolled = useSyncExternalStore(
     subscribe,
     () => window.scrollY > 24,
@@ -28,11 +30,17 @@ export function Header() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:h-20 sm:px-8">
-        <a href="#top" className="-mx-2 flex h-11 items-center px-2">
-          <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
-        </a>
+        {subpage ? (
+          <Link href="/" className="-mx-2 flex h-11 items-center px-2">
+            <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
+          </Link>
+        ) : (
+          <a href="#top" className="-mx-2 flex h-11 items-center px-2">
+            <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
+          </a>
+        )}
         {isWaitlist ? (
-          <a href="#join" className={BUTTON}>
+          <a href={subpage ? "/#join" : "#join"} className={BUTTON}>
             Join the waitlist
           </a>
         ) : (

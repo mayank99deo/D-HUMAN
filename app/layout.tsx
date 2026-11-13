@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Anek_Devanagari, Archivo } from "next/font/google";
 import { Suspense } from "react";
 import { Vitals } from "@/components/Vitals";
-import { isWaitlist } from "@/lib/site-mode";
+import { HOME_DESCRIPTION, HOME_TITLE } from "@/lib/seo";
 import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -23,14 +23,14 @@ const devanagari = Anek_Devanagari({
   preload: false,
 });
 
-const description = isWaitlist
-  ? "Test first. Supplement second. D-Human tests your blood, gut and body, analyses the results with AI, and recommends supplements only where your markers point. Join the waitlist."
-  : "Track calories and protein in Indian meals from a photo, your voice or a few words, in English, Hinglish, Hindi and 9 more Indian languages. Add a blood report and D-Human's AI reads it for the way you train. Start free.";
-
-// Waitlist mode keeps its old title; the open site leads with calorie tracking.
-const title = isWaitlist ? "D-Human | Your body speaks data" : "D-Human | Calorie tracking for Indian meals";
+// The landing page's words are the default for every page (lib/seo.ts). Public pages set
+// their own title, description and canonical URL; the app's pages set noindex.
+const title = HOME_TITLE;
+const description = HOME_DESCRIPTION;
 
 export const metadata: Metadata = {
+  // The canonical host in production (lib/site-url.ts), so canonical tags, share
+  // images and og:url all point at https://www.dhuman.fit whichever host served the page.
   metadataBase: new URL(siteUrl() ?? "http://localhost:3000"),
   title,
   description,

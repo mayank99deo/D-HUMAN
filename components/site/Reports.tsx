@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 // Slide 3, on black: blood reports, the problem and the proof. The sourced
 // vitamin D figure, and blood tests through D-Human marked as coming soon. The
 // steps (upload, read, stack, retest) live on the phone slide that follows.
@@ -18,6 +20,11 @@ export function Reports() {
           </h2>
           <p className="mt-6 max-w-[40ch] text-graphite">
             Most people buy supplements without ever seeing their number. D-Human starts there.
+          </p>
+          <p className="mt-3">
+            <Link href="/blood-report-analysis" className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 active:opacity-60">
+              How blood report analysis works
+            </Link>
           </p>
         </div>
 

@@ -44,8 +44,8 @@ type Input = {
   goals?: string[] | null;
 };
 
-const ACTIVITY_FACTOR: Record<string, number> = { starting: 1.3, regular: 1.5, competitive: 1.65, elite: 1.8 };
-const PROTEIN_PER_KG: Record<string, number> = { starting: 0.9, regular: 1.4, competitive: 1.6, elite: 1.8 };
+export const ACTIVITY_FACTOR: Record<string, number> = { starting: 1.3, regular: 1.5, competitive: 1.65, elite: 1.8 };
+export const PROTEIN_PER_KG: Record<string, number> = { starting: 0.9, regular: 1.4, competitive: 1.6, elite: 1.8 };
 
 export function targetsFor(p: Input): Targets {
   const female = p.sex === "female";

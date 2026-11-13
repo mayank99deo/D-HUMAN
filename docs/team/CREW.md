@@ -1,6 +1,6 @@
 # The D-Human crew
 
-Nine AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
+Ten AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
 
 | Agent | Role | Call them for |
 | --- | --- | --- |
@@ -13,16 +13,18 @@ Nine AI agents, each set up as a specialist with the working standards of a seni
 | `ux-retention-designer` | UI/UX and engagement designer | Interaction, motion, onboarding, habits and return visits, ethically |
 | `graphic-designer` | Visual and graphic designer | Tokens, type, icons, pictograms, data visuals, share cards, visual QA |
 | `qa-security-engineer` | QA and security test engineer | End-to-end testing, automated tests, security and privacy holes, fixes |
+| `seo-lead` | Principal SEO and organic growth lead | Search strategy and keyword research (India first), site architecture, technical SEO, structured data, health content that meets Google's bar, organic growth |
 
 ## How work flows
 
 1. **Mayank sets the goal.**
 2. **`svp-product` writes the plan** in `docs/team/plans/`: outcome, scope, tasks with owners, acceptance criteria, risks, and decisions for Mayank.
 3. **Designers go first** when a feature is new: `product-designer` specs it, and `ux-retention-designer` and `graphic-designer` shape how it feels and looks.
-4. **Engineers build:** `staff-engineer` leads; `systems-data-engineer` owns data and infrastructure; `ai-efficiency-lead` signs off on any Claude call.
-5. **`qa-security-engineer` tests and attacks it.**
-6. **`svp-product` reviews the integrated result** against the acceptance criteria, and `chief-of-staff` checks it's ready for users.
-7. **The main session (the orchestrator) logs it in `MEMORY.md`,** and commits and pushes only after Mayank agrees.
+4. **`seo-lead` shapes anything public** (pages, URLs, titles, copy meant to be found) before it's built.
+5. **Engineers build:** `staff-engineer` leads; `systems-data-engineer` owns data and infrastructure; `ai-efficiency-lead` signs off on any Claude call.
+6. **`qa-security-engineer` tests and attacks it.**
+7. **`svp-product` reviews the integrated result** against the acceptance criteria, and `chief-of-staff` checks it's ready for users.
+8. **The main session (the orchestrator) logs it in `MEMORY.md`,** and commits and pushes only after Mayank agrees.
 
 Agents can't start other agents, so the main Claude Code session dispatches the crew from the SVP's plan. To use one directly, ask Claude Code, for example: "have the qa-security-engineer test the upload flow".
 
