@@ -177,7 +177,19 @@ export const StackSchema = z.object({
       timing: text,
       duration: text,
       cautions: maybe,
-      brands: lenientArray(z.object({ brand: z.string(), product: text, url: maybe, note: maybe })),
+      // Since 2026-11-13: the rule that earned the item, and brand prices for budgets. Older stacks have neither.
+      rule: z.string().nullable().optional(),
+      brands: lenientArray(
+        z.object({
+          brand: z.string(),
+          product: text,
+          url: maybe,
+          note: maybe,
+          price_inr: z.number().nullable().optional(),
+          pack: z.string().nullable().optional(),
+          monthly_inr: z.number().nullable().optional(),
+        }),
+      ),
     }),
   ),
   skip: lenientArray(z.object({ name: z.string(), why: text })),

@@ -1,6 +1,8 @@
 import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { monthlyInr } from "@/lib/domain/budget";
+import type { StackBrand } from "@/lib/domain/supplements";
 import { MODELS, VOICE, anthropic, assertComplete, extractJson, fallbackFor, languageRule, logUsage, runWithWebSearch } from "./client";
 import type { StackPlan } from "./schemas";
 
@@ -8,26 +10,35 @@ import type { StackPlan } from "./schemas";
 // Claude does two small jobs here: find brands for a nutrient (shared by everyone,
 // cached monthly in brand_picks) and translate a plan for Hindi and Hinglish readers.
 
-export type Brand = { brand: string; product: string; url: string | null; note: string | null };
+export type Brand = StackBrand;
 
+// Brands across price points, so a stack can be fitted to someone's budget
+// (lib/domain/budget.ts): best first, each with its listed price and how long a
+// pack lasts at our dose. Code turns that into a monthly cost and drops odd numbers.
 const BRAND_SYSTEM = `${VOICE}
 
 You find supplement brands sold in India, on merit. D-Human has no brand partners.
-Search the web, then name 2–3 well-regarded brands for the product you're given, each with a product page you found: the brand's own site, or a major Indian pharmacy or marketplace page. Prefer makers with third-party testing or GMP certification and clean labels (no artificial colours, minimal fillers). In "note", say in one short sentence what makes it a good pick. Never invent a product or a URL. Never describe your searching.
-Finish with one JSON object in a \`\`\`json block: {"brands":[{"brand","product","url","note"}]}. If nothing suitable turns up, return {"brands":[]}.`;
+Search the web, then name 3–5 well-regarded brands for the product you're given, from an affordable option to a premium one, each with a product page you found: the brand's own site, or a major Indian pharmacy or marketplace page. Prefer makers with third-party testing or GMP certification and clean labels (no artificial colours, minimal fillers). List them best first, by quality, not by price. In "note", say in one short sentence what makes it a good pick.
+For each, give "price_inr": the pack price in rupees as listed on the page you found, "pack": the pack size (e.g. "60 tablets", "1 kg"), and "days": how many days one pack lasts at the dose you're given. Use null for any of these the page doesn't show; never guess a price. Never invent a product or a URL. Never describe your searching.
+Finish with one JSON object in a \`\`\`json block: {"brands":[{"brand","product","url","note","price_inr","pack","days"}]}. If nothing suitable turns up, return {"brands":[]}.`;
+
+const num = z.preprocess((v) => (typeof v === "string" ? Number(v.replace(/[^\d.]/g, "")) || null : v), z.number().nullable()).catch(null).default(null);
 
 const BrandSchema = z.object({
   brand: z.string().min(1),
   product: z.string().default(""),
   url: z.string().nullable().default(null),
   note: z.string().nullable().default(null),
+  price_inr: num,
+  pack: z.string().nullable().catch(null).default(null),
+  days: num,
 });
 
-export async function findBrands(input: { nutrient: string; form: string }): Promise<{ brands: Brand[]; model: string }> {
+export async function findBrands(input: { nutrient: string; form: string; dose: string }): Promise<{ brands: Brand[]; model: string }> {
   const { text, model } = await runWithWebSearch({
     job: "stack",
     system: BRAND_SYSTEM,
-    prompt: `Find brands sold in India for: ${input.nutrient}, as ${input.form}. Two searches at most.`,
+    prompt: `Find brands sold in India for: ${input.nutrient}, as ${input.form}, at a dose of ${input.dose}. Two searches at most.`,
     maxUses: 2,
     effort: "low",
     where: { country: "India" },
@@ -38,8 +49,11 @@ export async function findBrands(input: { nutrient: string; form: string }): Pro
     .map((b) => BrandSchema.safeParse(b))
     .filter((r) => r.success)
     .map((r) => r.data)
-    .map((b) => ({ ...b, url: b.url && /^https?:\/\//.test(b.url) ? b.url : null }))
-    .slice(0, 3);
+    .map(({ days, ...b }) => {
+      const monthly = monthlyInr(b.price_inr, days);
+      return { ...b, url: b.url && /^https?:\/\//.test(b.url) ? b.url : null, price_inr: monthly ? b.price_inr : null, monthly_inr: monthly };
+    })
+    .slice(0, 5);
   return { brands, model };
 }
 

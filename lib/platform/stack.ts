@@ -113,7 +113,8 @@ export async function startStack(userId: string): Promise<StackStart> {
       conditions: profile.conditions,
       medications: profile.medications,
     });
-    const items = await Promise.all(planned.items.map(async ({ rule, ...item }) => ({ ...item, brands: await brandsFor(rule, profile.diet) })));
+    // Items keep their rule (typical prices for budgets) and come in priority order.
+    const items = await Promise.all(planned.items.map(async (item) => ({ ...item, brands: await brandsFor(item.rule, profile.diet) })));
     const english = floorStack(
       { items, skip: planned.skip, food_first: planned.food_first, see_doctor: planned.see_doctor },
       markers.map((m) => ({ key: m.key, name: markerDef(m.key)?.name ?? m.name, status: m.status, flag: asFlag(m.flag) })),

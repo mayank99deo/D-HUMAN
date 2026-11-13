@@ -4,6 +4,7 @@ import { z } from "zod";
 import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
+import { BUDGET_IDS } from "@/lib/domain/budget";
 import { ACTIVITY_IDS, CONDITION_IDS, DIET_IDS, GOAL_IDS, LANGUAGE_IDS, LEVEL_IDS, SEX_IDS } from "@/lib/domain/options";
 import { ensureEvents } from "@/lib/platform/events";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -35,6 +36,7 @@ const patchSchema = (thisYear: number) =>
       conditions: z.array(z.enum(CONDITION_IDS)).max(10),
       medications: text(400),
       currentSupplements: text(400),
+      supplementBudget: z.enum(BUDGET_IDS).nullable(),
       consent: z.literal(true),
       complete: z.literal(true),
     })

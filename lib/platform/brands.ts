@@ -23,7 +23,7 @@ export async function brandsFor(rule: RuleId, diet: string | null): Promise<Bran
 }
 
 async function lookup(rule: RuleId, diet: string | null): Promise<Brand[]> {
-  const { key, nutrient, form } = brandQuery(rule, diet);
+  const { key, nutrient, form, dose } = brandQuery(rule, diet);
   const d = await db();
   const picks = schema.brandPicks;
   const [row] = await d.select().from(picks).where(eq(picks.key, key)).limit(1);
@@ -47,7 +47,7 @@ async function lookup(rule: RuleId, diet: string | null): Promise<Brand[]> {
   if (!claimed) return cached;
 
   try {
-    const { brands, model } = await findBrands({ nutrient, form });
+    const { brands, model } = await findBrands({ nutrient, form, dose });
     await d
       .update(picks)
       .set({ brands, status: brands.length ? "ok" : "empty", model, fetchedAt: new Date() })

@@ -69,10 +69,23 @@ describe("stack rules", () => {
     assert.equal(floored.items.length, 0); // the floor removes it
     assert.match(floored.see_doctor.join(" "), /Vitamin D/);
   });
-  it("shares brand look-ups by rule and diet variant", () => {
-    assert.equal(brandQuery("vitamin_d3", "vegan").key, "vitamin_d3:vegan");
-    assert.equal(brandQuery("vitamin_d3", "nonveg").key, "vitamin_d3:any");
-    assert.equal(brandQuery("b12", "veg").key, "b12:any");
-    assert.equal(brandQuery("omega3", "veg").key, "omega3:veg");
+  it("shares brand look-ups by rule and diet variant, with the dose for monthly prices", () => {
+    assert.equal(brandQuery("vitamin_d3", "vegan").key, "v2:vitamin_d3:vegan");
+    assert.equal(brandQuery("vitamin_d3", "nonveg").key, "v2:vitamin_d3:any");
+    assert.equal(brandQuery("b12", "veg").key, "v2:b12:any");
+    assert.equal(brandQuery("omega3", "veg").key, "v2:omega3:veg");
+    assert.match(brandQuery("protein", "nonveg").dose, /scoop/);
+  });
+  it("orders the stack by priority: out of range, then edge of range, then the biggest food gap", () => {
+    const plan = planStack(ctx({
+      diet: "veg",
+      markers: [mk("b12", 230, "pg/mL", "edge_low"), mk("triglycerides", 210, "mg/dL", "high"), mk("vitamin_d", 25, "ng/mL", "low")],
+      gaps: [
+        { key: "calcium_mg", label: "Calcium", pct: 45 },
+        { key: "protein", label: "Protein", pct: 50 },
+        { key: "zinc_mg", label: "Zinc", pct: 30 },
+      ],
+    }));
+    assert.deepEqual(plan.items.map((i) => i.rule), ["vitamin_d3", "omega3", "b12", "zinc", "calcium", "protein"]);
   });
 });

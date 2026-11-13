@@ -32,6 +32,17 @@ The running record of this project: where things stand, why they are the way the
 - **Landing mode (2026-11-11):** `lib/site-mode.ts` reads `NEXT_PUBLIC_SITE_MODE`; open mode is the default. Waitlist mode renders the old page unchanged. The platform ignores the mode, so existing users keep their links.
 - **Vercel Web Analytics and Speed Insights (2026-11-11):** both on, via `components/Vitals.tsx` in the root layout (`@vercel/analytics`, `@vercel/speed-insights`), with ids and query strings stripped from URLs before they're sent.
 - **Essential panel (2026-11-11):** reports are read against Nue Health's panel (Core 77, Advanced 93 per sex; `docs/research/nuehealth-biomarkers.md`): Claude copies those markers and only lab-flagged extras, and ratios are worked out in code, never by Claude. Mayank asked for this to cut API cost.
+- **Stack screen and budgets (2026-11-13, Mayank):**
+  - **The supplements lead,** in priority order: a result outside its range, then one at the edge of range, then food gaps, biggest first (`planStack` sorts).
+  - **Doctor notes close the page** in a small card: the flagged markers' names, "We've left this out of your stack; a doctor's look will help you even more." The safety floor still removes those items.
+  - **A held stack says so at the top** in one "!" line. That's an urgent result ("needs medical advice today") or pregnancy. Mayank chose this over putting urgent notes at the end too.
+  - **Monthly budget slabs** (`lib/domain/budget.ts`, saved in `profiles.supplement_budget`, migration `0007`): Under ₹1,000 (added at Mayank's OK), ₹1,000–2,000, ₹2,000–3,000, ₹3,000–4,000, ₹4,000–5,000, Above ₹5,000, Not sure.
+  - **`fitBudget`:**
+    - First it covers items in priority order at each one's cheapest brand. Whatever doesn't fit goes to "When your budget allows".
+    - Then it upgrades, in the same order, to the best brand the rest allows.
+    - Open budgets (above ₹5,000, not sure, none yet) get everything at the top brand. Re-fitting happens in the browser, with no rebuild.
+  - **Prices** come from the shared monthly brand search (keys `v2:<rule>:<variant>`): 3–5 brands, best first, each with its listed pack price and how long a pack lasts at our dose. Code works out ₹ a month and drops odd numbers.
+  - **Without a price,** `TYPICAL_MONTHLY_INR` (rough figures, shown as "typical price") fills in. Older stacks are matched to it by nutrient name.
 - **Brands in stacks (2026-11-09):** Mayank asked for named brands. The platform's stack names 2–3 brands sold in India per item, found by Claude's web search, under a plain note that D-Human has no brand partners and earns nothing from them. The landing page still names no brands.
 - **Safety floor (2026-11-09):** reads are AI and say so; they never diagnose. Conservative doctor and urgent thresholds in `lib/domain/markers.ts` (checked only when units match) force a "Doctor first" verdict whatever Claude writes. Stacks only add an item for a low or edge marker or a repeated food gap; iron only with low ferritin and a doctor check.
 - **Copy:** taken from the pitch deck. No disease claims; use "screening", "markers" and "risk". Only sourced numbers: 76% vitamin D deficient across 2.2 lakh lab tests in 27 Indian cities, 2023 (source in the pitch deck). Never name lab or supplement brands on the landing page (the platform's stack is the one exception, for supplements; see "Brands in stacks"); attribute as "research across…". Anything else shown as data is labelled illustrative. No test-plan prices until partner pricing is confirmed (the platform's ₹49 pass is Mayank's price).
@@ -98,7 +109,11 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Re-run Lighthouse on the live site after the open landing page and Speed Insights
 - [ ] Decide: purging report files after a read, Supabase Pro, share-card content, Hindi and Hinglish versions of the fixed doctor wording, and what to do about accounts made before the 18+ rule
 - [ ] Human review before inviting people: a doctor on the safety thresholds and wording, and a DPDP Act privacy check
-- [ ] Platform: run the live Claude read once against `tests/fixtures/sample-report.pdf` and a real report, and compare the `[ai] extract` cost line with the 2026-11-09 one (the essential-panel prompt hasn't run live yet)
+- [ ] Check `TYPICAL_MONTHLY_INR` in `lib/domain/budget.ts` against real Indian prices: these are Claude's rough 2026 figures, used only when the brand search found no price
+- [ ] Brand searches with prices cost more: about $0.09 (vitamin D3) and $0.17 (iron) each with 3 searches on 2026-11-13, now capped at 2. They run once a month per supplement and diet variant, shared by everyone; re-measure the next time a cache key refreshes
+- [ ] Interim lab reports: detect "Report Status: Interim" / "Result/s to follow", tell the person to upload the final report, and decide whether that read should count against their plan (dry run 2026-11-13: an interim report used a read and the read never said results were pending)
+- [ ] Lower-is-better markers (Apo B, LDL, non-HDL, Lp(a), triglycerides, hsCRP): a printed lower bound shouldn't flag a low value. Apo B 46 on a 46–174 range became "edge low", the read suggested adding fats, and meal tips called it something to watch
+- [ ] Platform: run the live Claude read once on a real (long) Indian full-body report; the sample report was measured on 2026-11-13 (see Log)
 - [ ] Platform next: doctor review of reads, phone/WhatsApp sign-in, Hindi app labels, speech-to-text for browsers without the Web Speech API, uploads over 4 MB
 
 - [ ] Add DMARC: TXT on `_dmarc.dhuman.fit` with `v=DMARC1; p=none;`
@@ -112,6 +127,48 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-13
+- **Stack screen: supplements first, doctor notes last, and a monthly budget (Mayank's request).** Design in Decisions ("Stack screen and budgets").
+  - **New:**
+    - `lib/domain/budget.ts`: slabs, `fitBudget`, monthly prices, typical prices.
+    - Migration `0007_supplement_budget`, safe to run twice; the deploy runs it.
+    - `supplementBudget` in `/api/profile`.
+  - **Changed:**
+    - The priority sort in `planStack`.
+    - Brand search with prices, 2 searches, up to 5 brands, keys `v2:`.
+    - Items keep their `rule`.
+    - The Stack page passes flagged markers and the hold reason.
+    - `Stack.tsx`, reworked.
+  - **Checked:**
+    - Typecheck, lint, 196 tests (budget and priority tests new), the production build.
+    - A live stack for demo Priya: vitamin D3 at about ₹226 a month, iron about ₹500, real brands and prices. Brand searches cost $0.09 and $0.17 with 3 searches, so they're now capped at 2.
+    - Two seeded local people in WebKit as an iPhone:
+      - Five items at four budgets: Under ₹1,000 kept vitamin D3, magnesium and zinc at ₹840 and left omega-3 and protein for later; open budgets gave all five, ₹7,300.
+      - The small doctor card at the end.
+      - An urgent haemoglobin putting the stack on hold with the top line.
+    - An old stack without prices shows typical prices, not "₹0".
+  - **Not checked:** a stack in Hindi or Hinglish (translation keeps the items and brands; the new labels are English like the rest of the screen).
+- **Dry run, report to stack plus a day of photo meals, live key (Mayank's request).** A new local person: 25, male, Delhi, gym 4 times a week, non-veg, English. Report: Mayank's `Z615.pdf`, a 6-page Dr Lal PathLabs interim heart screen for "DUMMY".
+  - **Read:**
+    - Copying the values (Haiku 5.5): 13,424 in and 1,209 out, $0.0019, 7.9 s. The read (Sonnet 5.5): 2,491 in and 938 out, $0.0144, 8.6 s. 16.8 s end to end.
+    - Kept Apo B 46 (edge low) and hsCRP 1.0 (edge high). Dropped hs troponin I 4 ng/L: off panel, not flagged. Invented nothing for the pending rows.
+    - Verdict "Ready to build muscle. Keep an eye on inflammation." (go with tweaks). The two open items above came from this run.
+  - **Stack:** built by the rules: nothing to add, skip a multivitamin and biotin; $0, 4.7 s. No brand search, since there were no items.
+  - **Events:** no search; strength has no event search.
+  - **Meals, three photos shrunk to 1280 px as the app does:**
+    - Poha: 295 kcal, $0.0006, 3,672 tokens in.
+    - Thali: 1,005 kcal, $0.0008.
+    - Chicken curry with rice: 465 kcal, $0.0007.
+    - 4.4 to 6.6 s each. The day came to 1,765 of 2,790 kcal and 68 of 115 g protein.
+  - **Wraps:** $0.0004 each (week and month).
+  - **Monthly AI cost at 3 photo meals a day plus 1 report:** about $0.08 to $0.095, roughly ₹7 to ₹8 at ₹88 to the dollar (assumed), against the ₹49 pass.
+- **Live AI costs measured locally (Mayank's new local key), demo Priya (40, runner), dev server:**
+  - **Report read of `tests/fixtures/sample-report.pdf`:** 45.6 s end to end. Copying the values (Haiku 5.5) took 7,803 tokens in and 3,225 out, about $0.0024, in 13.5 s. The read (Sonnet 5.5) took 3,705 in and 1,874 out, about $0.0261, in 17.8 s. About $0.029 a read, against $0.002 and $0.024 on 2026-11-09: the essential panel saves nothing on this short report; it was meant for long full-body reports. No event search ran.
+  - **Meals (Haiku 5.5):** about $0.0005 each, in 2.9 to 5.3 s:
+    - English "2 rotis, dal and a bowl of curd": 496 kcal.
+    - Hinglish by voice: 590 kcal, title in Latin letters.
+    - Hindi typed in Devanagari: 410 kcal, title in Devanagari.
+  - Stacks are built in code, so they cost nothing per person; the monthly brand search wasn't measured.
+- **Push `5e4950a`:** the iPhone tab fix below. Live on www.dhuman.fit and www.d-human.fit about 20 s later (the CSS has the 3.5rem scroll padding; `/signin` 200; `/fuel` signed out redirects to `/signin`).
 - **iPhone: tabs opened part-way down, and blank pages while loading (Mayank, on his iPhone in the Google app's browser):**
   - **Reported:** the text at the top of each page wasn't visible until he scrolled up, pages looked stale after switching tabs, and his screenshot showed Home opening on the verdict.
   - **Cause, reproduced in WebKit:** Next called `scrollIntoView` on 19 of 21 tab switches, because html's scroll padding (5rem) was taller than the app bar (3.5rem). With iPhone Safari's handling of that call mimicked (it ignores the padding), every switch to Home ended 400 px down, on the verdict, matching his screenshot. Details in Gotchas.

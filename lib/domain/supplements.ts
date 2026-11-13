@@ -21,7 +21,19 @@ export type StackItem = {
   timing: string;
   duration: string;
   cautions: string | null;
-  brands: { brand: string; product: string; url: string | null; note: string | null }[];
+  /** The rule that earned it; picks typical prices when a brand has none (lib/domain/budget.ts). */
+  rule?: RuleId;
+  brands: StackBrand[];
+};
+/** A brand found by the monthly search. Prices are as listed then, for a month at this item's dose. */
+export type StackBrand = {
+  brand: string;
+  product: string;
+  url: string | null;
+  note: string | null;
+  price_inr?: number | null;
+  pack?: string | null;
+  monthly_inr?: number | null;
 };
 export type Plan = {
   items: StackItem[];
@@ -231,6 +243,20 @@ function zinc(ctx: RuleContext): Built | null {
 
 const RULES = [vitaminD, b12, iron, folate, magnesium, omega3, calcium, protein, zinc];
 
+// ── Priority ──────────────────────────────────────────────────────────────
+// The order a budget spends in: a result outside its range first, then one at the
+// edge of range, then food gaps, biggest gap first. Ties keep the order above.
+
+const GAP_KEY: Partial<Record<RuleId, Gap["key"]>> = { magnesium: "magnesium_mg", calcium: "calcium_mg", protein: "protein", zinc: "zinc_mg" };
+
+function rank(ctx: RuleContext, b: Built): [number, number] {
+  const statuses = b.markers.map((k) => byKey(ctx, k)?.status);
+  if (statuses.some((s) => s === "low" || s === "high")) return [0, 0];
+  if (statuses.length) return [1, 0];
+  const key = GAP_KEY[b.rule];
+  return [2, (key && gapOf(ctx, key)?.pct) ?? 100];
+}
+
 // ── Food first and what to skip ───────────────────────────────────────────
 
 const FOOD_FIRST: Partial<Record<RuleId, (ctx: RuleContext) => string>> = {
@@ -278,6 +304,11 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
   }
 
   let built = RULES.map((r) => r(ctx)).filter((b): b is Built => !!b);
+  built.sort((a, b) => {
+    const [x, p] = rank(ctx, a);
+    const [y, q] = rank(ctx, b);
+    return x - y || p - q;
+  });
 
   // Kidney disease: no magnesium, protein powder or extra calcium on our say-so.
   if (conditions.has("kidney")) {
@@ -300,7 +331,8 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
 }
 
 // What to search for when looking up brands for a rule, shared by everyone with that rule and diet.
-export function brandQuery(rule: RuleId, diet: string | null): { key: string; nutrient: string; form: string } {
+// The dose lets the search say how long a pack lasts, so prices become a monthly cost.
+export function brandQuery(rule: RuleId, diet: string | null): { key: string; nutrient: string; form: string; dose: string } {
   const plant = PLANT_DIETS.has(diet ?? "");
   const vegan = diet === "vegan" || diet === "jain";
   const map: Record<RuleId, [string, string]> = {
@@ -314,10 +346,22 @@ export function brandQuery(rule: RuleId, diet: string | null): { key: string; nu
     protein: ["Protein powder", vegan ? "pea or soy protein powder" : plant ? "whey protein vegetarian" : "whey protein"],
     zinc: ["Zinc", "zinc picolinate or gluconate"],
   };
+  const dose: Record<RuleId, string> = {
+    vitamin_d3: "1,000–2,000 IU a day",
+    b12: "500–1,000 mcg a day",
+    iron: "18–30 mg of elemental iron a day",
+    folate: "400 mcg a day",
+    magnesium: "200–300 mg of elemental magnesium a day",
+    omega3: "1–2 g of EPA and DHA together a day",
+    calcium: "500 mg a day",
+    protein: "one scoop (20–30 g of protein) a day",
+    zinc: "10–15 mg a day",
+  };
   const [nutrient, form] = map[rule];
-  // One cache entry per rule and the diet variant that changes the product.
+  // One cache entry per rule and the diet variant that changes the product. "v2" entries
+  // carry prices for budgets (2026-11-13); older ones are ignored and searched again.
   const variant = rule === "vitamin_d3" || rule === "protein" ? (vegan ? "vegan" : plant ? "veg" : "any") : rule === "omega3" ? (plant ? "veg" : "any") : "any";
-  return { key: `${rule}:${variant}`, nutrient, form };
+  return { key: `v2:${rule}:${variant}`, nutrient, form, dose: dose[rule] };
 }
 
 export { markerName };

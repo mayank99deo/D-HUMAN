@@ -87,6 +87,8 @@ export const profiles = pgTable("profiles", {
   conditions: text("conditions").array().notNull().default(sql`'{}'::text[]`),
   medications: text("medications"),
   currentSupplements: text("current_supplements"),
+  // Monthly supplement budget, one of BUDGET_IDS in lib/domain/budget.ts; null until they pick one.
+  supplementBudget: text("supplement_budget"),
   consentAt: timestamp("consent_at", { withTimezone: true }),
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   // When they finished or skipped the first-run tour; null means it's still to show.
