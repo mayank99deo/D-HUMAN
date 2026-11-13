@@ -42,7 +42,7 @@ export function Hero() {
         )}
         {/* "Join the waitlist" links land here while the closing section is hidden. Open mode keeps
             the anchor so old links to /#join still reach the start form. */}
-        <div id="join" className="mt-9 max-w-xl">
+        <div id="join" className="mt-9 max-w-xl scroll-mt-6">
           {isWaitlist ? <WaitlistForm source="hero" /> : <StartForm />}
         </div>
       </div>

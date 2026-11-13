@@ -11,6 +11,7 @@ import { dietPicture, logsBetween, totalsOf } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { localDate } from "@/lib/platform/profile";
+import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Fuel" };
 
@@ -60,7 +61,7 @@ async function Fuel() {
 
 export default function FuelPage() {
   return (
-    <Suspense fallback={<main className="min-h-[60dvh]" />}>
+    <Suspense fallback={<PageLoading title="Fuel" main="max-w-3xl lg:max-w-6xl lg:pt-12" />}>
       <Fuel />
     </Suspense>
   );

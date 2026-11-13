@@ -5,6 +5,7 @@ import { aiMode } from "@/lib/ai/client";
 import { requireMember } from "@/lib/platform/member";
 import { localDate } from "@/lib/platform/profile";
 import { hasAnyLogs, listWraps, periodLabel, periodRange, type Period } from "@/lib/platform/wraps";
+import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Wraps" };
 
@@ -41,7 +42,7 @@ async function Wraps() {
 
 export default function WrapsPage() {
   return (
-    <Suspense fallback={<main className="min-h-[60dvh]" />}>
+    <Suspense fallback={<PageLoading title="Wraps" />}>
       <Wraps />
     </Suspense>
   );

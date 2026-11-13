@@ -4,6 +4,7 @@ import { Settings } from "@/components/platform/Settings";
 import { requireMember } from "@/lib/platform/member";
 import { paidPasses } from "@/lib/platform/plan";
 import { currentPlan } from "@/lib/platform/plan-state";
+import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -40,7 +41,7 @@ async function Content() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={<main className="min-h-[60dvh]" />}>
+    <Suspense fallback={<PageLoading title="You" main="max-w-2xl lg:pt-12" />}>
       <Content />
     </Suspense>
   );

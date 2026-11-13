@@ -10,7 +10,8 @@ export function Closing({ className = "py-28 sm:py-40" }: { className?: string }
       // The hero holds #join in open mode, so this one can't share it.
       id={isWaitlist ? "join" : "start"}
       aria-labelledby="join-title"
-      className={`relative isolate overflow-hidden border-t border-paper/15 ${className}`}
+      // The landing header is 5rem tall: html's 3.5rem scroll padding plus this.
+      className={`relative isolate scroll-mt-6 overflow-hidden border-t border-paper/15 ${className}`}
     >
       <SignalField className="absolute inset-0 -z-20 h-full w-full" seed={3} focus={[0.85, 0.4]} />
       <div

@@ -7,6 +7,7 @@ import type { StackPlan } from "@/lib/ai/schemas";
 import { markerDef } from "@/lib/domain/markers";
 import { requireMember } from "@/lib/platform/member";
 import { latestReadyReport, latestStack } from "@/lib/platform/stack";
+import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Stack" };
 
@@ -43,7 +44,7 @@ async function Stack() {
 
 export default function StackPage() {
   return (
-    <Suspense fallback={<main className="min-h-[60dvh]" />}>
+    <Suspense fallback={<PageLoading title="Your stack" />}>
       <Stack />
     </Suspense>
   );

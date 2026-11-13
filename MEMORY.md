@@ -8,7 +8,7 @@ The running record of this project: where things stand, why they are the way the
 - **Open to everyone, with a paywall (2026-11-11):** the landing page shows "Start free" and "Sign in" instead of the waitlist (`NEXT_PUBLIC_SITE_MODE=waitlist` brings the old page back after a redeploy; nothing was deleted). Free: 2 report reads and 20 meal logs. Then ₹49 for 30 days through Razorpay (one payment, no renewal): 3 reads in the pass, and 5 meal logs a day for everyone. Needs `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` in Vercel and the webhook in Razorpay's dashboard (steps in `docs/platform/PHASE-1.md`); until then the paywall says "Payments open soon".
 - **Reports are AI-analysed only (2026-11-11):** no doctor review for now; never say a doctor reviews reports. "See a doctor" flags for the person's own doctor stay.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
-- **Live:** https://www.dhuman.fit (`dhuman.fit` redirects there) and https://d-human.vercel.app. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
+- **Live:** https://www.dhuman.fit (`dhuman.fit` redirects there), https://www.d-human.fit (`d-human.fit` redirects there; same deployment, which Mayank uses on his phone) and https://d-human.vercel.app. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
 - **Stack:** Next.js 16.4.2 (App Router, Cache Components on), React 19.3, Tailwind CSS 4, Motion 14.6, zod 4, resend 6.34. Platform: drizzle-orm 0.45 (Postgres via `postgres` 4.1, or embedded `@electric-sql/pglite` 0.5 locally), `@anthropic-ai/sdk` 1.6 (Haiku 5.5 and Sonnet 5.5 per job, see Decisions). Node 24 via fnm.
 - **Signups:** browser → `/api/waitlist` → Google Apps Script web app (`google-apps-script/Code.gs`) → the `Waitlist` tab of the Google Sheet (13 columns). The optional follow-up answers go to `/api/waitlist/details` with an HMAC token. Second source: a Google Form, built by `setupForm()` in the same script. Its trigger files each answer in the `Waitlist` tab with Source `google-form` and calls `/api/waitlist/form` (authorised with the webhook secret) for the welcome email and Resend contact.
@@ -41,7 +41,8 @@ The running record of this project: where things stand, why they are the way the
 - **Touch:** hover styles only under `(hover: hover)`, pressed (`:active`) feedback instead, tap targets of at least 44 px, email keyboard shows "Send".
 - **Devices (2026-11-12, Mayank asked for the best experience on phone, tablet and laptop):**
   - **Phones:** one column, tab bar at the bottom.
-  - **Phones turned sideways:** the `short` variant in `globals.css` (landscape, at most 32rem tall). The app's top bar scrolls away and the tab bar is compact, icon beside label, so the page keeps the height. Use `short:max-lg:` so laptops in a short window keep the rail.
+  - **The app's top bar is fixed, not sticky (2026-11-13),** over a 3.5rem spacer (`pt-14` in the app layout), and html's `scroll-padding-top` equals it. See the iPhone gotcha.
+  - **Phones turned sideways:** the `short` variant in `globals.css` (landscape, at most 32rem tall). The app's top bar scrolls away (`short:max-lg:absolute`) and the tab bar is compact, icon beside label, so the page keeps the height. Use `short:max-lg:` so laptops in a short window keep the rail.
   - **Tablets, from `md` (768 px):** the home bib and verdict sit side by side, everything else full width below. Onboarding's buttons follow the question instead of sitting at the bottom of a tall screen.
   - **Laptops, from `lg` (1024 px):** the side rail. Home keeps the bib pinned on the left; Fuel keeps today's ring pinned on the left while meals are logged on the right. Home's markers pair up only from `xl` (1280 px).
   - **Kept as one reading column:** the report, Stack, Settings and Upload (`max-w-2xl`/`3xl`), because they read as documents and forms.
@@ -76,11 +77,13 @@ The running record of this project: where things stand, why they are the way the
 - **Scrolling chip rows:** hidden radios (`sr-only`, absolutely placed) inside a sideways-scrolling row widen the page unless the scroller is `relative`.
 - **Function size on Vercel:** files reachable from server code are traced into every function. PGlite (62 MB) and the local `.data` folder were, until `outputFileTracingExcludes` in `next.config.ts`. Check sizes with the `.nft.json` files under `.next/server/app` after a build.
 - **Drizzle journal times:** migrations run if their journal `when` is later than the last one applied, so a hand-written entry must sit in time order or databases that ran a later one skip it. `tests/migrations.test.ts` checks the order. Hand-written migrations also need a snapshot: generate with drizzle-kit, then rewrite its SQL to be safe to run twice.
+- **iPhone tab switches opened part-way down (fixed 2026-11-13):** after a navigation Next.js only resets to the top (`scrollTop = 0`) when the new page's top edge sits at or below html's `scroll-padding-top`; otherwise it calls `scrollIntoView`. The padding was 5rem (for the landing's header) against the app's 3.5rem bar, so every tab switch took the `scrollIntoView` path. iPhone Safari ignores the root's scroll padding there (webkit.org/b/179379), so pages opened 56 px down with their first lines under the bar; on Home, Safari's scroll anchoring then carried the page to the verdict when the skeleton was swapped for the dashboard. Rules: keep `scroll-padding-top` equal to the app bar (the landing's anchor targets add `scroll-mt-6`), and keep the bar `fixed`, not `sticky`: iOS 26 ignores `scrollTo(0, 0)` near a stuck sticky element (webkit.org/b/304489). Check: count `scrollIntoView` calls on tab switches; it should be 0.
+- **Safari's engine on this Mac:** Playwright's WebKit runs headlessly from the session scratchpad (`npx playwright install webkit`) and can sign in with a `dh_session` cookie minted by `/api/dev/session` on the dev server. It reproduces engine behaviour (scrolling, scroll anchoring, layout), not iOS toolbars, safe areas or touch momentum. Production-build checks of the app need `ANTHROPIC_API_KEY=` and `D_HUMAN_AI_MOCK=1` on `next start`, or meals call the live API.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
 ## Open items
 
-- [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that.
+- [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [ ] Razorpay: add the three variables in Vercel (test keys first) and the webhook in Razorpay's dashboard (URL, secret, events `payment.captured`, `payment.authorized`, `order.paid`), pay once in test mode end to end, then switch to live keys
 - [ ] Razorpay usually wants Terms, Privacy, Refund and Contact pages on the site; none exist yet (Mayank's legal call, including whether passes are refundable)
 - [ ] Footer says imaging and clinical tests are run by licensed partner centres; check that's still true now that people upload their own reports
@@ -108,7 +111,25 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-13
+- **iPhone: tabs opened part-way down, and blank pages while loading (Mayank, on his iPhone in the Google app's browser):**
+  - **Reported:** the text at the top of each page wasn't visible until he scrolled up, pages looked stale after switching tabs, and his screenshot showed Home opening on the verdict.
+  - **Cause, reproduced in WebKit:** Next called `scrollIntoView` on 19 of 21 tab switches, because html's scroll padding (5rem) was taller than the app bar (3.5rem). With iPhone Safari's handling of that call mimicked (it ignores the padding), every switch to Home ended 400 px down, on the verdict, matching his screenshot. Details in Gotchas.
+  - **Fixed:**
+    - html `scroll-padding-top` is 3.5rem, the app bar's height. The landing's `#join` and closing section add `scroll-mt-6`, so its anchors still land 80 px down (checked at 390 and 1280 px).
+    - The app's top bar is `fixed` over a `pt-14` spacer instead of `sticky` (`Nav.tsx`, app layout). It still scrolls away on sideways phones and starts after the rail on laptops.
+    - Tab pages show their own title, "Loading…" and, after 6 s, a Reload offer while their data streams in (`components/platform/PageLoading.tsx` for Fuel, Upload, Wraps, Stack and Settings). They were an empty black page until the server answered.
+    - The tab bar's black carries on below it (`after:`), so the page no longer shows through the strip under it when the browser hides its toolbars (seen in his screenshot). Off at laptop width.
+  - **Checked:**
+    - In WebKit as an iPhone, plain and with iOS behaviour mimicked: 21 tab switches from 0, 30 and 600 px down, 0 `scrollIntoView` calls, every page at the top with its first line under the bar.
+    - Fresh data after switching: a meal logged behind the page shows on Fuel and Home.
+    - With navigations held 1.5 s, each tab shows its title and "Loading…" by 0.3 s.
+    - Header and tab bar geometry unchanged at 390, 844×390, 768, 1024 and 1440 px; no sideways scroll.
+    - Typecheck, lint, 185 tests and the production build.
+  - **Not checked:** a real iPhone; WebKit on a Mac has no iOS toolbars or safe areas, so the tab bar's bottom edge needs his phone.
+
 ### 2026-11-12
+- **Push `c237fc8`:** the device layouts.
 - **Every screen fitted to phones, phones turned sideways, tablets and laptops (Mayank's request):**
   - **Audit first:** every app screen and the landing at 360, 390, 844×390, 932×430, 768, 820, 1024, 1180, 1280, 1440 and 1920 px. Nothing scrolled sideways anywhere, and form fields were already 16 px, so iPhones don't zoom in on them.
   - **What was wrong:**

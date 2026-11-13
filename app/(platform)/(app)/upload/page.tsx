@@ -6,6 +6,7 @@ import { factsFor } from "@/lib/domain/facts";
 import { targetEvent } from "@/lib/platform/events";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { requireMember } from "@/lib/platform/member";
+import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Upload a report" };
 
@@ -27,7 +28,7 @@ async function Upload({ searchParams }: { searchParams: Promise<{ report?: strin
 
 export default function UploadPage({ searchParams }: PageProps<"/upload">) {
   return (
-    <Suspense fallback={<main className="min-h-[60dvh]" />}>
+    <Suspense fallback={<PageLoading title="Upload a blood report." main="max-w-2xl lg:pt-14" />}>
       <Upload searchParams={searchParams as Promise<{ report?: string }>} />
     </Suspense>
   );

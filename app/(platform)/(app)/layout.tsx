@@ -30,7 +30,9 @@ async function TourForUser() {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     // clip, not hidden: wide glows (the verdict's) can't widen the page, and sticky still works.
-    <div className="min-h-dvh overflow-x-clip pb-24 short:max-lg:pb-16 lg:pb-0 lg:pl-24">
+    // pt-14 is the room under the fixed top bar (Nav.tsx); globals.css keeps html's
+    // scroll-padding-top equal to it, so navigations reset to the very top.
+    <div className="min-h-dvh overflow-x-clip pt-14 pb-24 short:max-lg:pb-16 lg:pb-0 lg:pl-24">
       <Suspense fallback={<NavView initial="" path="" />}>
         <NavWithUser />
       </Suspense>

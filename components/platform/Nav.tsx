@@ -52,8 +52,11 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
   const active = (href: string) => path === href || (href !== "/home" && path.startsWith(href)) || (href === "/home" && path.startsWith("/reports"));
   return (
     <>
-      {/* Top bar. On a phone turned sideways it scrolls away, leaving the height to the page. */}
-      <header className="sticky top-0 z-30 flex h-14 short:max-lg:static items-center justify-between border-b border-line bg-ink/90 px-4 backdrop-blur sm:px-6">
+      {/* Top bar, fixed over a 3.5rem spacer in the app layout. Fixed, not sticky: iPhone
+          Safari can ignore scrolling to the top while a sticky bar is stuck (webkit.org/b/304489),
+          which left new tabs opening part-way down. On a phone turned sideways it scrolls away,
+          leaving the height to the page. On laptops it starts after the rail. */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-ink/90 px-4 backdrop-blur short:max-lg:absolute sm:px-6 lg:left-24">
         <Link href="/home" className="flex h-11 items-center" aria-label="D-Human home">
           <Wordmark className="h-3.5 w-auto" />
         </Link>
@@ -66,10 +69,12 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
         </Link>
       </header>
 
-      {/* Rail on wide screens, tab bar on phones and tablets: compact, icon beside label, on a phone turned sideways */}
+      {/* Rail on wide screens, tab bar on phones and tablets: compact, icon beside label, on a phone turned sideways.
+          The tab bar's black carries on below it (after:): iPhone browsers that hide their toolbars
+          keep it above the home-indicator strip and show the page scrolling underneath. Off screen elsewhere. */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ink/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:inset-y-0 lg:left-0 lg:right-auto lg:w-24 lg:border-r lg:border-t-0 lg:pt-20"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ink/95 pb-[env(safe-area-inset-bottom)] backdrop-blur after:absolute after:inset-x-0 after:top-full after:h-24 after:bg-ink lg:inset-y-0 lg:left-0 lg:right-auto lg:w-24 lg:border-r lg:border-t-0 lg:pt-20 lg:after:hidden"
       >
         <ul className="mx-auto grid max-w-lg grid-cols-5 short:max-lg:max-w-2xl lg:flex lg:max-w-none lg:flex-col lg:gap-2">
           {TABS.map((t) => {

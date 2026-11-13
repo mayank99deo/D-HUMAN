@@ -47,7 +47,13 @@
     background: var(--color-ink);
     color-scheme: dark;
     scroll-behavior: smooth;
-    scroll-padding-top: 5rem;
+    /* The app's fixed top bar (Nav.tsx) is 3.5rem tall, and this must not be more than
+       that. After a navigation Next.js only resets the page to the top when the new
+       page's top edge sits at or below this padding; when the padding was taller it
+       called scrollIntoView instead, which iPhone Safari carries out ignoring the
+       padding, so every tab opened scrolled down with its first lines under the bar.
+       The landing page's taller header adds the rest on its anchor targets (scroll-mt-6). */
+    scroll-padding-top: 3.5rem;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
