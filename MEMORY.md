@@ -127,6 +127,8 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-13
+- **Home: "Log a meal" in Today's fuel is a white button (Mayank's request),** not a quiet link (`button-primary`, 44 px tall, level with the heading). Checked at 390 and 1280 px in WebKit; typecheck, lint and the build pass.
+- **Push `b52d111`:** the stack budget below. Live about 25 s later (new build id); the deploy succeeding means Supabase took migration `0007`. Checked live: `/signin` 200, `/stack` signed out redirects to `/signin` with the "Your stack" loading title, `/api/profile` 401 signed out.
 - **Stack screen: supplements first, doctor notes last, and a monthly budget (Mayank's request).** Design in Decisions ("Stack screen and budgets").
   - **New:**
     - `lib/domain/budget.ts`: slabs, `fitBudget`, monthly prices, typical prices.

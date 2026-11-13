@@ -77,11 +77,12 @@ async function Dashboard() {
   // Today's fuel changes every day, so it sits right under the verdict.
   const fuelSection = (
     <section className="mt-14" aria-labelledby="fuel">
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <h2 id="fuel" className="text-2xl font-bold semiwide">
           Today&apos;s fuel
         </h2>
-        <Link href="/fuel" className="link-quiet min-h-11 py-2 text-sm">
+        {/* The thing people come back to do every day, so a real button, not a quiet link. */}
+        <Link href="/fuel" className="button-primary h-11 shrink-0 px-5 text-[0.9375rem]">
           Log a meal
         </Link>
       </div>
