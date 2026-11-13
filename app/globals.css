@@ -27,6 +27,10 @@
    and laptops are never this short, so they keep the full bars. */
 @custom-variant short (@media (orientation: landscape) and (max-height: 32rem));
 
+/* Phones and tablets: the main pointer is a finger. The app's screens scroll inside
+   their own frame there, not the page (app/(platform)/(app)/layout.tsx). */
+@custom-variant touch (@media (pointer: coarse));
+
 /* Archivo's width axis echoes the extended stance of the wordmark. */
 @utility wide {
   font-variation-settings: "wdth" 125;

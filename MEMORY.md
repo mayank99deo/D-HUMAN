@@ -53,6 +53,10 @@ The running record of this project: where things stand, why they are the way the
 - **Devices (2026-11-12, Mayank asked for the best experience on phone, tablet and laptop):**
   - **Phones:** one column, tab bar at the bottom.
   - **The app's top bar is fixed, not sticky (2026-11-13),** over a 3.5rem spacer (`pt-14` in the app layout), and html's `scroll-padding-top` equals it. See the iPhone gotcha.
+  - **On touch devices the screens scroll inside a fixed frame (2026-11-13),** `#app-shell` with the `touch` variant (`pointer: coarse`), and the page itself never scrolls. Spacing sits on the layer inside it, so sticky parts measure from the screen edges.
+    - `ScrollReset` puts the frame back at the top on every screen change.
+    - Laptops (fine pointer) keep page scrolling.
+    - Costs: browser toolbars no longer hide on scroll, and tapping the iPhone status bar doesn't scroll to the top.
   - **Phones turned sideways:** the `short` variant in `globals.css` (landscape, at most 32rem tall). The app's top bar scrolls away (`short:max-lg:absolute`) and the tab bar is compact, icon beside label, so the page keeps the height. Use `short:max-lg:` so laptops in a short window keep the rail.
   - **Tablets, from `md` (768 px):** the home bib and verdict sit side by side, everything else full width below. Onboarding's buttons follow the question instead of sitting at the bottom of a tall screen.
   - **Laptops, from `lg` (1024 px):** the side rail. Home keeps the bib pinned on the left; Fuel keeps today's ring pinned on the left while meals are logged on the right. Home's markers pair up only from `xl` (1280 px).
@@ -89,6 +93,12 @@ The running record of this project: where things stand, why they are the way the
 - **Function size on Vercel:** files reachable from server code are traced into every function. PGlite (62 MB) and the local `.data` folder were, until `outputFileTracingExcludes` in `next.config.ts`. Check sizes with the `.nft.json` files under `.next/server/app` after a build.
 - **Drizzle journal times:** migrations run if their journal `when` is later than the last one applied, so a hand-written entry must sit in time order or databases that ran a later one skip it. `tests/migrations.test.ts` checks the order. Hand-written migrations also need a snapshot: generate with drizzle-kit, then rewrite its SQL to be safe to run twice.
 - **iPhone tab switches opened part-way down (fixed 2026-11-13):** after a navigation Next.js only resets to the top (`scrollTop = 0`) when the new page's top edge sits at or below html's `scroll-padding-top`; otherwise it calls `scrollIntoView`. The padding was 5rem (for the landing's header) against the app's 3.5rem bar, so every tab switch took the `scrollIntoView` path. iPhone Safari ignores the root's scroll padding there (webkit.org/b/179379), so pages opened 56 px down with their first lines under the bar; on Home, Safari's scroll anchoring then carried the page to the verdict when the skeleton was swapped for the dashboard. Rules: keep `scroll-padding-top` equal to the app bar (the landing's anchor targets add `scroll-mt-6`), and keep the bar `fixed`, not `sticky`: iOS 26 ignores `scrollTo(0, 0)` near a stuck sticky element (webkit.org/b/304489). Check: count `scrollIntoView` calls on tab switches; it should be 0.
+- **iOS 26 in-app browsers cover the top of a scrolled page (fixed 2026-11-13 with the touch frame):**
+  - **Seen:** in the Google app's browser on Mayank's iPhone 17, the Wraps title sat under the top bar even though the page was at its top. Pulling down showed it; letting go hid it again.
+  - **Proof:** the scroll indicator sat at the top of its track, yet the page's first 57 px were missing. The app's address bar covered the page while the fixed parts (top bar, tab bar) sat correctly below it.
+  - **Cause:** iOS 26 lets web content flow under an app's own bars, and some apps don't leave room for it (Apple forum thread 798672).
+  - **Fix:** the screens scroll inside a fixed frame, placed like the bars, and the page never scrolls.
+  - **Watch for:** `next dev`'s badge covers the Home tab, so scripted taps on it fail in dev; test tab switches on a production build.
 - **Safari's engine on this Mac:** Playwright's WebKit runs headlessly from the session scratchpad (`npx playwright install webkit`) and can sign in with a `dh_session` cookie minted by `/api/dev/session` on the dev server. It reproduces engine behaviour (scrolling, scroll anchoring, layout), not iOS toolbars, safe areas or touch momentum. Production-build checks of the app need `ANTHROPIC_API_KEY=` and `D_HUMAN_AI_MOCK=1` on `next start`, or meals call the live API.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
@@ -127,6 +137,21 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-13
+- **The touch frame: screens scroll inside a fixed frame on phones and tablets (Mayank: the Wraps title still hid under the top bar on his iPhone 17).**
+  - **Found:** the page was at its top, but the Google app's address bar covered its first 57 px. This is an iOS 26 in-app browser behaviour that the earlier scroll fix couldn't reach (details in Gotchas).
+  - **Changed:**
+    - `#app-shell` becomes a fixed, scrolling frame on touch devices (the `touch` variant in `globals.css`), with the spacing on an inner layer.
+    - `components/platform/ScrollReset.tsx` resets the frame to the top on every screen change.
+  - **Checked on a production build, WebKit as an iPhone:**
+    - 21 tab switches from 0, 30 and 600 px down, plain and with iPhone scrolling mimicked: every screen at the top, 0 `scrollIntoView` calls, the page never scrolls.
+    - Sideways phone: the top bar scrolls away.
+    - iPad landscape: the rail is there, and the bib pins at 80 px as before.
+    - Settings: the save bar is flush on the tab bar.
+    - Wraps: the viewer is full screen.
+    - Laptop: page scrolling, unchanged.
+    - Lint, 196 tests and the build pass.
+  - **Not checked:** a real iPhone, the keyboard over inputs low on a screen, and the first-run tour on a phone.
+- **Push `6a8b281`:** the Log a meal button. Live about 40 s later; `/signin` 200.
 - **Home: "Log a meal" in Today's fuel is a white button (Mayank's request),** not a quiet link (`button-primary`, 44 px tall, level with the heading). Checked at 390 and 1280 px in WebKit; typecheck, lint and the build pass.
 - **Push `b52d111`:** the stack budget below. Live about 25 s later (new build id); the deploy succeeding means Supabase took migration `0007`. Checked live: `/signin` 200, `/stack` signed out redirects to `/signin` with the "Your stack" loading title, `/api/profile` 401 signed out.
 - **Stack screen: supplements first, doctor notes last, and a monthly budget (Mayank's request).** Design in Decisions ("Stack screen and budgets").
