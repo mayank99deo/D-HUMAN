@@ -28,7 +28,7 @@ describe("the canonical address", () => {
       process.env.NEXT_PUBLIC_SITE_URL = `https://${host}/`;
       assert.equal(siteUrl(), SITE_ORIGIN);
     }
-    assert.equal(SITE_ORIGIN, "https://www.dhuman.fit");
+    assert.equal(SITE_ORIGIN, "https://www.d-human.fit");
   });
   it("keeps an override that names somewhere else", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://staging.example.com/";
@@ -78,7 +78,7 @@ describe("host redirects", async () => {
     for (const p of ["/api", "/api/waitlist/form", "/api/billing/webhook", "/_next/static/chunks/a.js", "/_vercel/insights/script.js"]) {
       assert.equal(resolve("d-human.vercel.app", p), null, p);
     }
-    assert.equal(resolve("www.dhuman.fit", "/"), null);
+    assert.equal(resolve("www.d-human.fit", "/"), null);
     // The host is a regex: its dots must not match any character.
     assert.equal(resolve("d-humanXvercel.app", "/"), null);
   });

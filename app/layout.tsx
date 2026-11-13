@@ -30,7 +30,7 @@ const description = HOME_DESCRIPTION;
 
 export const metadata: Metadata = {
   // The canonical host in production (lib/site-url.ts), so canonical tags, share
-  // images and og:url all point at https://www.dhuman.fit whichever host served the page.
+  // images and og:url all point at https://www.d-human.fit whichever host served the page.
   metadataBase: new URL(siteUrl() ?? "http://localhost:3000"),
   title,
   description,

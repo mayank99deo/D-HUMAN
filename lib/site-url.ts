@@ -1,9 +1,10 @@
 // The public address of the site, used for canonical tags, share previews,
 // structured data, the sitemap and email links.
 //
-// One canonical host: https://www.dhuman.fit. dhuman.fit, www.d-human.fit,
-// d-human.fit and d-human.vercel.app serve the same deployment, and
-// next.config.ts sends their page requests here with a 308.
+// One canonical host: https://www.d-human.fit (Mayank's pick on 2026-11-13; it
+// matches the name). d-human.fit, www.dhuman.fit, dhuman.fit and
+// d-human.vercel.app serve the same deployment, and next.config.ts sends their
+// page requests here with a 308. Email stays on dhuman.fit.
 //
 // NEXT_PUBLIC_SITE_URL still wins when it names some other address (a new
 // domain one day). When it names one of the hosts above, it's read as the
@@ -13,11 +14,11 @@
 // nothing locally (callers fall back to the request's own origin).
 // Pure, so tests can import it.
 
-export const SITE_HOST = "www.dhuman.fit";
+export const SITE_HOST = "www.d-human.fit";
 export const SITE_ORIGIN = `https://${SITE_HOST}`;
 
 /** Hosts that serve this site but aren't the canonical one. */
-export const LEGACY_HOSTS = ["dhuman.fit", "www.d-human.fit", "d-human.fit", "d-human.vercel.app"] as const;
+export const LEGACY_HOSTS = ["d-human.fit", "www.dhuman.fit", "dhuman.fit", "d-human.vercel.app"] as const;
 
 export function siteUrl(): string | undefined {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();

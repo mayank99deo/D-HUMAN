@@ -7,7 +7,7 @@ As of 2026-11-13. Owner: `seo-lead`. For Mayank.
 - **The goal:** when someone in India searches for calorie tracking for Indian food, how much protein they need, what their blood report means, or which supplements their results point to, D-Human should be the result they pick.
 - **Where we stood today:** search engines had one page to show. It sat on four addresses with no canonical tag, and had no sitemap, no robots.txt and no structured data. Its headline is a brand line with no search words in it.
 - **What ships now (Phase 1, in the repo, not yet committed):**
-  - One address: `https://www.dhuman.fit`.
+  - One address: `https://www.d-human.fit` (Mayank switched it from `www.dhuman.fit` on 2026-11-13, before anything was indexed; it matches the name).
   - A robots.txt and a sitemap.
   - Structured data.
   - A better landing title.
@@ -25,16 +25,16 @@ As of 2026-11-13. Owner: `seo-lead`. For Mayank.
 
 | # | Finding (verified 2026-11-13) | Impact | Status |
 | --- | --- | --- | --- |
-| 1 | The same site answered with 200 on `www.dhuman.fit`, `www.d-human.fit` and `d-human.vercel.app`, with no canonical tag. Search engines saw up to three copies and had to guess which to show. | Splits ranking signals; the vercel.app copy could outrank the real one | **Fixed in Phase 1.** 308 redirects from every other host to `www.dhuman.fit` for page requests (`next.config.ts`). `/api`, `/_next` and `/_vercel` are left alone, so open tabs, the Apps Script calls and the payment webhook keep working. A canonical tag and `og:url` are on every public page. |
+| 1 | The same site answered with 200 on `www.dhuman.fit`, `www.d-human.fit` and `d-human.vercel.app`, with no canonical tag. Search engines saw up to three copies and had to guess which to show. | Splits ranking signals; the vercel.app copy could outrank the real one | **Fixed in Phase 1.** 308 redirects from every other host to `www.d-human.fit` for page requests (`next.config.ts`). `/api`, `/_next` and `/_vercel` are left alone, so open tabs, the Apps Script calls and the payment webhook keep working. A canonical tag and `og:url` are on every public page. |
 | 2 | No `robots.txt` and no `sitemap.xml` (both 404). | Slower discovery; nothing to submit to Search Console | **Fixed.** `app/robots.ts` and `app/sitemap.ts` (6 URLs). |
 | 3 | Only one indexable page. Its H1 is "Your body speaks data.", which has no search words. | Can't rank for any topic beyond the brand | **Partly fixed.** Five new pages, each with the topic in its H1. The landing H1 is a decision for you (below). |
-| 4 | Share previews and absolute URLs pointed at `d-human.vercel.app`. `NEXT_PUBLIC_SITE_URL` is set to it, at least locally. | Shares and crawlers were sent to the wrong host | **Fixed in code.** `lib/site-url.ts` reads any of our other hosts as `www.dhuman.fit`, so a stale variable can't point anything at a redirecting host. Tidy the variable anyway (checklist). |
+| 4 | Share previews and absolute URLs pointed at `d-human.vercel.app`. `NEXT_PUBLIC_SITE_URL` is set to it, at least locally. | Shares and crawlers were sent to the wrong host | **Fixed in code.** `lib/site-url.ts` reads any of our other hosts as `www.d-human.fit`, so a stale variable can't point anything at a redirecting host. Tidy the variable anyway (checklist). |
 | 5 | No structured data. | No eligibility for rich results; machines can't read prices, breadcrumbs or questions | **Fixed.** Organization, WebSite, WebApplication with the free start and ₹49 pass, BreadcrumbList, and FAQPage where questions are visible. |
 | 6 | The main landing title led with the brand and one topic: "D-Human \| Calorie tracking for Indian meals". | Weak match for report and supplement searches | **Fixed.** Now "D-Human \| Indian calorie tracker and AI blood report reads" (58 characters). The description is 153 characters. |
 | 7 | Mobile LCP is 3.8–3.9 s in a local Lighthouse run (simulated slow 4G). The headline waits on two preloaded Archivo font files, 89 KB and 84 KB. | Core Web Vitals is a light ranking signal and a heavier conversion one | **Open.** Same on every page, including the landing. Check real users in Speed Insights first. If field LCP is over 2.5 s, look at serving one Archivo file. |
 | 8 | No About, Contact, Privacy, Terms or Refund pages. | For health topics, Google's raters look for who runs the site and how to reach them. Razorpay usually needs these pages too. | **Open.** Needs you (legal and company details). |
 | 9 | The signed-in app was noindex, but crawlable. | Low; noindex already kept it out | **Tightened.** robots.txt now disallows the app routes and `/api/`. `/signin` stays crawlable on purpose: it's linked from every page, and crawlers can only see its noindex if they may fetch it. |
-| 10 | The legacy domain `d-human.fit` and its www | Low | Keep renewing it. The redirects pass any links it has earned to `www.dhuman.fit`. |
+| 10 | The second domain, `dhuman.fit` and its www (email lives there) | Low | Keep renewing it. The redirects pass any links it has earned to `www.d-human.fit`. |
 
 ### Content findings, ranked by impact
 
@@ -346,26 +346,27 @@ The guides are static. They are built from the landing page's own type, grid and
 1. **Deploy** this change after review. Then check that the redirects work:
    ```bash
    curl -sI https://d-human.vercel.app/ | grep -iE "^HTTP|^location"
-   curl -sI https://www.d-human.fit/calorie-tracker | grep -iE "^HTTP|^location"
+   curl -sI https://www.dhuman.fit/calorie-tracker | grep -iE "^HTTP|^location"
    curl -s -o /dev/null -w "%{http_code}\n" -X POST https://d-human.vercel.app/api/waitlist/details
-   curl -s https://www.dhuman.fit/robots.txt
-   curl -s https://www.dhuman.fit/sitemap.xml
+   curl -s https://www.d-human.fit/robots.txt
+   curl -s https://www.d-human.fit/sitemap.xml
    ```
-   - The first two should give 308 with `location: https://www.dhuman.fit/...`.
+   - The first two should give 308 with `location: https://www.d-human.fit/...`.
    - The POST should give 400 or 403, never 308: the API isn't redirected.
-   - Then view source on `https://www.dhuman.fit/calorie-tracker`. Look for `rel="canonical"` and `application/ld+json`.
+   - Then view source on `https://www.d-human.fit/calorie-tracker`. Look for `rel="canonical"` and `application/ld+json`.
 2. **Google Search Console:**
-   - Add a **Domain property** for `dhuman.fit`. Verify it with the DNS TXT record Google gives you, at your domain registrar. It covers www and the apex.
-   - Submit `https://www.dhuman.fit/sitemap.xml`.
+   - Add a **Domain property** for `d-human.fit`. Verify it with the DNS TXT record Google gives you, at your domain registrar. It covers www and the apex.
+   - Submit `https://www.d-human.fit/sitemap.xml`.
    - Use URL Inspection → Request indexing for `/` and the five guides.
-   - Optional: add `d-human.fit` too, to watch its redirects.
+   - Optional: add `dhuman.fit` too, to watch its redirects.
 3. **Bing Webmaster Tools:** sign in, import the sites from Search Console, and submit the same sitemap.
 4. **Vercel** (optional, tidy):
-   - Set `NEXT_PUBLIC_SITE_URL` to `https://www.dhuman.fit`, or delete it, then redeploy.
+   - Set `NEXT_PUBLIC_SITE_URL` to `https://www.d-human.fit`, or delete it, then redeploy.
    - Code already treats the old value as the canonical host.
-   - Make sure `www.d-human.fit` and `d-human.vercel.app` are attached to production, so the code redirects reach them. If you'd rather, set them as redirect domains in Project → Settings → Domains; it has the same effect.
+   - Make sure `www.dhuman.fit` and `d-human.vercel.app` stay attached to production, so the code redirects reach them.
+   - `dhuman.fit` (no www) is set in Domains to redirect to `www.dhuman.fit`, so it takes two hops. Point that redirect at `www.d-human.fit` to make it one.
 5. **Webhooks** (tidy, not urgent):
-   - Point the Apps Script's site URL at `https://www.dhuman.fit`.
+   - Point the Apps Script's site URL at `https://www.d-human.fit`.
    - Point the Razorpay webhook there when you set it up.
    - The old addresses keep working, because `/api` isn't redirected.
 6. **Trust pages:**

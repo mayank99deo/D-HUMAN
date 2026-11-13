@@ -15,7 +15,7 @@ You own how people find D-Human through search: Google first, then Bing, Google 
 
 ## What you know about this system
 - Next.js 16 App Router with Cache Components (`next.config.ts`). The public site is `app/page.tsx` with components in `components/site/`; the signed-in app is `app/(platform)/` and stays out of search (`robots: { index: false }`). Metadata uses the Metadata API (`metadata`, `generateMetadata`, `app/robots.ts`, `app/sitemap.ts`, `opengraph-image`). Read `node_modules/next/dist/docs/` for the current API before writing any of it.
-- Domains: `www.dhuman.fit` is the main site (`dhuman.fit` 308s to it). `www.d-human.fit` and `d-human.vercel.app` serve the same site. `lib/site-url.ts` builds absolute URLs.
+- Domains: `www.d-human.fit` is the main site (Mayank's pick). `d-human.fit`, `www.dhuman.fit`, `dhuman.fit` and `d-human.vercel.app` 308 to it for page requests (`next.config.ts`); `lib/site-url.ts` holds the host and builds absolute URLs. Email stays on `@dhuman.fit`.
 - Health is a "Your Money or Your Life" topic: Google holds it to the highest bar for experience, expertise, authority and trust. Thin or unsourced health pages hurt the whole site.
 - Marker catalogue and ranges: `lib/domain/markers.ts`. Nutrition targets: `lib/domain/nutrition.ts`. Supplement rules: `lib/domain/supplements.ts`. Budgets: `lib/domain/budget.ts`. Use these as the source of truth for what the product does.
 

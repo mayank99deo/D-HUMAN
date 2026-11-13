@@ -8,17 +8,17 @@ The running record of this project: where things stand, why they are the way the
 - **Open to everyone, with a paywall (2026-11-11):** the landing page shows "Start free" and "Sign in" instead of the waitlist (`NEXT_PUBLIC_SITE_MODE=waitlist` brings the old page back after a redeploy; nothing was deleted). Free: 2 report reads and 20 meal logs. Then ₹49 for 30 days through Razorpay (one payment, no renewal): 3 reads in the pass, and 5 meal logs a day for everyone. Needs `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` in Vercel and the webhook in Razorpay's dashboard (steps in `docs/platform/PHASE-1.md`); until then the paywall says "Payments open soon".
 - **Reports are AI-analysed only (2026-11-11):** no doctor review for now; never say a doctor reviews reports. "See a doctor" flags for the person's own doctor stay.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
-- **Live:** https://www.dhuman.fit (`dhuman.fit` redirects there), https://www.d-human.fit (`d-human.fit` redirects there; same deployment, which Mayank uses on his phone) and https://d-human.vercel.app. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
+- **Live:** https://www.d-human.fit, the main address since 2026-11-13 (Mayank's pick). https://www.dhuman.fit, dhuman.fit, d-human.fit and https://d-human.vercel.app serve the same deployment and send page visits there. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
 - **Stack:** Next.js 16.4.2 (App Router, Cache Components on), React 19.3, Tailwind CSS 4, Motion 14.6, zod 4, resend 6.34. Platform: drizzle-orm 0.45 (Postgres via `postgres` 4.1, or embedded `@electric-sql/pglite` 0.5 locally), `@anthropic-ai/sdk` 1.6 (Haiku 5.5 and Sonnet 5.5 per job, see Decisions). Node 24 via fnm.
 - **Signups:** browser → `/api/waitlist` → Google Apps Script web app (`google-apps-script/Code.gs`) → the `Waitlist` tab of the Google Sheet (13 columns). The optional follow-up answers go to `/api/waitlist/details` with an HMAC token. Second source: a Google Form, built by `setupForm()` in the same script. Its trigger files each answer in the `Waitlist` tab with Source `google-form` and calls `/api/waitlist/form` (authorised with the webhook secret) for the welcome email and Resend contact.
 - **Email:** Resend. `dhuman.fit` is verified there (DKIM, plus MX and SPF on `send.dhuman.fit`; no DMARC yet). The sender defaults to `D-Human <hello@dhuman.fit>`. The welcome email template is `lib/waitlist/welcome-email.ts`; preview it in dev at `/api/email-preview`.
 - **Search (2026-11-13):**
-  - One canonical host, `https://www.dhuman.fit` (`SITE_ORIGIN` in `lib/site-url.ts`). Page requests on dhuman.fit, www.d-human.fit, d-human.fit and d-human.vercel.app get a 308 there (`next.config.ts`); `/api`, `/_next` and `/_vercel` are left alone.
+  - One canonical host, `https://www.d-human.fit` (`SITE_ORIGIN` in `lib/site-url.ts`; it was www.dhuman.fit for a few hours on 2026-11-13). Page requests on d-human.fit, www.dhuman.fit, dhuman.fit and d-human.vercel.app get a 308 there (`next.config.ts`); `/api`, `/_next` and `/_vercel` are left alone. The 308s carry `max-age=0, must-revalidate`, so browsers don't keep them and the host can change again without redirect loops.
   - `app/robots.ts` and `app/sitemap.ts` (6 URLs); structured data and per-page metadata in `lib/seo.ts`.
   - Five guides in `app/(guides)/`: calorie tracker, protein tracker, blood report analysis, supplements from your blood test, sources and safety. Every number is sourced in `components/site/sources.ts`.
   - Strategy and Mayank's checklist: `docs/team/seo/STRATEGY.md`.
-- **Domains:** as of 2026-10-27 `dhuman.fit` points at Vercel and 308-redirects to `www.dhuman.fit`, which serves the site. Mail for `@dhuman.fit` runs on Google Workspace. Links and images use `lib/site-url.ts` (`NEXT_PUBLIC_SITE_URL`, else Vercel's production domain); share previews still point at `d-human.vercel.app` (see Open items).
+- **Domains:** the site's address is `www.d-human.fit`; email stays on `@dhuman.fit` (Google Workspace for mail, Resend for sending). In Vercel's Domains, `d-human.fit` redirects to `www.d-human.fit` and `dhuman.fit` to `www.dhuman.fit`; the code's redirects do the rest. Links and images use `lib/site-url.ts`.
 - **Launch film:** in the studio, `~/Projects/studio/projects/d-human-launch` (16:9) and `d-human-launch-reel` (9:16); notes in each `REVIEW.md`. New video work goes in the studio, not this repo.
 - **Video:** two HyperFrames projects, each with `SPEC.md` and `REVIEW.md`. `video/intro/` is the 13 s product intro. `video/loop/` is the 20 s phone-screen loop (600 x 1296) that plays in the "Test first" section; its web copy and stills live in `public/media/loop/` (re-encode steps in its `REVIEW.md`). Preview with the plugin CLI's `preview`, render with `render`; caches and `renders/` are git-ignored.
 - **Environment variables (names only):** Payments: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`. Landing: `NEXT_PUBLIC_SITE_MODE` (optional). Waitlist: `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_WEBHOOK_SECRET` (must equal `WEBHOOK_SECRET` in Apps Script), `RESEND_API_KEY` (full access), `RESEND_FROM`, `RESEND_REPLY_TO`, `RESEND_SEGMENT_ID`, `NEXT_PUBLIC_SITE_URL` (optional). Platform: `DATABASE_URL` (or `POSTGRES_URL` from Vercel's Supabase integration), `ANTHROPIC_API_KEY`, `AUTH_SECRET`, `CLAUDE_MODEL` (optional), `D_HUMAN_AI_MOCK` (local only). Local values live in `.env.local`, which is git-ignored; there `RESEND_API_KEY` is empty (the real key is only in Vercel).
@@ -132,11 +132,13 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Platform next: doctor review of reads, phone/WhatsApp sign-in, Hindi app labels, speech-to-text for browsers without the Web Speech API, uploads over 4 MB
 
 - [ ] Add DMARC: TXT on `_dmarc.dhuman.fit` with `v=DMARC1; p=none;`
-- [x] Share previews: fixed in code on 2026-11-13. `siteUrl()` reads any of the site's own hosts as the canonical one, so og:image and links use www.dhuman.fit. Setting `NEXT_PUBLIC_SITE_URL=https://www.dhuman.fit` in Vercel, or deleting it, is now just tidying.
+- [x] Share previews: fixed in code on 2026-11-13. `siteUrl()` reads any of the site's own hosts as the canonical one, so og:image and links use the main host (now www.d-human.fit). Setting `NEXT_PUBLIC_SITE_URL=https://www.d-human.fit` in Vercel, or deleting it, is now just tidying.
 - [ ] SEO, Mayank's checklist (`docs/team/seo/STRATEGY.md` §11):
   - Search Console: a Domain property for dhuman.fit verified by DNS TXT, submit the sitemap, request indexing for `/` and the 5 guides.
   - Bing Webmaster Tools.
-  - Point the Apps Script and the future Razorpay webhook at www.dhuman.fit.
+  - Search Console's Domain property is for `d-human.fit`, with its sitemap at https://www.d-human.fit/sitemap.xml.
+  - Point the Apps Script and the future Razorpay webhook at www.d-human.fit (the old address keeps working; `/api` isn't redirected).
+  - Optional: in Vercel's Domains, point `dhuman.fit`'s redirect at `www.d-human.fit` (one hop instead of two).
   - About, Contact, Privacy, Terms and Refund pages.
 - [ ] SEO decisions for Mayank:
   - Make "Calorie and protein tracking for Indian meals." the landing H1, keeping "Your body speaks data." visible as it is.
@@ -154,6 +156,17 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-13
+- **Main address switched to www.d-human.fit (Mayank: typing d-human.fit landed on dhuman.fit; email can stay on dhuman.fit).**
+  - **Changed:** `SITE_HOST` and `LEGACY_HOSTS` in `lib/site-url.ts`, so canonicals, og:url, the sitemap, robots.txt and structured data use www.d-human.fit, and page visits on www.dhuman.fit, dhuman.fit, d-human.fit and d-human.vercel.app 308 there. Also `tests/seo.test.ts`, the Razorpay webhook URL in `docs/platform/PHASE-1.md`, `docs/team/seo/STRATEGY.md` (Search Console now for d-human.fit) and `seo-lead.md`.
+  - **Not changed:** the sender `hello@dhuman.fit` and the Organization email; `google-apps-script/Code.gs` still calls www.dhuman.fit, which works because `/api` isn't redirected.
+  - **Before switching:** the live 308s carried `cache-control: public, max-age=0, must-revalidate`, so no browser keeps the old redirect and none can loop. Nothing was in Search Console yet.
+  - **Checked:** typecheck, lint, 207 tests, the production build.
+- **Push `8b46404`:** the SEO lead and SEO Phase 1. Live about 50 s later.
+  - robots.txt is served, and the sitemap lists 6 URLs on www.dhuman.fit.
+  - All 6 pages have their own canonical, one H1, and JSON-LD that parses.
+  - www.d-human.fit, d-human.vercel.app and dhuman.fit 308 to www.dhuman.fit (path and query kept); d-human.fit goes via www.d-human.fit.
+  - POST `/api/waitlist/details` on the old hosts gives 400, not a redirect.
+  - og:image is on www.dhuman.fit.
 - **SEO Phase 1 by the `seo-lead` (Mayank's request), reviewed by the orchestrator:**
   - **Found:** robots.txt and the sitemap returned 404; three hosts served duplicate copies with no canonical; no structured data; the only public page had no search terms in its H1.
   - **Built:**

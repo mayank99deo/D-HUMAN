@@ -151,7 +151,7 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 
 ### Razorpay
 
-1. In the Razorpay Dashboard → Webhooks → Add New Webhook: URL `https://www.dhuman.fit/api/billing/webhook`, a secret of your choice (the same value as `RAZORPAY_WEBHOOK_SECRET`), and the events `payment.captured`, `payment.authorized` and `order.paid`. Do it in test mode and again in live mode; each has its own webhooks and keys.
+1. In the Razorpay Dashboard → Webhooks → Add New Webhook: URL `https://www.d-human.fit/api/billing/webhook`, a secret of your choice (the same value as `RAZORPAY_WEBHOOK_SECRET`), and the events `payment.captured`, `payment.authorized` and `order.paid`. Do it in test mode and again in live mode; each has its own webhooks and keys.
 2. Keep payment capture on automatic (the default). Manual capture works too: the app captures what it confirms. Keep customer fee bearer off: the app checks that each payment is exactly ₹49.
 3. Test with test keys: Razorpay's test checkout has success and failure buttons, test cards and the UPI ids `success@razorpay` and `failure@razorpay`. Then switch the three variables to live values and redeploy.
 
