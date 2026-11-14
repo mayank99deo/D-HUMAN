@@ -9,7 +9,7 @@
 //   layouts say noindex. No public page may start with one of those prefixes.
 
 import type { Metadata } from "next";
-import { PASS_DETAIL, PLAN, PRICE_TEXT } from "./domain/plan.ts";
+import { PLAN } from "./domain/plan.ts";
 import { isWaitlist } from "./site-mode.ts";
 import { absoluteUrl } from "./site-url.ts";
 
@@ -141,7 +141,10 @@ export function websiteLd(): Json {
   };
 }
 
-/** The app with its two prices, as the landing page's Start free form states them. Open mode only. */
+/**
+ * The app and its free start, as the landing page's Start free form states it. Open mode only.
+ * No pass price: the landing page doesn't show it, and structured data must match the page.
+ */
 export function appLd(): Json {
   return {
     "@type": "WebApplication",
@@ -160,20 +163,13 @@ export function appLd(): Json {
         name: "Free start",
         price: "0",
         priceCurrency: PLAN.currency,
-        description: `${PLAN.freeReads} report reads and ${PLAN.freeMeals} meal logs.`,
-      },
-      {
-        "@type": "Offer",
-        name: `${PLAN.days}-day pass`,
-        price: String(PLAN.pricePaise / 100),
-        priceCurrency: PLAN.currency,
-        description: `${PRICE_TEXT} for ${PLAN.days} days: ${PASS_DETAIL}`,
+        description: "Blood report reads and calorie and protein tracking to start, with just an email.",
       },
     ],
   };
 }
 
-/** The landing page's graph: who we are, the site, and (open mode) the app with its prices. */
+/** The landing page's graph: who we are, the site, and (open mode) the app with its free start. */
 export function homeLd(): Json {
   return {
     "@context": "https://schema.org",

@@ -12,6 +12,7 @@ import { allowAppImports } from "./support/app.ts";
 allowAppImports();
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { LEGACY_HOSTS, SITE_ORIGIN, absoluteUrl, siteUrl } = await import("../lib/site-url.ts");
+const { SESSION_COOKIE } = await import("../lib/auth/cookie.ts");
 const { APP_PATHS, GUIDES, guideLd, homeLd, ldJson } = await import("../lib/seo.ts");
 
 const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, vercel: process.env.VERCEL };
@@ -44,7 +45,7 @@ describe("the canonical address", () => {
   });
 });
 
-describe("host redirects", async () => {
+describe("redirects", async () => {
   // Next's own matchers, as its router runs them (server/lib/router-utils/resolve-routes.js).
   const require = createRequire(import.meta.url);
   const { buildCustomRoute } = require("next/dist/server/lib/router-utils/filesystem.js");
@@ -52,16 +53,17 @@ describe("host redirects", async () => {
   const config = (await import("../next.config.ts")).default;
   const routes = (await config.redirects!()).map((r: object) => buildCustomRoute("redirect", r, "", false));
 
-  function resolve(host: string, pathname: string, query: Record<string, string> = {}) {
+  function resolve(host: string, pathname: string, query: Record<string, string> = {}, cookie?: string) {
     for (const route of routes) {
       let params = route.match(pathname);
       if (params && route.has) {
-        const extra = matchHas({ headers: { host } }, query, route.has, route.missing);
+        const extra = matchHas({ headers: cookie ? { host, cookie } : { host } }, query, route.has, route.missing);
         params = extra ? Object.assign(params, extra) : false;
       }
       if (!params) continue;
       const { parsedDestination: d } = prepareDestination({ appendParamsToQuery: false, destination: route.destination, params, query });
-      return { status: route.permanent ? 308 : 307, url: `${d.protocol}//${d.hostname}${d.pathname}`, query: d.query };
+      const url = d.hostname ? `${d.protocol}//${d.hostname}${d.pathname}` : d.pathname;
+      return { status: route.permanent ? 308 : 307, url, query: d.query };
     }
     return null;
   }
@@ -81,6 +83,19 @@ describe("host redirects", async () => {
     assert.equal(resolve("www.d-human.fit", "/"), null);
     // The host is a regex: its dots must not match any character.
     assert.equal(resolve("d-humanXvercel.app", "/"), null);
+  });
+  it("sends someone signed in on this browser from the landing page to their home screen", () => {
+    const signedIn = `theme=dark; ${SESSION_COOKIE}=abc123`;
+    assert.deepEqual(resolve("www.d-human.fit", "/", {}, signedIn), { status: 307, url: "/home", query: {} });
+    // Signed out, or only other cookies: the landing page.
+    assert.equal(resolve("www.d-human.fit", "/"), null);
+    assert.equal(resolve("www.d-human.fit", "/", {}, "theme=dark"), null);
+    // Only the landing page: guides, sign-in and app screens stay where they are.
+    for (const p of ["/calorie-tracker", "/signin", "/fuel", "/api/profile"]) {
+      assert.equal(resolve("www.d-human.fit", p, {}, signedIn), null, p);
+    }
+    // Other hosts move to the canonical host first; the cookie is per host anyway.
+    assert.equal(resolve("dhuman.fit", "/", {}, signedIn)?.url, `${SITE_ORIGIN}/`);
   });
 });
 
@@ -123,12 +138,12 @@ describe("robots.txt and the sitemap", async () => {
 });
 
 describe("structured data", () => {
-  it("describes the site, and the app with the prices the start form shows", () => {
+  it("describes the site, and the app's free start as the start form shows it, without the pass price", () => {
     const graph = JSON.parse(ldJson(homeLd()))["@graph"];
     const types = graph.map((n: { "@type": string }) => n["@type"]);
     assert.deepEqual(types, ["Organization", "WebSite", "WebApplication"]);
     const prices = graph[2].offers.map((o: { price: string; priceCurrency: string }) => `${o.price} ${o.priceCurrency}`);
-    assert.deepEqual(prices, ["0 INR", "49 INR"]);
+    assert.deepEqual(prices, ["0 INR"]);
   });
   it("gives each guide breadcrumbs, and FAQ markup only with questions", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://d-human.vercel.app";

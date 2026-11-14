@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 import { db, schema } from "@/lib/db";
+import { SESSION_COOKIE as COOKIE } from "./cookie";
 import { newSessionToken, sha256 } from "./crypto";
 
-const COOKIE = "dh_session";
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 export async function startSession(userId: string) {

@@ -3,15 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition, type FormEvent } from "react";
 import { useSilkTether } from "@/components/waitlist/useSilkTether";
-import { PLAN, PRICE_TEXT } from "@/lib/domain/plan";
 import { handOffEmail } from "@/lib/signin-handoff";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// The numbers come from the platform's own limits (lib/domain/plan.ts), so they can't drift.
-// Say "₹49 for 30 days", never "a month" or "subscription": it's paid once.
-const PRICE_LEAD = "Free to start";
-const PRICE_REST = ` with ${PLAN.freeReads} report reads and ${PLAN.freeMeals} meal logs. Then ${PRICE_TEXT} for ${PLAN.days}\u00a0days, with ${PLAN.passReads} report reads and up to ${PLAN.mealsPerDay} meal logs a day. One payment; it doesn't renew.`;
+// What starting free gets you, not what it costs later (Mayank, 2026-11-14): the pass and
+// its price are shown in the app, on the paywall, before anyone pays. "Free to start", never
+// "free": the free reads and meal logs have limits (lib/domain/plan.ts).
+const FREE_LEAD = "Free to start.";
+const FREE_REST = " AI reads your blood report marker by marker and counts the calories and protein in your meals. No card needed, just your email.";
 
 // Open mode's answer to the waitlist form: same shape, but it starts the
 // account. The email rides over to /signin in sessionStorage. The input has no
@@ -52,7 +52,7 @@ export function StartForm() {
           autoComplete="email"
           placeholder="Your email"
           aria-invalid={error ? true : undefined}
-          aria-describedby={`${id}-message ${id}-price`}
+          aria-describedby={`${id}-message ${id}-free`}
           onChange={() => error && setError(null)}
           className="field h-14 min-w-0 sm:flex-1"
         />
@@ -63,9 +63,9 @@ export function StartForm() {
       <p id={`${id}-message`} role="alert" className="text-sm font-medium text-paper">
         {error && <span className="error-mark mt-3 block">{error}</span>}
       </p>
-      <p id={`${id}-price`} className="mt-3 max-w-[56ch] text-sm text-pretty text-graphite">
-        <span className="font-semibold text-paper">{PRICE_LEAD}</span>
-        {PRICE_REST}
+      <p id={`${id}-free`} className="mt-3 max-w-[56ch] text-sm text-pretty text-graphite">
+        <span className="font-semibold text-paper">{FREE_LEAD}</span>
+        {FREE_REST}
       </p>
     </form>
   );

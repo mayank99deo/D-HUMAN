@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { SESSION_COOKIE } from "./lib/auth/cookie.ts";
 import { LEGACY_HOSTS, SITE_ORIGIN } from "./lib/site-url.ts";
 
 // Page requests on any other host that serves this deployment go to the canonical
@@ -15,10 +16,23 @@ const hostRedirects = LEGACY_HOSTS.map((host) => ({
   permanent: true,
 }));
 
+// Someone signed in on this browser who comes back to the landing page goes straight
+// to their home screen. Matched on the cookie at Vercel's routing layer, so the landing
+// page stays static for everyone else and no function runs. 307, so browsers don't keep
+// it: after signing out (the cookie is deleted) the landing page shows again. A cookie
+// whose session is gone lands on /signin, as /home sends anyone signed out there.
+// After the host redirects, so other hosts first move to the canonical one.
+const signedInRedirect = {
+  source: "/",
+  has: [{ type: "cookie" as const, key: SESSION_COOKIE }],
+  destination: "/home",
+  permanent: false,
+};
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   async redirects() {
-    return hostRedirects;
+    return [...hostRedirects, signedInRedirect];
   },
   partialPrefetching: true,
   // The embedded dev database ships WebAssembly that has to load from node_modules.

@@ -21,8 +21,8 @@ const SNAP = "@media (min-width: 1024px) and (prefers-reduced-motion: no-prefere
 // The canonical URL and share tags; title and description as in the root layout.
 export const metadata: Metadata = pageMetadata({ path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION });
 
-// Who we are and the site, plus (open mode) the app with its free start and ₹49 pass,
-// as the Start free form states them. Invisible; read by search engines.
+// Who we are and the site, plus (open mode) the app with its free start, as the Start
+// free form states it. Invisible; read by search engines.
 function StructuredData() {
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldJson(homeLd()) }} />;
 }
