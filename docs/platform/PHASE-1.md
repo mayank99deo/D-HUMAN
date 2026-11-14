@@ -144,7 +144,7 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 | `ANTHROPIC_API_KEY` | From the Claude Console. Reads, food, events, wraps and stacks. |
 | `AUTH_SECRET` | Any long random string (`openssl rand -hex 32`). Required in production. |
 | `CLAUDE_MODEL` | Optional. Overrides the per-job models (see Claude above). |
-| `RAZORPAY_KEY_ID` | Razorpay Dashboard → Account & Settings → API Keys. Test keys (`rzp_test_…`) first, live keys (`rzp_live_…`) to take real money. Until all three Razorpay variables are set, the paywall says "Payments open soon". |
+| `RAZORPAY_KEY_ID` | Razorpay Dashboard → Account & Settings → API Keys. Live keys (`rzp_live_…`) in Production; test keys (`rzp_test_…`) only in `.env.local`, because on the public site the test bank's Success button would hand anyone a pass. Until all three Razorpay variables are set, the paywall says "Payments open soon". |
 | `RAZORPAY_KEY_SECRET` | The secret shown with that key. |
 | `RAZORPAY_WEBHOOK_SECRET` | The secret you type when adding the webhook below. Different from the key secret. |
 | `NEXT_PUBLIC_SITE_MODE` | Optional. `waitlist` brings back the waitlist landing page; unset (or anything else) shows "Start free". Baked in at build, so redeploy after changing it. |
@@ -153,7 +153,7 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 
 1. In the Razorpay Dashboard → Webhooks → Add New Webhook: URL `https://www.d-human.fit/api/billing/webhook`, a secret of your choice (the same value as `RAZORPAY_WEBHOOK_SECRET`), and the events `payment.captured`, `payment.authorized` and `order.paid`. Do it in test mode and again in live mode; each has its own webhooks and keys.
 2. Keep payment capture on automatic (the default). Manual capture works too: the app captures what it confirms. Keep customer fee bearer off: the app checks that each payment is exactly ₹49.
-3. Test with test keys: Razorpay's test checkout has success and failure buttons, test cards and the UPI ids `success@razorpay` and `failure@razorpay`. Then switch the three variables to live values and redeploy.
+3. Test with test keys locally: Razorpay's test checkout has success and failure buttons, test cards and the UPI ids `success@razorpay` and `failure@razorpay` (on desktop the UPI tab shows only a QR code; Netbanking's demo bank is the quickest). Production gets live values; redeploy after adding them, then pay ₹49 once for real.
 
 `RESEND_API_KEY` is already set there, so sign-in codes send from `hello@dhuman.fit`. Migrations run on deploy. The landing page opens the platform ("Start free" and "Sign in") unless `NEXT_PUBLIC_SITE_MODE` is `waitlist`. Vercel Web Analytics (visits) and Speed Insights (page speed) run from `components/Vitals.tsx`, with ids and query strings stripped from URLs.
 
