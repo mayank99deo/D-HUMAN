@@ -181,6 +181,8 @@ export function totalsOf(logs: Pick<FoodLog, "kcal" | "proteinG" | "carbsG" | "f
 export type DietPicture = {
   source: "logs" | "typical_day" | "none";
   days: number;
+  /** Days in the window with at least two meals logged; three make the picture come from logs. */
+  fullDays: number;
   perDay: Totals | null;
   gaps: { key: MicroKey | "protein" | "fibre"; label: string; pct: number }[];
   patterns: string[];
@@ -188,13 +190,25 @@ export type DietPicture = {
 
 // What the person eats on an average day: from logs when there are at least
 // three properly logged days in the window, else from their typical day.
+// "Properly logged" means it looks like a day of eating: two meals or more, and at least
+// PLAUSIBLE_SHARE of their energy target. Two cups of chai aren't a day's food, and the
+// "gaps" they'd show aren't real, so they never earn a supplement (QA, 2026-11-17). A usual
+// day that describes almost no food doesn't count either.
+export const PLAUSIBLE_SHARE = 0.4;
+
 export async function dietPicture(userId: string, profile: Profile, days = 14): Promise<DietPicture> {
   const today = localDate(profile.timezone);
   const from = localDate(profile.timezone, new Date(Date.now() - (days - 1) * 86400000));
+  const persona = personaFor(profile);
+  const targets = targetsFor({
+    sex: profile.sex, age: persona.age, heightCm: profile.heightCm, weightKg: profile.weightKg,
+    level: profile.level, archetype: persona.archetype, goals: profile.goals,
+  });
+  const enough = (kcal: number) => kcal >= targets.kcal * PLAUSIBLE_SHARE;
   const logs = await logsBetween(userId, from, today);
   const byDay = new Map<string, FoodLog[]>();
   for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), l]);
-  const fullDays = [...byDay.values()].filter((meals) => meals.length >= 2);
+  const fullDays = [...byDay.values()].filter((meals) => meals.length >= 2 && enough(meals.reduce((t, m) => t + m.kcal, 0)));
 
   let perDay: Totals | null = null;
   let source: DietPicture["source"] = "none";
@@ -213,26 +227,24 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     if (base) {
       const est = base.estimate as Day;
       const t = totalsOf(est.meals.map((m) => ({ kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g, fibreG: m.fibre_g, micros: {} })));
-      perDay = { ...t, micros: est.micros };
-      source = "typical_day";
+      // Patterns still show on Fuel; the numbers only count when they describe a day's food.
       patterns = est.patterns;
+      if (enough(t.kcal)) {
+        perDay = { ...t, micros: est.micros };
+        source = "typical_day";
+      }
     }
   }
 
   const gaps: DietPicture["gaps"] = [];
   if (perDay) {
-    const persona = personaFor(profile);
-    const targets = targetsFor({
-      sex: profile.sex, age: persona.age, heightCm: profile.heightCm, weightKg: profile.weightKg,
-      level: profile.level, archetype: persona.archetype, goals: profile.goals,
-    });
     const pct = (v: number, t: number) => Math.round((v / t) * 100);
     gaps.push({ key: "protein", label: "Protein", pct: pct(perDay.proteinG, targets.proteinG) });
     gaps.push({ key: "fibre", label: "Fibre", pct: pct(perDay.fibreG, targets.fibreG) });
     for (const { key, label } of MICROS) gaps.push({ key, label, pct: pct(perDay.micros[key], targets.micros[key]) });
     gaps.sort((a, b) => a.pct - b.pct);
   }
-  return { source, days: source === "logs" ? fullDays.length : 0, perDay, gaps, patterns };
+  return { source, days: source === "logs" ? fullDays.length : 0, fullDays: fullDays.length, perDay, gaps, patterns };
 }
 
 export function dietText(p: DietPicture): string | null {

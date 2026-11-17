@@ -8,7 +8,7 @@ import type { Persona } from "@/lib/domain/persona";
 import { targetsFor } from "@/lib/domain/nutrition";
 import { addDays } from "@/lib/domain/periods";
 import { eventsFor } from "./events";
-import { logsBetween, totalsOf } from "./food";
+import { dietPicture, logsBetween, totalsOf } from "./food";
 import { daysBetween, localDate } from "./profile";
 import { requireMember } from "./member";
 import { latestStack } from "./stack";
@@ -78,8 +78,9 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
   const previous = ready[1];
   const inProgress = reports.find((r) => r.status === "reading" || r.status === "interpreting" || r.status === "uploaded");
 
-  // Then the latest read and the previous report's values (to show which way each marker moved), together.
-  const [view, prevMarkers] = await Promise.all([
+  // Then the latest read and the previous report's values (to show which way each marker moved), together;
+  // with no report and no stack yet, whether their food is enough to build one from meals.
+  const [view, prevMarkers, foodReady] = await Promise.all([
     latestReady ? reportView(userId, latestReady.id) : Promise.resolve(null),
     previous
       ? d
@@ -87,6 +88,7 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
           .from(schema.markers)
           .where(and(eq(schema.markers.reportId, previous.id), eq(schema.markers.userId, userId)))
       : Promise.resolve([]),
+    !latestReady && stack?.status !== "ready" ? dietPicture(userId, profile).then((p) => p.source !== "none") : Promise.resolve(false),
   ]);
 
   const targets = targetsFor({
@@ -108,6 +110,7 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
     today: { totals: totalsOf(todayLogs), meals: todayLogs.length, targets },
     yesterday: { totals: totalsOf(yesterdayLogs), meals: yesterdayLogs.length },
     stack,
+    foodReady,
   };
 }
 

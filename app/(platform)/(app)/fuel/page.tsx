@@ -9,14 +9,17 @@ import { foodFactsFor } from "@/lib/domain/food-facts";
 import { MICROS, targetsFor } from "@/lib/domain/nutrition";
 import { dietPicture, logsBetween, mealView, totalsOf } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
+import { latestReadyReport, latestStack } from "@/lib/platform/stack";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { localDate } from "@/lib/platform/profile";
 import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Fuel" };
 
-async function Fuel() {
+async function Fuel({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { user, profile, persona } = await requireMember();
+  // ?usual=1 (from the Stack screen): open at "How you usually eat".
+  const usual = (await searchParams).usual === "1";
   const today = localDate(profile.timezone);
   const logs = await logsBetween(user.id, today, today);
   const targets = targetsFor({
@@ -24,7 +27,14 @@ async function Fuel() {
     level: profile.level, archetype: persona.archetype, goals: profile.goals,
   });
   const totals = totalsOf(logs);
-  const [picture, plan] = await Promise.all([dietPicture(user.id, profile), currentPlan(user.id, profile.timezone)]);
+  const [picture, plan, report, stack] = await Promise.all([
+    dietPicture(user.id, profile),
+    currentPlan(user.id, profile.timezone),
+    latestReadyReport(user.id),
+    latestStack(user.id),
+  ]);
+  // No report and no stack, but their food is now enough to build one from meals.
+  const stackReady = !report && !stack && picture.source !== "none";
   const d = await db();
   const [base] = await d.select().from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, user.id)).limit(1);
   // Facts for the waiting screen, picked by age, height and weight bands, diet and sex. No AI involved.
@@ -44,14 +54,16 @@ async function Fuel() {
       facts={facts}
       categories={categories}
       plan={plan}
+      stackReady={stackReady}
+      focusUsual={usual}
     />
   );
 }
 
-export default function FuelPage() {
+export default function FuelPage({ searchParams }: PageProps<"/fuel">) {
   return (
     <Suspense fallback={<PageLoading title="Fuel" main="max-w-3xl lg:max-w-6xl lg:pt-12" />}>
-      <Fuel />
+      <Fuel searchParams={searchParams} />
     </Suspense>
   );
 }

@@ -42,6 +42,38 @@ describe("stack rules", () => {
     assert.deepEqual(plan.items.map((i) => i.rule).sort(), ["calcium", "magnesium", "protein", "zinc"]);
     assert.match(plan.items.find((i) => i.rule === "protein")!.form, /Pea or soy/);
   });
+  it("gives B12 from a food gap only on plant diets, and only without a B12 result", () => {
+    const short = [{ key: "b12_ug" as const, label: "Vitamin B12", pct: 35 }];
+    const veg = planStack(ctx({ diet: "veg", gaps: short }));
+    assert.equal(veg.items[0].rule, "b12");
+    assert.equal(veg.items[0].dose, "500 mcg a day", "the lower dose, with no result to go on");
+    assert.deepEqual(veg.items[0].markers, []);
+    assert.match(veg.items[0].diet_gap ?? "", /35% of daily need/);
+    assert.equal(planStack(ctx({ diet: "nonveg", gaps: short })).items.length, 0, "not on a mixed diet");
+    assert.equal(planStack(ctx({ diet: "veg", gaps: [{ key: "b12_ug", label: "Vitamin B12", pct: 60 }] })).items.length, 0, "not for a small gap");
+    assert.equal(planStack(ctx({ diet: "veg", gaps: short, markers: [mk("b12", 450, "pg/mL", "in_range")] })).items.length, 0, "a healthy result wins over the food estimate");
+    assert.match(planStack(ctx({ diet: "veg", gaps: short, medications: "Metformin 500" })).items[0].cautions ?? "", /metformin or acid reducers/);
+  });
+  it("gives food advice for big iron and folate gaps, without a supplement", () => {
+    const plan = planStack(ctx({ gaps: [{ key: "iron_mg", label: "Iron", pct: 40 }, { key: "folate_ug", label: "Folate", pct: 50 }] }));
+    assert.deepEqual(plan.items, []);
+    assert.ok(plan.food_first.some((f) => f.startsWith("Iron:")) && plan.food_first.some((f) => f.startsWith("Folate:")));
+  });
+  it("doesn't mention a report in the pregnancy hold when there isn't one", () => {
+    assert.doesNotMatch(planStack(ctx({ conditions: ["pregnant"] })).see_doctor[0], /report/);
+    assert.match(planStack(ctx({ conditions: ["pregnant"], markers: [mk("b12", 450, "pg/mL", "in_range")] })).see_doctor[0], /show them this report/);
+  });
+  it("never offers vitamin D, iron or folate from food alone", () => {
+    const plan = planStack(ctx({
+      diet: "veg",
+      gaps: [
+        { key: "vitamin_d_iu", label: "Vitamin D", pct: 5 },
+        { key: "iron_mg", label: "Iron", pct: 30 },
+        { key: "folate_ug", label: "Folate", pct: 30 },
+      ],
+    }));
+    assert.deepEqual(plan.items, []);
+  });
   it("doesn't push protein on people who don't train yet", () => {
     assert.equal(planStack(ctx({ level: "starting", gaps: [{ key: "protein", label: "Protein", pct: 40 }] })).items.length, 0);
   });

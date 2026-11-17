@@ -4,7 +4,7 @@ The running record of this project: where things stand, why they are the way the
 
 ## Snapshot
 
-- **Platform (Phase 1, pushed 2026-11-09 in `99168f2`):** sign-in by emailed code, onboarding, blood report upload read by Claude, a persona dashboard (bib, verdict aimed at an event, metrics that matter, contour fingerprint), food logging by photo, voice or text, wraps and a supplement stack. Since 2026-11-17: Past meals (`/fuel/past`, the 28 days before today) and Your reports (`/reports`, delete one or all). Pages in `app/(platform)/`, design and architecture in `docs/platform/PHASE-1.md`. Needs `DATABASE_URL`, `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel before it works live; the landing page doesn't link to it yet.
+- **Platform (Phase 1, pushed 2026-11-09 in `99168f2`):** sign-in by emailed code, onboarding, blood report upload read by Claude, a persona dashboard (bib, verdict aimed at an event, metrics that matter, contour fingerprint), food logging by photo, voice or text, wraps and a supplement stack. Since 2026-11-17: Past meals (`/fuel/past`, the 28 days before today), Your reports (`/reports`, delete one or all), and a stack built from meals before any report. Pages in `app/(platform)/`, design and architecture in `docs/platform/PHASE-1.md`. Needs `DATABASE_URL`, `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel before it works live; the landing page doesn't link to it yet.
 - **Open to everyone, with a paywall (2026-11-11):** the landing page shows "Start free" and "Sign in" instead of the waitlist (`NEXT_PUBLIC_SITE_MODE=waitlist` brings the old page back after a redeploy; nothing was deleted). Someone signed in on that browser who opens the landing page goes straight to `/home` (2026-11-14). Free: 2 report reads and 20 meal logs. Then ₹49 for 30 days through Razorpay (one payment, no renewal): 3 reads in the pass, and 5 meal logs a day for everyone. **Payments are live since 2026-11-14:** live Razorpay keys and the live webhook, with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` set in Vercel (Production only), and Mayank paid the first real ₹49. Test keys live only in `.env.local`. Setup steps are in `docs/platform/PHASE-1.md`. Without all three variables the paywall says "Payments open soon".
 - **Reports are AI-analysed only (2026-11-11):** no doctor review for now; never say a doctor reviews reports. "See a doctor" flags for the person's own doctor stay.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
@@ -52,6 +52,19 @@ The running record of this project: where things stand, why they are the way the
   - **Prices** come from the shared monthly brand search (keys `v2:<rule>:<variant>`): 3–5 brands, best first, each with its listed pack price and how long a pack lasts at our dose. Code works out ₹ a month and drops odd numbers.
   - **Without a price,** `TYPICAL_MONTHLY_INR` (rough figures, shown as "typical price") fills in. Older stacks are matched to it by nutrient name.
 - **Brands in stacks (2026-11-09):** Mayank asked for named brands. The platform's stack names 2–3 brands sold in India per item, found by Claude's web search, under a plain note that D-Human has no brand partners and earns nothing from them. The landing page still names no brands.
+- **A stack before any report (2026-11-17, from user feedback: most people have no report with them):**
+  - **What it's built from:** with no ready report, `startStack` builds from food gaps alone. That's `dietPicture`, measured against `targetsFor` (age, sex, height, weight, training level, goals). It uses the same rules, safety floor, brands, prices and budgets as report stacks.
+  - **How it's marked:** such a stack has `report_id` null. Migration `0008` removed the older report-less leftovers, so null now always means "from meals", and `deleteReports` keeps these stacks.
+  - **What food alone can earn:** magnesium, calcium, protein and zinc (as before), and B12 at 500 mcg for mostly vegetarian meals under 50% of need when there's no B12 result (`b12FromFood`). Never vitamin D, iron, folate or omega-3. Big iron and folate gaps get food advice only.
+  - **What counts as data:** a day counts only with two or more meals and at least 40% of the energy target (`PLAUSIBLE_SHARE` in `lib/platform/food.ts`), and a "usual day" only past the same 40%. This came from QA: two cups of chai a day had earned five supplements.
+  - **Not enough data:** `no_data`, and the Stack screen's "Your stack starts with your food." (progress "1 of 3 days", a link to `/fuel?usual=1`, which opens Fuel at "How you usually eat").
+  - **The screens:**
+    - The Stack screen says it's "Built … from AI estimates of your meals, against targets for you (…)", with a card asking for a blood report for vitamin D, B12 stores and iron.
+    - Home and Fuel offer the stack once meals are enough.
+  - **Once a report is read:**
+    - The meals stack is out of date. It shows no doses, only "Rebuild with my blood report".
+    - Safety flags always come from the newest report, so an urgent result holds the page whichever report the stack was built from.
+    - A held stack (urgent, or pregnancy added later) shows no items.
 - **Past meals (2026-11-17, from user feedback):** `/fuel/past` lists the 28 days before today (`HISTORY_DAYS` in `lib/domain/meals.ts`), only days with meals, newest first, yesterday open, each meal with its time and Delete. Older logs are kept and still count in wraps. Reached from "Past meals" beside the Fuel title and from Home ("Yesterday: X kcal and Y g protein."). Meal delete stays one tap, as on Today.
 - **Deleting reports (2026-11-17, from user feedback: people tried the app with a friend's report and had none of their own):**
   - **Where:** `/reports` lists every upload with Open and Delete. "Start fresh" deletes them all, and shows only from 2 reports.
@@ -131,6 +144,12 @@ The running record of this project: where things stand, why they are the way the
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
+- [ ] Decide (Mayank) on the stack before a report:
+  - B12 at 500 mcg from a food gap alone, without a test (needs a doctor's look too).
+  - The 40% energy floor for a day to count: a day logged without breakfast (about 60%) still counts, so calcium under 50% can still come from it. The options are a higher share, or scaling gaps by how much of the day was logged.
+  - Should a stack go out of date when diet, medicines or a kidney condition change? Pregnancy already holds it.
+  - Should an old meals stack come back after all reports are deleted? It does now, dated, with Rebuild.
+  - Accounts made before the 18+ rule can get stacks without a report.
 - [ ] Daily caps reset when reports are deleted (QA, 2026-11-17): `readLimitReached` counts today's report rows and the stack cap counts stacks, so delete-and-retry gets around the 10 reads and 5 stacks a day (the plan's own read limits still hold; a junk file whose read fails costs an AI extraction each round, up to 6 an hour per server). Fix: count attempts where deletes don't reach (a ledger, needs a migration).
 - [ ] Home and wraps pick the "latest" report by upload order, not by when the blood was taken: uploading last year's report after this year's makes Home show last year's as current, and wraps compare in upload order.
 - [ ] Upgrade Next.js from 16.4.2 to 16.4.6 or later: moderate advisory GHSA-mfr8-8qww-v76h (information disclosure when a `"use cache"` function runs through `unstable_cache()`). D-Human uses neither, so it isn't exposed; `next build` asks for it.
@@ -185,6 +204,27 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-17
+- **A stack before any report (Mayank, from user feedback):** design in Decisions ("A stack before any report").
+  - **New:** migration `0008_meal_stacks` (deletes stacks without a report made before 2026-11-17; safe to run twice) and `tests/meal-stack.test.ts`. QA added `tests/qa-meal-stack.test.ts`.
+  - **Changed:**
+    - `lib/platform/stack.ts` (`startStack` without a report, `no_data`).
+    - `lib/domain/supplements.ts` (`b12FromFood`, food-only advice for iron and folate, skip wording, the pregnancy line without a report).
+    - `lib/platform/food.ts` (`PLAUSIBLE_SHARE`, `fullDays`); `lib/platform/dashboard.ts` (`foodReady`).
+    - The Stack page and `Stack.tsx` (basis, body line, report card, out-of-date and held stacks show no doses, flags from the newest report).
+    - Home's stack section, Fuel's "Your meals are enough for a stack" card and `?usual=1`, the tour's stack stop.
+    - `lib/platform/reports.ts` keeps meals stacks.
+  - **The crew:** the UX designer caught Home saying "Open my stack" after a report was read, over-claims ("makes it exact", "cover the basics"), the missing "AI estimates" wording, and dead ends without food data; all fixed. QA caught near-empty logs earning a full stack (fixed with the 40% floor), and an old meals stack still showing doses after an urgent report (fixed: flags come from the newest report, and out-of-date or held stacks show no doses). Choices left for Mayank are in Open items.
+  - **Checked:**
+    - Typecheck, lint, 230 tests (14 new), the production build.
+    - On database copies, in Chrome as a 390 px touch phone:
+      - The film account without its report: Home offers Build, and the stack builds from meals ("Nothing to add from your meals.").
+      - A new person with one day of meals: "Your stack starts with your food.", 1 of 3 days.
+      - The same person after describing a usual day on Fuel: 3 items (B12 at 32%, zinc, protein) with budget, typical prices and the report card.
+      - A meals stack followed by a report with an urgent haemoglobin: the page is held with no doses, and Home says to rebuild.
+      - `/fuel?usual=1` opens at "How you usually eat".
+    - No sideways scroll; no console errors besides Vercel's analytics scripts.
+  - **Not checked:** a real phone; Hindi and Hinglish stacks built from meals (the translation step is unchanged).
+- **Push `0e816ed`:** the entry below. Live about 40 s later, served from `bom1`. Signed out, `/fuel/past` and `/reports` send visitors to `/signin` the same way `/fuel` does. `DELETE /api/reports` and `/api/reports/[id]` give 401, and robots.txt blocks `/reports`. The landing and the payment webhook (401 without a signature) are unchanged.
 - **Past meals and deleting reports (Mayank, from user feedback):** design in Decisions ("Past meals", "Deleting reports").
   - **New:**
     - `lib/domain/meals.ts`, `lib/platform/reports.ts`.

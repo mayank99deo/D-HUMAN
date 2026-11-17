@@ -6,39 +6,81 @@ import { StackClient } from "@/components/platform/Stack";
 import { aiMode } from "@/lib/ai/client";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
+import type { Profile } from "@/lib/db/schema";
 import { markerDef } from "@/lib/domain/markers";
+import type { Persona } from "@/lib/domain/persona";
 import { asFlag } from "@/lib/domain/safety";
+import { dietPicture } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
 import { latestReadyReport, latestStack } from "@/lib/platform/stack";
 import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Stack" };
 
-async function Stack() {
-  const { user, profile } = await requireMember();
-  const report = await latestReadyReport(user.id);
-  if (!report) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
-        <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Your stack starts with a test.</h1>
-        <p className="mt-4 max-w-prose text-lg text-graphite">
-          D-Human only suggests a supplement when a marker or a real gap in your food points to it. Upload a blood report and we&apos;ll build it from there.
+// "24, 175 cm, 70 kg, regular lifter": what a meals-only stack's targets were set from.
+function bodyLine(profile: Profile, persona: Persona) {
+  return [
+    persona.age != null ? String(persona.age) : null,
+    // Non-breaking spaces, so "71 kg" never splits across lines.
+    profile.heightCm ? `${Math.round(profile.heightCm)}\u00a0cm` : null,
+    profile.weightKg ? `${Math.round(profile.weightKg)}\u00a0kg` : null,
+    persona.label.toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+// No report and nothing to go on in their food yet: the two ways to start.
+function StartWithFood({ fullDays }: { fullDays: number }) {
+  return (
+    <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
+      <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Your stack starts with your food.</h1>
+      <p className="mt-4 max-w-prose text-lg text-graphite">
+        Log what you eat on three days, or describe a normal day once. We&apos;ll suggest only what your food runs short of, measured against your body and
+        training. A blood report adds what food can&apos;t show.
+      </p>
+      {fullDays > 0 && (
+        <p className="mt-4 font-semibold">
+          {fullDays} of 3 days logged. A day counts once most of what you ate is in.
         </p>
-        <Link href="/upload" className="button-primary mt-8 h-13">
+      )}
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link href="/fuel" className="button-primary h-13">
+          Log a meal
+        </Link>
+        <Link href="/upload" className="button-ghost h-13">
           Upload a blood report
         </Link>
-      </main>
-    );
+      </div>
+      <Link href="/fuel?usual=1" className="link-quiet mt-6 inline-flex min-h-11 items-center">
+        Short on time? Describe a normal day instead
+      </Link>
+    </main>
+  );
+}
+
+async function Stack() {
+  const { user, profile, persona } = await requireMember();
+  const [report, stack] = await Promise.all([latestReadyReport(user.id), latestStack(user.id)]);
+  // Before any report, the stack comes from meals alone (lib/platform/stack.ts).
+  if (!report) {
+    const picture = await dietPicture(user.id, profile);
+    if (!stack && picture.source === "none") return <StartWithFood fullDays={picture.fullDays} />;
   }
-  const stack = await latestStack(user.id);
-  const stale = !!stack && stack.reportId !== report.id;
+  // A stack built from meals has no report; once a report is read, it's out of date.
+  const basis = stack ? (stack.reportId ? "report" : "meals") : report ? "report" : "meals";
+  const stale = !!report && !!stack && stack.reportId !== report.id;
   const names = Object.fromEntries(
     ((stack?.plan as StackPlan | null)?.items ?? []).flatMap((i) => i.markers).map((k) => [k, markerDef(k)?.name ?? k]),
   );
-  // Results the safety floor kept out of the stack, from the report the stack was built on:
-  // named in a small card at the end, or, when urgent, in one line at the top.
+  // Results the safety floor keeps out of a stack, from the newest report (not the one the
+  // stack was built on, which may be older or none at all, for a stack from meals): named
+  // in a small card at the end, or, when urgent, in one line at the top with the stack held.
+  const fromReport = report?.id ?? stack?.reportId ?? null;
   const d = await db();
-  const markers = await d.select({ key: schema.markers.key, name: schema.markers.name, flag: schema.markers.flag }).from(schema.markers).where(eq(schema.markers.reportId, stack?.reportId ?? report.id));
+  const markers = fromReport
+    ? await d.select({ key: schema.markers.key, name: schema.markers.name, flag: schema.markers.flag }).from(schema.markers).where(eq(schema.markers.reportId, fromReport))
+    : [];
   const flagged = markers.flatMap((m) => {
     const flag = asFlag(m.flag);
     return flag ? [{ name: markerDef(m.key)?.name ?? m.name, urgent: flag === "urgent" }] : [];
@@ -49,6 +91,9 @@ async function Stack() {
       aiOff={aiMode() === "off"}
       stack={stack ? { id: stack.id, status: stack.status, error: stack.error, plan: stack.plan as StackPlan | null, demo: stack.model === "mock", made: stack.createdAt.toISOString() } : null}
       stale={stale}
+      basis={basis}
+      hasReport={!!report}
+      body={bodyLine(profile, persona)}
       markerNames={names}
       budget={profile.supplementBudget}
       flagged={flagged}

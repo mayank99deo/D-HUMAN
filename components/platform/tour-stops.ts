@@ -25,8 +25,8 @@ export const TOUR: readonly TourStop[] = [
   },
   {
     id: "stack",
-    title: "Stack: only what your markers point to",
-    body: "A supplement shows up only where a marker or a repeated food gap points to it, with food first. We don't partner with any brand.",
+    title: "Stack: only what your markers and meals point to",
+    body: "A supplement shows up only where a marker or a repeated food gap points to it, with food first. No report yet? Three days of meals is enough to start. We don't partner with any brand.",
   },
   {
     id: "wraps",

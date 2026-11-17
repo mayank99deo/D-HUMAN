@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { StackPlan } from "@/lib/ai/schemas";
@@ -11,15 +12,21 @@ type Item = StackPlan["items"][number];
 /** A result the safety floor kept out of the stack. */
 export type Flagged = { name: string; urgent: boolean };
 
+const madeOn = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(iso));
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const pricedBrands = (item: Item) => item.brands.some((b) => typeof b.monthly_inr === "number");
 
 // The Stack screen. The supplements lead, in priority order and fitted to the
 // person's monthly budget (lib/domain/budget.ts); doctor notes close the page in a
 // small card. Only a held stack (an urgent result, or pregnancy) says so at the top.
+// Before any report the stack is built from meals ("meals"): it says so, and asks for a
+// report to cover what food can't show.
 export function StackClient({
   stack,
   stale,
+  basis,
+  hasReport,
+  body,
   aiOff,
   markerNames,
   budget: savedBudget,
@@ -28,6 +35,10 @@ export function StackClient({
 }: {
   stack: StackState | null;
   stale: boolean;
+  basis: "report" | "meals";
+  hasReport: boolean;
+  /** "24, 175 cm, 70 kg, regular lifter": what the targets were set from. */
+  body: string;
   aiOff: boolean;
   markerNames: Record<string, string>;
   budget: string | null;
@@ -85,6 +96,7 @@ export function StackClient({
   }
 
   const plan = stack?.status === "ready" ? stack.plan : null;
+  const meals = basis === "meals";
   const items = useMemo(() => plan?.items ?? [], [plan]);
   const fit = useMemo(() => fitBudget(items, budget), [items, budget]);
   const chosen = budgetOf(budget);
@@ -95,11 +107,16 @@ export function StackClient({
   const doctorNames = flagged.filter((f) => !(hold === "urgent" && f.urgent)).map((f) => f.name);
   const doctorNotes = hold === "pregnant" ? [] : (plan?.see_doctor ?? []).filter((line) => !flagged.some((f) => line.startsWith(f.name)));
 
+  // A stack out of date (a newer report, or the first one after a stack from meals) or on
+  // hold (an urgent result, or pregnancy since it was built) shows no doses, only why.
+  const showPlan = !!plan && !hold && !stale;
   const title = !plan
     ? "Your stack"
     : hold
       ? "Your stack is on hold."
-      : fit.included.length
+      : stale
+        ? "Time to rebuild your stack."
+        : fit.included.length
         ? fit.later.length
           ? `${fit.included.length} for your budget.`
           : `${fit.included.length} for you. Nothing else.`
@@ -107,7 +124,9 @@ export function StackClient({
           ? "Nothing fits this budget yet."
           : doctorNames.length || doctorNotes.length
             ? "Nothing to add for now."
-            : "You don't need anything.";
+            : meals
+              ? "Nothing to add from your meals."
+              : "You don't need anything.";
 
   // "About ₹0" never shows: a stack we can't price at all just doesn't state a total.
   const about = fit.total > 0 ? `About ${rupees(fit.total)} a month` : null;
@@ -128,6 +147,12 @@ export function StackClient({
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
       <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">{title}</h1>
+      {meals && (
+        <p className="mt-4 max-w-prose text-graphite">
+          {plan && stack ? `Built ${madeOn(stack.made)} from AI estimates of your meals` : "We build it from AI estimates of your meals"}, against targets for you
+          {body ? ` (${body})` : ""}.{!hasReport && " Without a blood report it covers only what food can show."}
+        </p>
+      )}
 
       {plan && hold && (
         <p className="error-mark mt-4 max-w-prose text-lg">
@@ -137,12 +162,21 @@ export function StackClient({
         </p>
       )}
 
+      {plan && stale && !hold && (
+        <p className="mt-4 max-w-prose text-lg">
+          {meals ? "Your report is read. Rebuild your stack so it covers your markers too." : "A newer report is in. Rebuild your stack from it."}
+        </p>
+      )}
+
       {aiOff && !plan && <p className="error-mark mt-6 text-sm">Stacks aren&apos;t switched on yet on this server.</p>}
 
       {building ? (
         <section className="mt-10" aria-live="polite">
           <p className="text-lg font-semibold">Building your stack…</p>
-          <p className="mt-2 text-graphite">Weighing your markers against what you eat. The first look for brands sold in India can take a minute.</p>
+          <p className="mt-2 text-graphite">
+            {hasReport ? "Weighing your markers against what you eat." : "Weighing what you eat against targets for your body and training."} The first look for brands
+            sold in India can take a minute.
+          </p>
           <div className="mt-6 h-px overflow-hidden bg-line">
             <div className="h-px w-1/3 animate-pulse bg-paper" />
           </div>
@@ -151,7 +185,7 @@ export function StackClient({
         (!plan || stale) && (
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button type="button" onClick={build} disabled={starting} className="button-primary h-13 px-8">
-              {starting ? "Starting…" : plan ? "Rebuild from my latest report" : "Build my stack"}
+              {starting ? "Starting…" : plan ? (meals ? "Rebuild with my blood report" : "Rebuild from my latest report") : hasReport ? "Build my stack" : "Build my stack from my meals"}
             </button>
             {stack?.status === "failed" && <p className="error-mark text-sm">{stack.error}</p>}
             {error && <p className="error-mark text-sm">{error}</p>}
@@ -159,7 +193,7 @@ export function StackClient({
         )
       )}
 
-      {plan && (
+      {showPlan && plan && (
         <>
           {stack?.demo && <p className="mt-4 text-sm text-graphite">Demo stack: AI is off on this machine.</p>}
 
@@ -199,7 +233,8 @@ export function StackClient({
                       </span>
                       <div className="min-w-0">
                         <h2 className="text-2xl font-bold leading-tight semiwide">{it.nutrient}</h2>
-                        <p className="mt-1 text-sm text-graphite">For {it.markers.map((k) => markerNames[k] ?? k).join(", ") || it.diet_gap}</p>
+                        {/* A food gap's numbers are in the line below, so it isn't repeated here. */}
+                        <p className="mt-1 text-sm text-graphite">{it.markers.length ? `For ${it.markers.map((k) => markerNames[k] ?? k).join(", ")}` : "From a gap in your meals"}</p>
                         {fit.cost[i] != null && (
                           <p className="mt-1 text-sm font-semibold">
                             {fit.typical[i] && typical ? `About ${rupees(typical[0])}–${rupees(typical[1]).slice(1)} a month (typical price)` : `About ${rupees(fit.cost[i]!)} a month`}
@@ -275,6 +310,22 @@ export function StackClient({
             </section>
           )}
 
+          {/* Before any report: what food can't show, and the way to cover it. */}
+          {meals && !hasReport && (
+            <section className="mt-12 border border-line-strong p-5" aria-labelledby="report">
+              <h2 id="report" className="text-xl font-bold semiwide">
+                Add a blood report for the full picture
+              </h2>
+              <p className="mt-2 text-graphite">
+                Food can&apos;t show your vitamin D, your B12 stores or your iron. A report can, and we then rebuild your stack around your results, adding only what
+                they point to.
+              </p>
+              <Link href="/upload" className="button-ghost mt-4 h-12">
+                Upload a blood report
+              </Link>
+            </section>
+          )}
+
           {plan.food_first.length > 0 && (
             <section className="mt-12" aria-labelledby="food">
               <h2 id="food" className="text-2xl font-bold semiwide">
@@ -294,7 +345,7 @@ export function StackClient({
           {plan.skip.length > 0 && (
             <section className="mt-12" aria-labelledby="skip">
               <h2 id="skip" className="text-2xl font-bold semiwide">
-                You don&apos;t need these
+                {meals ? "Skip these for now" : "You don't need these"}
               </h2>
               <ul className="mt-3">
                 {plan.skip.map((s, i) => (
@@ -322,7 +373,9 @@ export function StackClient({
       <aside className="mt-10 border border-line-strong p-5 text-[0.9375rem]">
         <p className="font-semibold">We don&apos;t partner with any supplement brand.</p>
         <p className="mt-2 text-graphite">
-          Every pick comes from your blood report and what you eat, and nothing else. The brands are suggestions found on merit; D-Human earns nothing from them. Prices are
+          {meals
+            ? "Every pick comes from what you eat, measured against targets for your body and training, and nothing else."
+            : "Every pick comes from your blood report and what you eat, and nothing else."} The brands are suggestions found on merit; D-Human earns nothing from them. Prices are
           as listed when we last looked, for a month at the dose shown, and they change. Check with your doctor before starting anything, especially if you take medicines,
           are pregnant, or have a kidney or liver condition.
         </p>

@@ -14,7 +14,7 @@ export async function POST() {
   if (!allowRequest(`stack:${user.id}`, 5, 60 * 60_000)) return json({ error: "rate_limited" }, 429);
   try {
     const started = await startStack(user.id);
-    if (started.kind === "no_report") return json({ error: "no_report" }, 409);
+    if (started.kind === "no_data") return json({ error: "no_data", message: STACK_MESSAGES.no_data }, 409);
     if (started.kind === "daily_limit") return json({ error: "daily_limit", message: STACK_MESSAGES.daily_limit }, 429);
     // Already building: hand back that one, so a second tap follows the same stack.
     if (started.kind === "building") return json({ id: started.id });

@@ -25,10 +25,13 @@ function greeting(tz: string | null) {
 }
 
 // With nothing to take because a doctor comes first, home must not count "0 supplements".
-function stackLine(plan: { items: unknown[]; see_doctor: unknown[] } | null) {
+// A stack built from meals alone (no report) says what it's from.
+function stackLine(plan: { items: unknown[]; see_doctor: unknown[] } | null, fromMeals: boolean) {
   const n = plan?.items.length ?? 0;
-  if (!n && plan?.see_doctor.length) return "See a doctor before adding anything. Your stack lists what to ask about.";
+  if (!n && plan?.see_doctor.length) return "See a doctor before adding anything. Your stack says why.";
+  if (!n && fromMeals) return "Nothing to add from your food. A blood report checks what food can't show.";
   if (!n) return "Nothing to add. Your markers and your food don't point to any supplement.";
+  if (fromMeals) return `${n} supplement${n === 1 ? "" : "s"}, each tied to a gap in what you eat. A blood report adds what food can't show.`;
   return `${n} supplement${n === 1 ? "" : "s"}, each tied to a marker or a gap in what you eat. Nothing else.`;
 }
 
@@ -83,6 +86,19 @@ async function Dashboard({ searchParams }: { searchParams: Promise<Record<string
   const tone: Tone = read?.verdict.level ?? null;
   const fuel = data.today;
   const isMock = data.view?.model === "mock";
+  // The stack section: built from a report, from meals (before any report), or not yet.
+  const stackReady = data.stack?.status === "ready";
+  const fromMeals = !!data.stack && !data.stack.reportId;
+  const stackCopy =
+    stackReady && read && fromMeals
+      ? { line: "Your report is read. Rebuild your stack so it covers your markers too.", button: "Rebuild with my report" }
+      : stackReady
+        ? { line: stackLine(data.stack!.plan as { items: unknown[]; see_doctor: unknown[] } | null, fromMeals), button: "Open my stack" }
+        : read
+          ? { line: "Built from this report and what you eat. Only what a marker or a real gap points to.", button: "Build my stack" }
+          : data.foodReady
+            ? { line: "Your meals are enough to start: we build it from what you eat, measured against your body and training. No report needed.", button: "Build my stack" }
+            : { line: "Log meals on 3 days, or describe a normal day, and we'll build it. No report needed.", button: "Start my stack" };
   // A friend's report tried on the app: say so, and offer the delete right here.
   const otherName = data.view ? printedFor(data.view.nameOnReport, profile.name) : null;
   const source = data.view
@@ -292,18 +308,10 @@ async function Dashboard({ searchParams }: { searchParams: Promise<Record<string
           <h2 id="stack" className="text-2xl font-bold semiwide">
             Your stack
           </h2>
-          <p className="mt-2 max-w-prose text-graphite">
-            {data.stack?.status === "ready"
-              ? stackLine(data.stack.plan as { items: unknown[]; see_doctor: unknown[] } | null)
-              : read
-                ? "Built from this report and what you eat. Only what a marker or a real gap points to."
-                : "It appears once your first report is read."}
-          </p>
-          {read && (
-            <Link href="/stack" className="button-ghost mt-4 h-12">
-              {data.stack?.status === "ready" ? "Open my stack" : "Build my stack"}
-            </Link>
-          )}
+          <p className="mt-2 max-w-prose text-graphite">{stackCopy.line}</p>
+          <Link href="/stack" className="button-ghost mt-4 h-12">
+            {stackCopy.button}
+          </Link>
         </section>
       </div>
     </div>

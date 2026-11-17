@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
 export type ReportRow = {
@@ -58,7 +58,7 @@ export function printedFor(nameOnReport: string | null, profileName: string | nu
 
 /**
  * Deletes some or all of a person's reports, and with each its files, markers, read
- * and stack (foreign keys cascade). Every wrap that counted any report goes too: a wrap
+ * and stack (foreign keys cascade). A stack built from meals alone has no report and stays. Every wrap that counted any report goes too: a wrap
  * compares a report in its period with the one uploaded before it, which can be from
  * any date, so only that is sure to leave no wrap quoting a deleted report. The Wraps
  * screen offers to make them again, from meals that are all still there. Reads already
@@ -71,8 +71,8 @@ export async function deleteReports(userId: string, which: "all" | string[]): Pr
   return d.transaction(async (tx) => {
     const mine = which === "all" ? eq(schema.reports.userId, userId) : and(eq(schema.reports.userId, userId), inArray(schema.reports.id, which));
     const gone = await tx.delete(schema.reports).where(mine).returning({ id: schema.reports.id });
-    // Stacks made before migration 0002 lost their report link instead of going with it.
-    if (which === "all") await tx.delete(schema.stacks).where(and(eq(schema.stacks.userId, userId), isNull(schema.stacks.reportId)));
+    // A stack without a report was built from meals, so it stays (migration 0008 removed
+    // the old ones left without their report).
     if (!gone.length) return 0;
     await tx.delete(schema.wraps).where(and(eq(schema.wraps.userId, userId), sql`coalesce((${schema.wraps.stats}->>'reportsInPeriod')::int, 0) > 0`));
     return gone.length;

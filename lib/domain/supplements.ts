@@ -96,12 +96,16 @@ function vitaminD(ctx: RuleContext): Built | null {
   };
 }
 
+const B12_MEDS = /metformin|pantoprazole|omeprazole|rabeprazole|esomeprazole|ranitidine|famotidine/i;
+const B12_MEDS_NOTE = "Your medicines (metformin or acid reducers) lower B12 absorption; tell your doctor you're taking it.";
+
 function b12(ctx: RuleContext): Built | null {
   const m = byKey(ctx, "b12");
-  if (!m || !LOW.has(m.status)) return null;
+  if (!m) return b12FromFood(ctx);
+  if (!LOW.has(m.status)) return null;
   // At the bottom of the range, it's worth acting only where diet explains it.
   if (m.status === "edge_low" && !PLANT_DIETS.has(ctx.diet ?? "")) return null;
-  const meds = /metformin|pantoprazole|omeprazole|rabeprazole|esomeprazole|ranitidine|famotidine/i.test(ctx.medications ?? "");
+  const meds = B12_MEDS.test(ctx.medications ?? "");
   return {
     rule: "b12",
     nutrient: "Vitamin B12",
@@ -112,7 +116,27 @@ function b12(ctx: RuleContext): Built | null {
     dose: "500–1,000 mcg a day",
     timing: "Any time of day",
     duration: "12 weeks, then retest B12",
-    cautions: meds ? "Your medicines (metformin or acid reducers) lower B12 absorption; tell your doctor you're taking it." : null,
+    cautions: meds ? B12_MEDS_NOTE : null,
+  };
+}
+
+// No B12 result to go on (no report yet, or one without B12): meals that are mostly
+// vegetarian and fall well short are the commonest reason for low B12 in India, and B12
+// has no known upper limit, so a food gap alone can earn it, at the lower dose.
+function b12FromFood(ctx: RuleContext): Built | null {
+  const gap = gapOf(ctx, "b12_ug");
+  if (!gap || gap.pct >= 50 || !PLANT_DIETS.has(ctx.diet ?? "")) return null;
+  return {
+    rule: "b12",
+    nutrient: "Vitamin B12",
+    why: `Your meals cover about ${gap.pct}% of your B12 need, common when meals are mostly vegetarian.`,
+    markers: [],
+    diet_gap: `Vitamin B12 at ${gap.pct}% of daily need`,
+    form: "Methylcobalamin or cyanocobalamin tablet",
+    dose: "500 mcg a day",
+    timing: "Any time of day",
+    duration: "While your meals fall short; a blood test shows your stores",
+    cautions: B12_MEDS.test(ctx.medications ?? "") ? B12_MEDS_NOTE : null,
   };
 }
 
@@ -247,7 +271,7 @@ const RULES = [vitaminD, b12, iron, folate, magnesium, omega3, calcium, protein,
 // The order a budget spends in: a result outside its range first, then one at the
 // edge of range, then food gaps, biggest gap first. Ties keep the order above.
 
-const GAP_KEY: Partial<Record<RuleId, Gap["key"]>> = { magnesium: "magnesium_mg", calcium: "calcium_mg", protein: "protein", zinc: "zinc_mg" };
+const GAP_KEY: Partial<Record<RuleId, Gap["key"]>> = { magnesium: "magnesium_mg", calcium: "calcium_mg", protein: "protein", zinc: "zinc_mg", b12: "b12_ug" };
 
 function rank(ctx: RuleContext, b: Built): [number, number] {
   const statuses = b.markers.map((k) => byKey(ctx, k)?.status);
@@ -272,7 +296,9 @@ const FOOD_FIRST: Partial<Record<RuleId, (ctx: RuleContext) => string>> = {
 };
 
 function skips(ctx: RuleContext, chosen: Set<RuleId>): Plan["skip"] {
-  const out: Plan["skip"] = [{ name: "Multivitamin", why: "Your gaps are specific; a multivitamin mostly adds things you don't need." }];
+  const out: Plan["skip"] = [
+    { name: "Multivitamin", why: chosen.size ? "Your gaps are specific; a multivitamin mostly adds things you don't need." : "Nothing in your results or meals points to one." },
+  ];
   const fine = (key: string) => {
     const m = byKey(ctx, key);
     return m && m.status === "in_range" ? m : null;
@@ -285,7 +311,7 @@ function skips(ctx: RuleContext, chosen: Set<RuleId>): Plan["skip"] {
   if (f && !chosen.has("iron")) out.push({ name: "Iron", why: `Your ferritin is ${reading(f)}, fine. Iron you don't need can harm.` });
   const t = fine("triglycerides");
   if (t && !chosen.has("omega3")) out.push({ name: "Fish oil for cholesterol", why: `Your triglycerides are ${reading(t)}, in range.` });
-  out.push({ name: "Biotin", why: "No marker points to it, and it can distort thyroid and heart test results." });
+  out.push({ name: "Biotin", why: "Nothing points to it, and it can distort thyroid and heart test results." });
   return out.slice(0, 4);
 }
 
@@ -299,7 +325,7 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
 
   // Pregnant or breastfeeding: nothing new without a doctor.
   if (conditions.has("pregnant")) {
-    see_doctor.push("You're pregnant or breastfeeding: take nothing new without your doctor, and show them this report.");
+    see_doctor.push(`You're pregnant or breastfeeding: take nothing new without your doctor${ctx.markers.length ? ", and show them this report" : ""}.`);
     return { items: [], skip: [], food_first: [], see_doctor };
   }
 
@@ -326,7 +352,9 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
   }));
 
   const chosen = new Set(items.map((i) => i.rule));
-  const food_first = [...chosen].map((r) => FOOD_FIRST[r]?.(ctx)).filter((s): s is string => !!s).slice(0, 4);
+  // Big food gaps that never earn a supplement without a test (iron, folate) still get food advice.
+  const foodOnly = (["iron", "folate"] as const).filter((r) => !chosen.has(r) && (gapOf(ctx, r === "iron" ? "iron_mg" : "folate_ug")?.pct ?? 100) < 60);
+  const food_first = [...chosen, ...foodOnly].map((r) => FOOD_FIRST[r]?.(ctx)).filter((s): s is string => !!s).slice(0, 4);
   return { items, skip: skips(ctx, chosen), food_first, see_doctor };
 }
 

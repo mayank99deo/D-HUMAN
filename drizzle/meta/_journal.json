@@ -57,6 +57,13 @@
       "when": 1794548718104,
       "tag": "0007_supplement_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794927340536,
+      "tag": "0008_meal_stacks",
+      "breakpoints": true
     }
   ]
 }

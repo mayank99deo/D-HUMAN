@@ -24,6 +24,7 @@ export const STACK_MESSAGES = {
   failed: "We couldn't build your stack this time. Try again in a minute.",
   timeout: "Building your stack took too long, so we stopped. Try again in a minute.",
   stale: "This stack stopped partway. Try again.",
+  no_data: "Log meals on three days, or describe a normal day on Fuel, and we'll build your stack from them.",
 };
 
 export async function latestReadyReport(userId: string) {
@@ -66,16 +67,20 @@ export async function settleStaleStack(id: string, userId: string): Promise<bool
 export type StackStart =
   | { kind: "started"; id: string; job: Promise<void> }
   | { kind: "building"; id: string } // one is already on its way; the screen follows that one
-  | { kind: "no_report" }
+  | { kind: "no_data" } // no report, and not enough meals (or a usual day) to go on
   | { kind: "daily_limit" };
 
-// Builds a fresh stack from the latest report plus what they eat.
+// Builds a fresh stack from the latest report plus what they eat. Before any report, it
+// comes from what they eat alone (food gaps against targets set for their body and
+// training); such a stack has no report. The same rules, safety floor, brands and budgets
+// apply either way, and the marker rules simply find nothing to act on.
 export async function startStack(userId: string): Promise<StackStart> {
   // The plan itself needs no AI; brands and translation are skipped when it's off.
   const mode = aiMode();
-  const report = await latestReadyReport(userId);
-  const profile = await getProfile(userId);
-  if (!report || !profile) return { kind: "no_report" };
+  const [report, profile] = await Promise.all([latestReadyReport(userId), getProfile(userId)]);
+  if (!profile) return { kind: "no_data" };
+  // Without a report, meals are all there is: three logged days, or a usual day described.
+  if (!report && (await dietPicture(userId, profile)).source === "none") return { kind: "no_data" };
 
   const d = await db();
   const id = newId();
@@ -90,7 +95,7 @@ export async function startStack(userId: string): Promise<StackStart> {
     const building = recent.find((s) => s.status === "building" && !isStaleBuild(s.createdAt));
     if (building) return { kind: "building", id: building.id } as const;
     if (recent.length >= DAILY_STACKS) return { kind: "daily_limit" } as const;
-    await tx.insert(schema.stacks).values({ id, userId, reportId: report.id, status: "building" });
+    await tx.insert(schema.stacks).values({ id, userId, reportId: report?.id ?? null, status: "building" });
     return null;
   });
   if (claim) return claim;
@@ -103,7 +108,7 @@ export async function startStack(userId: string): Promise<StackStart> {
   // brands, shared by everyone and cached monthly, and translates for Hindi and
   // Hinglish readers. The safety floor runs on the English plan before translation.
   const work = async () => {
-    const markers = await d.select().from(schema.markers).where(eq(schema.markers.reportId, report.id));
+    const markers = report ? await d.select().from(schema.markers).where(eq(schema.markers.reportId, report.id)) : [];
     const picture = await dietPicture(userId, profile);
     const planned = planStack({
       markers: markers.map((m) => ({ key: m.key, name: markerDef(m.key)?.name ?? m.name, value: m.value, unit: m.unit, status: m.status, flag: m.flag })),

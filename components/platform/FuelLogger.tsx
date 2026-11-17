@@ -170,7 +170,13 @@ export function FuelLogger({
   facts,
   categories,
   plan,
+  stackReady,
+  focusUsual,
 }: {
+  /** No report and no stack yet, and their meals are now enough to build one. */
+  stackReady: boolean;
+  /** Opened from the Stack screen to describe a usual day: start at that section. */
+  focusUsual: boolean;
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
   totals: Totals;
@@ -491,6 +497,11 @@ export function FuelLogger({
     }
   }
 
+  // After the screen's own reset to the top (ScrollReset), so this wins.
+  useEffect(() => {
+    if (focusUsual) document.getElementById("typical")?.scrollIntoView({ block: "start" });
+  }, [focusUsual]);
+
   const sorted = [...logs].sort((a, b) => MEAL_ORDER.indexOf(a.meal) - MEAL_ORDER.indexOf(b.meal));
   const kcalOver = overBy(totals.kcal, targets.kcal);
 
@@ -797,6 +808,18 @@ export function FuelLogger({
             </div>
           )}
         </section>
+
+        {stackReady && (
+          <section className="mt-10 border border-line-strong p-5" aria-labelledby="stack-ready">
+            <h2 id="stack-ready" className="text-xl font-bold semiwide">
+              Your meals are enough for a stack
+            </h2>
+            <p className="mt-2 text-graphite">See what your food runs short of, measured against your body and training. No report needed.</p>
+            <Link href="/stack" className="button-ghost mt-4 h-12">
+              Build my stack
+            </Link>
+          </section>
+        )}
 
         {/* Gaps */}
         {gaps.length > 0 && (
