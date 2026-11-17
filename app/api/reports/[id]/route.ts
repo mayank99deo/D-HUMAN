@@ -3,6 +3,7 @@ import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { READ_MESSAGES, isStale, settleStaleRead } from "@/lib/platform/analyze";
 import { json, unauthorized } from "@/lib/platform/http";
+import { deleteReports } from "@/lib/platform/reports";
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/reports/[id]">) {
   const user = await apiUser();
@@ -26,7 +27,7 @@ export async function DELETE(_request: Request, ctx: RouteContext<"/api/reports/
   const user = await apiUser();
   if (!user) return unauthorized();
   const { id } = await ctx.params;
-  const d = await db();
-  await d.delete(schema.reports).where(and(eq(schema.reports.id, id), eq(schema.reports.userId, user.id)));
+  // Its files, markers, read, stack and any wrap that counted it go with it.
+  await deleteReports(user.id, [id]);
   return json({ status: "deleted" });
 }

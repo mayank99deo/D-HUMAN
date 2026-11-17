@@ -10,6 +10,7 @@ import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { reportView } from "@/lib/platform/dashboard";
 import { requireMember } from "@/lib/platform/member";
 import { localDate } from "@/lib/platform/profile";
+import { printedFor } from "@/lib/platform/reports";
 
 export const metadata: Metadata = { title: "Report" };
 
@@ -32,8 +33,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
   const order = Object.values(PANELS);
   const sorted = [...groups.entries()].sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99));
 
-  const otherName =
-    view.nameOnReport && profile.name && !view.nameOnReport.toLowerCase().includes(profile.name.trim().split(/\s+/)[0].toLowerCase()) ? view.nameOnReport : null;
+  const otherName = printedFor(view.nameOnReport, profile.name);
   const out = markers.filter((m) => m.status === "low" || m.status === "high").length;
   const retest = retestFrom(view.collectedOn ?? localDate(profile.timezone, view.createdAt), read.retest.weeks, localDate(profile.timezone));
 
@@ -153,6 +153,9 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
           Build my stack from this
         </Link>
         <DeleteReport id={view.id} />
+        <Link href="/reports" className="link-quiet inline-flex min-h-11 items-center text-sm">
+          All your reports
+        </Link>
       </div>
     </main>
   );

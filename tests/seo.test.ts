@@ -108,7 +108,7 @@ describe("robots.txt and the sitemap", async () => {
     const r = robots();
     const rule = Array.isArray(r.rules) ? r.rules[0] : r.rules;
     const disallow = [rule.disallow].flat();
-    for (const p of ["/api/", "/home", "/fuel", "/upload", "/reports/", "/stack", "/wraps", "/settings", "/onboarding"]) {
+    for (const p of ["/api/", "/home", "/fuel", "/upload", "/reports", "/stack", "/wraps", "/settings", "/onboarding"]) {
       assert.ok(disallow.includes(p), p);
     }
     for (const p of ["/", "/signin", "/_next/"]) assert.ok(!disallow.some((d) => p.startsWith(d!)), p);

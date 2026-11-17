@@ -6,6 +6,7 @@ import { READ_MESSAGES, claimReport, readLimitReached } from "@/lib/platform/ana
 import { json, sniffMime, unauthorized } from "@/lib/platform/http";
 import { claimRefused, streamAnalysis } from "@/lib/platform/report-stream";
 import { planLimit } from "@/lib/platform/plan";
+import { deleteReports } from "@/lib/platform/reports";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { getProfile } from "@/lib/platform/profile";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
@@ -65,4 +66,13 @@ export async function POST(request: Request) {
     return claimRefused(claim);
   }
   return streamAnalysis(reportId, user.id, claim.startedAt);
+}
+
+// "Start fresh": every report goes, with its markers, reads and stacks, so home is back
+// to how it was before the first upload. Reads already used still count.
+export async function DELETE() {
+  const user = await apiUser();
+  if (!user) return unauthorized();
+  const deleted = await deleteReports(user.id, "all");
+  return json({ status: "deleted", deleted });
 }

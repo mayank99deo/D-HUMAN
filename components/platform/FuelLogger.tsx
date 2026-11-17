@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { MEAL_ORDER, type MealView } from "@/lib/domain/meals";
 import type { PlanView } from "@/lib/domain/plan";
 import {
   MEAL_ENGLISH_MAX,
   MEAL_WORDS_MAX,
   SPOKEN,
   langTag,
-  scriptLanguage,
   soundsLikeHindi,
   spokenById,
   spokenForAppLanguage,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/domain/speech";
 import { COUNTDOWN_MS, IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { MealOrbit, type MealRun } from "./MealOrbit";
+import { MealRow } from "./MealRow";
 import { OFFLINE, send } from "./net";
 import { Paywall, PlanLine } from "./Paywall";
 import { overBy, TargetBar } from "./Target";
@@ -28,11 +30,7 @@ import { toEnglish } from "./translate";
 import { useReducedMotion, VoiceActivity, VoiceMeter } from "./VoiceMeter";
 
 type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number };
-type Log = {
-  id: string; meal: string; title: string; source: string; kcal: number; proteinG: number; confidence: string | null; tip: string | null; items: string[]; demo: boolean;
-  /** The language the title and tip are written in, as an HTML lang tag. */
-  lang?: string;
-};
+type Log = MealView;
 type Mode = "photo" | "voice" | "text";
 type Meal = "" | "breakfast" | "lunch" | "dinner" | "snack";
 
@@ -43,7 +41,6 @@ const MEALS: { id: Meal; label: string }[] = [
   { id: "dinner", label: "Dinner" },
   { id: "snack", label: "Snack" },
 ];
-const MEAL_ORDER = ["breakfast", "lunch", "snack", "dinner"];
 
 const ERRORS: Record<string, string> = {
   not_food: "That doesn't look like food. Try another photo, or tell us what you ate.",
@@ -504,7 +501,12 @@ export function FuelLogger({
       {run && <MealOrbit run={run} facts={facts} categories={categories} onClose={() => setRun(null)} />}
       <div className="lg:col-span-5">
         <div className="lg:sticky lg:top-20">
-          <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Fuel</h1>
+          <div className="flex items-baseline justify-between gap-4">
+            <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Fuel</h1>
+            <Link href="/fuel/past" className="link-quiet min-h-11 shrink-0 whitespace-nowrap py-2 text-sm">
+              Past meals
+            </Link>
+          </div>
 
           <section className={`mt-8 flex flex-wrap items-center gap-8 ${refreshing ? "opacity-70" : ""}`} aria-label="Today so far">
             <div className="relative">
@@ -772,26 +774,7 @@ export function FuelLogger({
           ) : (
             <ul className="mt-3">
               {sorted.map((l) => (
-                <li key={l.id} className="grid grid-cols-[1fr_auto] gap-x-4 border-t border-line py-4">
-                  <div className="min-w-0">
-                    <p className="text-sm text-graphite">
-                      {l.meal[0].toUpperCase() + l.meal.slice(1)}, by {l.source === "photo" ? "photo" : l.source === "voice" ? "voice" : "text"}
-                      {l.confidence === "low" ? ", rough estimate" : ""}
-                    </p>
-                    {/* Titles in an Indian script get their language; the rest inherit the page's. */}
-                    <p lang={langTag(scriptLanguage(l.title), l.title)} className="font-semibold">
-                      {l.title}
-                    </p>
-                    <p className="truncate text-sm text-graphite">{l.items.join("; ")}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">{Math.round(l.kcal)} kcal</p>
-                    <p className="text-sm text-graphite">{Math.round(l.proteinG)} g protein</p>
-                    <button type="button" className="link-quiet min-h-11 text-sm" onClick={() => remove(l.id)} disabled={!!removing} aria-label={`Delete ${l.title}`}>
-                      {removing === l.id ? "Deleting…" : "Delete"}
-                    </button>
-                  </div>
-                </li>
+                <MealRow key={l.id} meal={l} deleting={removing === l.id} disabled={!!removing} onDelete={() => remove(l.id)} />
               ))}
             </ul>
           )}

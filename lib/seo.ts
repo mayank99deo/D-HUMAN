@@ -76,7 +76,7 @@ export const HOME_DESCRIPTION = isWaitlist
  * on purpose: it's linked from every page and says noindex, which crawlers can
  * only see if they may fetch it.
  */
-export const APP_PATHS = ["/api/", "/home", "/fuel", "/upload", "/reports/", "/stack", "/wraps", "/settings", "/onboarding", "/dev/"] as const;
+export const APP_PATHS = ["/api/", "/home", "/fuel", "/upload", "/reports", "/stack", "/wraps", "/settings", "/onboarding", "/dev/"] as const;
 
 // ── Metadata ─────────────────────────────────────────────────────────────
 

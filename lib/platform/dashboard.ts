@@ -6,6 +6,7 @@ import { db, schema } from "@/lib/db";
 import type { EventRow, Marker, Profile } from "@/lib/db/schema";
 import type { Persona } from "@/lib/domain/persona";
 import { targetsFor } from "@/lib/domain/nutrition";
+import { addDays } from "@/lib/domain/periods";
 import { eventsFor } from "./events";
 import { logsBetween, totalsOf } from "./food";
 import { daysBetween, localDate } from "./profile";
@@ -55,9 +56,10 @@ export async function reportView(userId: string, reportId: string): Promise<Repo
 export async function dashboard(userId: string, profile: Profile, persona: Persona) {
   const d = await db();
   const today = localDate(profile.timezone);
+  const yesterday = addDays(today, -1);
 
   // Everything that doesn't depend on another query runs at once.
-  const [reports, events, todayLogs, stack] = await Promise.all([
+  const [reports, events, recentLogs, stack] = await Promise.all([
     d
       .select({ id: schema.reports.id, status: schema.reports.status, createdAt: schema.reports.createdAt, collectedOn: schema.reports.collectedOn, error: schema.reports.error })
       .from(schema.reports)
@@ -65,9 +67,11 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
       .orderBy(desc(schema.reports.createdAt))
       .limit(12),
     eventsFor(userId, profile, persona),
-    logsBetween(userId, today, today),
+    logsBetween(userId, yesterday, today),
     latestStack(userId),
   ]);
+  const todayLogs = recentLogs.filter((l) => l.localDate === today);
+  const yesterdayLogs = recentLogs.filter((l) => l.localDate === yesterday);
 
   const ready = reports.filter((r) => r.status === "ready");
   const latestReady = ready[0];
@@ -102,6 +106,7 @@ export async function dashboard(userId: string, profile: Profile, persona: Perso
     upcoming: events.upcoming,
     pickedId: events.pickedId,
     today: { totals: totalsOf(todayLogs), meals: todayLogs.length, targets },
+    yesterday: { totals: totalsOf(yesterdayLogs), meals: yesterdayLogs.length },
     stack,
   };
 }

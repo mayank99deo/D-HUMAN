@@ -7,7 +7,9 @@ import type { Day, Meal } from "@/lib/ai/schemas";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
+import { HISTORY_DAYS, type MealView } from "@/lib/domain/meals";
 import { MICROS, emptyMicros, targetsFor, type MicroKey, type Micros } from "@/lib/domain/nutrition";
+import { addDays } from "@/lib/domain/periods";
 import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
 import { localDate, personaFor } from "./profile";
 
@@ -113,6 +115,46 @@ export async function logsBetween(userId: string, from: string, to: string) {
     .from(schema.foodLogs)
     .where(and(eq(schema.foodLogs.userId, userId), gte(schema.foodLogs.localDate, from), lte(schema.foodLogs.localDate, to)))
     .orderBy(schema.foodLogs.createdAt);
+}
+
+/** A logged meal as the screens show it. */
+export function mealView(l: FoodLog): MealView {
+  return {
+    id: l.id,
+    meal: l.meal,
+    title: l.title,
+    source: l.source,
+    kcal: l.kcal,
+    proteinG: l.proteinG,
+    confidence: l.confidence,
+    tip: (l.micros as { tip?: string | null }).tip ?? null,
+    items: (l.items as { name: string; portion: string }[]).map((i) => `${i.name}, ${i.portion}`),
+    demo: l.model === "mock",
+  };
+}
+
+const clockTime = (at: Date, tz: string | null | undefined) => {
+  const f = (zone: string) => new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone: zone }).format(at);
+  try {
+    return f(tz || "Asia/Kolkata");
+  } catch {
+    return f("Asia/Kolkata");
+  }
+};
+
+export type HistoryDay = { date: string; meals: MealView[] };
+
+/**
+ * Meals from the days before today, back HISTORY_DAYS days, newest day first and each
+ * day's meals in the order they were logged. Only days with meals are listed.
+ */
+export async function mealHistory(userId: string, tz: string | null | undefined, now = new Date()): Promise<{ today: string; days: HistoryDay[] }> {
+  const today = localDate(tz, now);
+  const logs = await logsBetween(userId, addDays(today, -HISTORY_DAYS), addDays(today, -1));
+  const byDay = new Map<string, MealView[]>();
+  for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), { ...mealView(l), time: clockTime(l.createdAt, tz) }]);
+  const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, meals]) => ({ date, meals }));
+  return { today, days };
 }
 
 export async function deleteMeal(userId: string, id: string) {

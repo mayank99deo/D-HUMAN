@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Bib, type Tone } from "@/components/platform/Bib";
 import { Contour, type ContourMarker } from "@/components/platform/Contour";
+import { DeleteReport } from "@/components/platform/DeleteReport";
 import { EventPicker } from "@/components/platform/EventPicker";
 import { MarkerTile, rangeText } from "@/components/platform/Markers";
 import { retestFrom } from "@/components/platform/retest";
@@ -12,6 +13,7 @@ import { Verdict } from "@/components/platform/Verdict";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { homeData } from "@/lib/platform/dashboard";
 import { localDate } from "@/lib/platform/profile";
+import { printedFor } from "@/lib/platform/reports";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -30,8 +32,16 @@ function stackLine(plan: { items: unknown[]; see_doctor: unknown[] } | null) {
   return `${n} supplement${n === 1 ? "" : "s"}, each tied to a marker or a gap in what you eat. Nothing else.`;
 }
 
-async function Dashboard() {
+// After a delete: say what went, and that the rest is still there (people with no report
+// of their own keep using Fuel).
+const DELETED: Record<string, string> = {
+  report: "Report deleted. Your meals, targets and profile are still here.",
+  all: "Reports deleted. Your meals, targets and profile are still here.",
+};
+
+async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { profile, persona, data } = await homeData();
+  const deleted = DELETED[String((await searchParams).deleted ?? "")] ?? null;
   const read = data.view?.read;
   const notes = new Map(read?.markers.map((m) => [m.id, m.note]) ?? []);
   const markers = data.view?.markers ?? [];
@@ -73,6 +83,13 @@ async function Dashboard() {
   const tone: Tone = read?.verdict.level ?? null;
   const fuel = data.today;
   const isMock = data.view?.model === "mock";
+  // A friend's report tried on the app: say so, and offer the delete right here.
+  const otherName = data.view ? printedFor(data.view.nameOnReport, profile.name) : null;
+  const source = data.view
+    ? data.view.collectedOn
+      ? `collected ${dateText(data.view.collectedOn)}`
+      : `uploaded ${dateText(localDate(profile.timezone, data.view.createdAt))}`
+    : null;
 
   // Today's fuel changes every day, so it sits right under the verdict.
   const fuelSection = (
@@ -106,6 +123,16 @@ async function Dashboard() {
         })}
       </div>
       {fuel.meals === 0 && <p className="mt-4 text-sm text-graphite">Nothing logged today. Snap a plate, say it, or type it.</p>}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 text-sm">
+        {data.yesterday.meals > 0 && (
+          <p className="text-graphite">
+            Yesterday: {Math.round(data.yesterday.totals.kcal).toLocaleString("en-IN")} kcal and {Math.round(data.yesterday.totals.proteinG)} g protein.
+          </p>
+        )}
+        <Link href="/fuel/past" className="link-quiet inline-flex min-h-11 items-center">
+          Past meals
+        </Link>
+      </div>
     </section>
   );
 
@@ -139,10 +166,32 @@ async function Dashboard() {
       </div>
 
       <div className="mt-12 md:mt-9 lg:col-span-7">
+        {deleted && (
+          <p role="status" className="mb-8 border border-line-strong px-4 py-3 text-sm">
+            {deleted}
+          </p>
+        )}
         {read ? (
           <>
+            {/* Before the verdict, so a friend's results are never read as their own first. */}
+            {otherName && (
+              <div className="mb-8 border border-line-strong p-4">
+                <p className="error-mark text-sm">This report is printed for {otherName}. If it isn&apos;t yours, delete it to clear Home.</p>
+                <div className="mt-3">
+                  <DeleteReport key={data.view!.id} id={data.view!.id} stay />
+                </div>
+              </div>
+            )}
             <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={profile.language === "hi" ? "hi" : undefined} />
             {isMock && <p className="mt-4 text-sm text-graphite">Demo read: AI is off on this machine, so this was written from a template.</p>}
+            <p className="mt-3 flex flex-wrap items-center gap-x-4 text-sm text-graphite">
+              <span>
+                From {otherName ? "the" : "your"} report {source}.
+              </span>
+              <Link href="/reports" className="link-quiet inline-flex min-h-11 items-center">
+                Manage reports
+              </Link>
+            </p>
           </>
         ) : (
           <section aria-labelledby="first" className="@container">
@@ -288,10 +337,10 @@ function Skeleton() {
   );
 }
 
-export default function HomePage() {
+export default function HomePage({ searchParams }: PageProps<"/home">) {
   return (
     <Suspense fallback={<Skeleton />}>
-      <Dashboard />
+      <Dashboard searchParams={searchParams} />
     </Suspense>
   );
 }

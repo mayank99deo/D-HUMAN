@@ -36,6 +36,7 @@ const DAY_MS = 24 * 60 * 60_000;
 
 export const READ_MESSAGES = {
   busy: "This report is being read right now. Give it a minute.",
+  deleted: "This report was deleted.",
   daily_limit: `You've had ${DAILY_READS} reports read in the last 24 hours, the most we allow for now. Try again tomorrow.`,
   stale: "This read stopped partway. Your file is saved; try again.",
 };
@@ -375,9 +376,10 @@ export async function runAnalysis(reportId: string, userId: string, startedAt: D
     await Promise.race([work(), deadline]);
   } catch (error) {
     if (error instanceof LostClaimError) {
-      // Another run owns this report now (this one went stale); leave its status alone.
-      console.warn(`[analyze] ${reportId} was taken over by a newer read`);
-      emit({ type: "error", message: READ_MESSAGES.busy });
+      // Deleted while it was read, or another run owns it now (this one went stale); leave its status alone.
+      const [still] = await d.select({ id: schema.reports.id }).from(schema.reports).where(eq(schema.reports.id, reportId)).limit(1).catch(() => []);
+      console.warn(`[analyze] ${reportId} ${still ? "was taken over by a newer read" : "was deleted while it was read"}`);
+      emit({ type: "error", message: still ? READ_MESSAGES.busy : READ_MESSAGES.deleted });
       return;
     }
     console.error("[analyze]", error);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ACTIVITIES, CONDITIONS, DIETS, GOALS, LANGUAGES, LEVELS, SEXES } from "@/lib/domain/options";
@@ -207,6 +208,16 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
             {saved === "saved" ? "Saved. New reads use these answers." : saved === "error" ? problem : ""}
           </span>
         </div>
+      </section>
+
+      <section className="mt-14 border-t border-line pt-6" aria-labelledby="reports">
+        <h2 id="reports" className="text-xl font-bold semiwide">
+          Blood reports
+        </h2>
+        <p className="mt-2 text-sm text-graphite">See every report you&apos;ve uploaded, delete one, or delete them all to start fresh.</p>
+        <Link href="/reports" className="button-ghost mt-4 h-12">
+          Manage reports
+        </Link>
       </section>
 
       <section className="mt-14 border-t border-line pt-6">

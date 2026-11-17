@@ -4,7 +4,7 @@ The running record of this project: where things stand, why they are the way the
 
 ## Snapshot
 
-- **Platform (Phase 1, pushed 2026-11-09 in `99168f2`):** sign-in by emailed code, onboarding, blood report upload read by Claude, a persona dashboard (bib, verdict aimed at an event, metrics that matter, contour fingerprint), food logging by photo, voice or text, wraps and a supplement stack. Pages in `app/(platform)/`, design and architecture in `docs/platform/PHASE-1.md`. Needs `DATABASE_URL`, `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel before it works live; the landing page doesn't link to it yet.
+- **Platform (Phase 1, pushed 2026-11-09 in `99168f2`):** sign-in by emailed code, onboarding, blood report upload read by Claude, a persona dashboard (bib, verdict aimed at an event, metrics that matter, contour fingerprint), food logging by photo, voice or text, wraps and a supplement stack. Since 2026-11-17: Past meals (`/fuel/past`, the 28 days before today) and Your reports (`/reports`, delete one or all). Pages in `app/(platform)/`, design and architecture in `docs/platform/PHASE-1.md`. Needs `DATABASE_URL`, `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel before it works live; the landing page doesn't link to it yet.
 - **Open to everyone, with a paywall (2026-11-11):** the landing page shows "Start free" and "Sign in" instead of the waitlist (`NEXT_PUBLIC_SITE_MODE=waitlist` brings the old page back after a redeploy; nothing was deleted). Someone signed in on that browser who opens the landing page goes straight to `/home` (2026-11-14). Free: 2 report reads and 20 meal logs. Then ₹49 for 30 days through Razorpay (one payment, no renewal): 3 reads in the pass, and 5 meal logs a day for everyone. **Payments are live since 2026-11-14:** live Razorpay keys and the live webhook, with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` set in Vercel (Production only), and Mayank paid the first real ₹49. Test keys live only in `.env.local`. Setup steps are in `docs/platform/PHASE-1.md`. Without all three variables the paywall says "Payments open soon".
 - **Reports are AI-analysed only (2026-11-11):** no doctor review for now; never say a doctor reviews reports. "See a doctor" flags for the person's own doctor stay.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
@@ -52,6 +52,15 @@ The running record of this project: where things stand, why they are the way the
   - **Prices** come from the shared monthly brand search (keys `v2:<rule>:<variant>`): 3–5 brands, best first, each with its listed pack price and how long a pack lasts at our dose. Code works out ₹ a month and drops odd numbers.
   - **Without a price,** `TYPICAL_MONTHLY_INR` (rough figures, shown as "typical price") fills in. Older stacks are matched to it by nutrient name.
 - **Brands in stacks (2026-11-09):** Mayank asked for named brands. The platform's stack names 2–3 brands sold in India per item, found by Claude's web search, under a plain note that D-Human has no brand partners and earns nothing from them. The landing page still names no brands.
+- **Past meals (2026-11-17, from user feedback):** `/fuel/past` lists the 28 days before today (`HISTORY_DAYS` in `lib/domain/meals.ts`), only days with meals, newest first, yesterday open, each meal with its time and Delete. Older logs are kept and still count in wraps. Reached from "Past meals" beside the Fuel title and from Home ("Yesterday: X kcal and Y g protein."). Meal delete stays one tap, as on Today.
+- **Deleting reports (2026-11-17, from user feedback: people tried the app with a friend's report and had none of their own):**
+  - **Where:** `/reports` lists every upload with Open and Delete. "Start fresh" deletes them all, and shows only from 2 reports.
+  - **Ways in:** Home's line under the verdict ("From your report collected 2 Nov. Manage reports"), Settings, and each report page.
+  - **A friend's report on Home:** when the printed name shares nothing with the profile name (`printedFor` in `lib/platform/reports.ts`; loose on purpose, and different scripts aren't compared), Home says "This report is printed for X. If it isn't yours, delete it to clear Home." above the verdict, with the delete in place.
+  - **What a delete takes** (`deleteReports`): the report's files, markers, read and stack, plus every wrap that counted any report, because a wrap compares against the report uploaded before it, from any date. Wraps can be made again from meals.
+  - **What it keeps:** the read stays counted (the confirm says so), and meals, targets and profile stay.
+  - **After a delete:** Home opens at the top with "Report deleted. Your meals, targets and profile are still here." (`?deleted=report|all`).
+  - **Mid-read:** a report deleted while it's being read ends the read with "This report was deleted.", and the upload and stack pollers stop on a 404.
 - **Safety floor (2026-11-09):** reads are AI and say so; they never diagnose. Conservative doctor and urgent thresholds in `lib/domain/markers.ts` (checked only when units match) force a "Doctor first" verdict whatever Claude writes. Stacks only add an item for a low or edge marker or a repeated food gap; iron only with low ferritin and a doctor check.
 - **Copy:** taken from the pitch deck. No disease claims; use "screening", "markers" and "risk". Only sourced numbers: 76% vitamin D deficient across 2.2 lakh lab tests in 27 Indian cities, 2023 (source in the pitch deck). Never name lab or supplement brands on the landing page (the platform's stack is the one exception, for supplements; see "Brands in stacks"); attribute as "research across…". Anything else shown as data is labelled illustrative. No test-plan prices until partner pricing is confirmed (the platform's ₹49 pass is Mayank's price).
 - **Motion:** the hero's hand-written WebGL contour field (inspired by illumelabs.ai's cinematic hero, not copied); the vitamin D chart's fill and picker (Motion); silk threads on the Join buttons; the "Test first" phone loop (a HyperFrames render, played only in view, with the four steps as chapter controls and a Pause button). All respect reduced motion: the phone shows chapter stills instead, as it does for Data Saver. The silk threads are also off on touch screens.
@@ -107,6 +116,9 @@ The running record of this project: where things stand, why they are the way the
   - **Cause:** iOS 26 lets web content flow under an app's own bars, and some apps don't leave room for it (Apple forum thread 798672).
   - **Fix:** the screens scroll inside a fixed frame, placed like the bars, and the page never scrolls.
   - **Watch for:** `next dev`'s badge covers the Home tab, so scripted taps on it fail in dev; test tab switches on a production build.
+- **Next 16 keeps the previous screen mounted, hidden:** with Cache Components, a screen you left stays in the page inside a hidden React Activity. Scripted locators can match its elements (a `summary` on Fuel was counted on Past meals). Scope locators to the visible screen.
+- **`next build` can stop once with `SecurityFatalError`:** it prints an upgrade notice for a Next.js advisory and exits 1; running the same command again builds. Check the advisory with `npm audit --omit=dev` rather than acting on the notice's own instructions (2026-11-17: GHSA-mfr8-8qww-v76h, see Open items).
+- **A production check on real-looking data, without touching local data:** copy `.data/pglite` into the scratchpad, mint a session row there by script, then `next start` with `PGLITE_DIR` pointing at the copy (one process at a time per folder). That is how Past meals and report deletes were checked on the film account on 2026-11-17.
 - **Safari's engine on this Mac:** Playwright's WebKit runs headlessly from the session scratchpad (`npx playwright install webkit`) and can sign in with a `dh_session` cookie minted by `/api/dev/session` on the dev server. It reproduces engine behaviour (scrolling, scroll anchoring, layout), not iOS toolbars, safe areas or touch momentum. Production-build checks of the app need `ANTHROPIC_API_KEY=` and `D_HUMAN_AI_MOCK=1` on `next start`, or meals call the live API.
 - **Testing Razorpay's checkout by script (test mode):**
   - The mobile field rejects numbers that look made up (9999999999, 9876543210); a realistic one passes.
@@ -118,6 +130,11 @@ The running record of this project: where things stand, why they are the way the
 
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
+- [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
+- [ ] Daily caps reset when reports are deleted (QA, 2026-11-17): `readLimitReached` counts today's report rows and the stack cap counts stacks, so delete-and-retry gets around the 10 reads and 5 stacks a day (the plan's own read limits still hold; a junk file whose read fails costs an AI extraction each round, up to 6 an hour per server). Fix: count attempts where deletes don't reach (a ledger, needs a migration).
+- [ ] Home and wraps pick the "latest" report by upload order, not by when the blood was taken: uploading last year's report after this year's makes Home show last year's as current, and wraps compare in upload order.
+- [ ] Upgrade Next.js from 16.4.2 to 16.4.6 or later: moderate advisory GHSA-mfr8-8qww-v76h (information disclosure when a `"use cache"` function runs through `unstable_cache()`). D-Human uses neither, so it isn't exposed; `next build` asks for it.
+- [ ] Words written with a deleted report's markers stay: meal tips and the typical-day notes on Fuel. Deleting a past meal also doesn't refresh wraps that name it.
 - [ ] Look at the live webhook's deliveries in Razorpay (Live mode → Webhooks → the webhook): `payment.captured` and `order.paid` for the first real payment should show 200. That pass was granted through `/verify`, so a real Razorpay delivery hasn't been seen yet; only a self-signed one has.
 - [ ] Razorpay's docs list About, Contact, Pricing, Terms, Privacy and Refund pages for a business website; its FAQ says Master KYC no longer needs the policies at onboarding, and the site was verified without them (2026-11-14). Still Mayank's legal call, including whether passes are refundable
 - [ ] Footer says imaging and clinical tests are run by licensed partner centres; check that's still true now that people upload their own reports
@@ -167,7 +184,31 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-17
+- **Past meals and deleting reports (Mayank, from user feedback):** design in Decisions ("Past meals", "Deleting reports").
+  - **New:**
+    - `lib/domain/meals.ts`, `lib/platform/reports.ts`.
+    - `components/platform/MealRow.tsx` (shared by Today and Past meals), `PastMeals.tsx`, `ReportsManager.tsx`.
+    - The `/fuel/past` and `/reports` pages, and `DELETE /api/reports` (all).
+    - Tests: `tests/history-and-reports.test.ts` and QA's `tests/qa-history-reports.test.ts`.
+  - **Changed:**
+    - Fuel and Home (links, yesterday's totals, the friend's-report box, the note after a delete); `DeleteReport.tsx`.
+    - Settings gets a Blood reports section; the report page links to all reports.
+    - `DELETE /api/reports/[id]` uses `deleteReports`.
+    - The upload and stack pollers stop on a 404, and a read lost to a delete says "This report was deleted." (`analyze.ts`).
+    - robots.txt blocks `/reports`.
+  - **The crew:** the UX and retention designer reviewed the flows from phone shots. Taken: the friend's box above the verdict, a looser name check with softer words, the read note in the confirm, "Past meals" beside the Fuel title, the note after a delete, and "Start fresh" only from 2 reports. The QA and security engineer found no way to reach another person's data. Fixed: wraps that could still quote a deleted report, false warnings for names typed in Devanagari, pollers spinning on a deleted report, dead reads listed as "Being read now", and old stacks without a report surviving "Start fresh". Deferred to Open items: the caps that reset on delete, and upload-order "latest".
+  - **Checked:**
+    - Typecheck, lint, 220 tests (12 new), the production build.
+    - On a copy of the local database signed in as the film account, Chrome as a 390 px touch phone:
+      - Past meals: 26 days, yesterday open with times; Hindi and Bangla titles; a meal deleted from yesterday.
+      - A friend's report deleted from Home: Home clean, at the top, with the note.
+      - With two reports, deleting the friend's put Home back on the person's own; "Start fresh" cleared both.
+    - No sideways scroll and no tap target under 44 px at 320, 390 and 1280 px. Console errors were only Vercel's analytics scripts, which `next start` doesn't serve.
+  - **Not checked:** a real phone, and Safari's engine.
+
 ### 2026-11-14
+- **Push `48f990f`:** the entry below (memory only), plus the record of `abc12a1` and the subscription open item.
 - **Payments live on www.d-human.fit (Mayank's request):** no code changed.
   - **In Razorpay's Live mode:** Mayank generated API keys and added the webhook. The webhook secret was generated on this Mac, pasted by Mayank, and the local copy deleted afterwards.
   - **In Vercel:** Mayank set the three Razorpay variables for Production only and redeployed.

@@ -7,7 +7,7 @@ import type { Day } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import { foodFactsFor } from "@/lib/domain/food-facts";
 import { MICROS, targetsFor } from "@/lib/domain/nutrition";
-import { dietPicture, logsBetween, totalsOf } from "@/lib/platform/food";
+import { dietPicture, logsBetween, mealView, totalsOf } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { localDate } from "@/lib/platform/profile";
@@ -36,18 +36,7 @@ async function Fuel() {
       targets={{ kcal: targets.kcal, proteinG: targets.proteinG, carbsG: targets.carbsG, fatG: targets.fatG, fibreG: targets.fibreG, basis: targets.basis, estimated: targets.estimated }}
       totals={{ kcal: totals.kcal, proteinG: totals.proteinG, carbsG: totals.carbsG, fatG: totals.fatG, fibreG: totals.fibreG }}
       micros={MICROS.map((m) => ({ label: m.label, pct: Math.round((totals.micros[m.key] / targets.micros[m.key]) * 100) }))}
-      logs={logs.map((l) => ({
-        id: l.id,
-        meal: l.meal,
-        title: l.title,
-        source: l.source,
-        kcal: l.kcal,
-        proteinG: l.proteinG,
-        confidence: l.confidence,
-        tip: (l.micros as { tip?: string | null }).tip ?? null,
-        items: (l.items as { name: string; portion: string }[]).map((i) => `${i.name}, ${i.portion}`),
-        demo: l.model === "mock",
-      }))}
+      logs={logs.map(mealView)}
       typical={base ? { description: base.description, patterns: (base.estimate as Day).patterns } : null}
       gaps={picture.source === "none" ? [] : picture.gaps.slice(0, 4).map((g) => ({ label: g.label, pct: g.pct }))}
       gapSource={picture.source}

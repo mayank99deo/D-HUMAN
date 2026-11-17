@@ -31,6 +31,7 @@ async function pollReport(id: string, onUpdate: (u: StatusUpdate) => void, life:
     const res = await fetch(`/api/reports/${id}`, { cache: "no-store" }).catch(() => null);
     const data = res?.ok ? await res.json().catch(() => null) : null;
     if (!life.alive) return;
+    if (res?.status === 404) return onUpdate({ stage: "error", error: "This report was deleted." });
     if (data?.status === "ready") return onUpdate({ stage: "done" });
     if (data?.status === "failed") return onUpdate({ stage: "error", error: data.error ?? null });
     if (data?.stage) onUpdate({ stage: data.stage as Stage });

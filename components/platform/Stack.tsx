@@ -50,7 +50,8 @@ export function StackClient({
         await new Promise((r) => setTimeout(r, 3000));
         const res = await fetch(`/api/stack/${building}`, { cache: "no-store" }).catch(() => null);
         const data = res?.ok ? await res.json().catch(() => null) : null;
-        if (data && data.status !== "building") {
+        // Gone (its report was deleted) or done: either way the refreshed page says which.
+        if (res?.status === 404 || (data && data.status !== "building")) {
           setBuilding(null);
           startTransition(() => router.refresh());
           return;
