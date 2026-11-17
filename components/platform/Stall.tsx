@@ -15,6 +15,12 @@ export function Stall({ after = 6000 }: { after?: number }) {
     };
   }, [after]);
   if (!stage) return null;
+  return <StallNotice stage={stage} />;
+}
+
+// The words and the Reload, for screens that know for themselves when it's taking too long
+// (the Stack screen, once a build outlasts its status checks).
+export function StallNotice({ stage = 1 }: { stage?: 1 | 2 }) {
   return (
     <div role="status" className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-graphite">
       <span>{stage === 1 ? "This is taking longer than usual." : "Still loading. Check your connection, then reload."}</span>

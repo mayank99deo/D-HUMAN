@@ -122,6 +122,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Full-page screenshots lie about screen-sized slides:** stretching the emulated window to the page's height (how `cdp.mjs` takes a full page) makes every `svh`/`dvh` slide that tall too, so the landing looked 19,000 px long in landscape. Judge those pages from screen-sized shots taken while scrolling.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
+- **Never clear client state before the refreshed props arrive:** after background work (a build, a read), keep showing the in-progress view until the page's own data shows the result. `router.refresh()` on a phone can be slow, lost or come back stale, and the screen then shows whatever data it was opened with (the stack bug of 2026-11-17, `components/platform/stack-state.ts`).
 - **jsonb reorders keys:** an object saved in a `jsonb` column comes back with its keys in Postgres's order (shorter keys first), so never compare saved JSON as text with `JSON.stringify`; compare fields (`inputsChanged` in `lib/platform/stack.ts`).
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
 - **Headless Chrome and the mic:** `getUserMedia` never resolves headlessly on this Mac even with permission granted, so real mic levels can't be tested here; use a synthetic stream or a device.
@@ -205,6 +206,17 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-17
+- **Stack screen fell back to "Build" after a build (Mayank, iPhone, live site; fixed by the crew):**
+  - **Seen:** with no report, after a usual day: "Building your stack…", then the loading screen's "This is taking longer than usual.", then the pre-build screen (title "Your stack", the Build button, no error).
+  - **Cause:** found by the staff engineer, from the code. The screen cleared its building view as soon as the status check said done, then waited on `router.refresh()`. On a phone over mobile data that refresh was slow or lost, so the screen showed the data it was opened with: no stack yet. Locally the refresh takes about 50 ms, so no test saw it.
+  - **Fix (staff engineer):**
+    - `components/platform/stack-state.ts` (`watchedBuild`, `pollAnswer`, 10 tests).
+    - `Stack.tsx` follows a build until the page's own data shows it finished, refreshing and asking again. After 5 "done" checks the page doesn't reflect, or 120 checks, it shows Stall's "taking longer" notice with Reload.
+    - Home says "Building your stack…" with "See progress" while one builds.
+  - **Proven (QA engineer, production build, demo mode, 390 px touch):** the tap-only path; refreshes held 8 s; a refresh aborted (Next falls back to a full load); two refreshes returning old data; a stack already building when the tab opens; Home before and after. Every case ended on the built stack and never showed Build mid-build. Typecheck, lint, 241 tests.
+  - **Follow-up, in progress:** on a slow network, each 3 s refresh cancels the one still loading, so the stack shows about 9 s later, after the "taking longer" notice. Fix: don't refresh while one is loading.
+  - **Not known:** why the live refresh stalled (mobile data, a cold function); there are no Vercel logs from here.
+- **Push `4ee82a3`:** the entry below. Live about 36 s later. Signed out, `/stack` and `/home` send visitors to `/signin`, `POST /api/stack` gives 401, and the landing gives 200.
 - **Stacks go out of date when health answers change (Mayank affirmed the four stack decisions; this was the one that needed building):**
   - **What:** a stack saves the diet, medicines and conditions it was built with. When any of them changes, the Stack page says "Time to rebuild your stack.", explains why, shows no doses and offers "Rebuild my stack"; Home says the same. Home now also says when a newer report than the stack's is in.
   - **Gotcha found on the way:** Postgres stores JSON with its keys reordered, so saved objects can't be compared as text; `inputsChanged` compares field by field.

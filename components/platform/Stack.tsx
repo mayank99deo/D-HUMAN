@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { BUDGETS, budgetOf, fitBudget, rupees, typicalFor } from "@/lib/domain/budget";
 import { OFFLINE, send } from "./net";
+import { StallNotice } from "./Stall";
+import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, pollAnswer, watchedBuild } from "./stack-state";
 
 type StackState = { id: string; status: string; error: string | null; plan: StackPlan | null; demo: boolean; made: string };
 type Item = StackPlan["items"][number];
@@ -15,6 +17,15 @@ export type Flagged = { name: string; urgent: boolean };
 const madeOn = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(iso));
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const pricedBrands = (item: Item) => item.brands.some((b) => typeof b.monthly_inr === "number");
+
+// Outside React state, so they survive the screen being remounted (a refresh can swap it
+// for the loading screen and back). A full reload starts them afresh, and then the page's
+// own data is current.
+/** The build this screen last started. */
+let followed: string | null = null;
+/** By build: status checks that found it done while the page still didn't show it. */
+const doneChecks = new Map<string, number>();
+const outlasted = (id: string | null) => id !== null && (doneChecks.get(id) ?? 0) >= STALL_AFTER_DONE;
 
 // The Stack screen. The supplements lead, in priority order and fitted to the
 // person's monthly budget (lib/domain/budget.ts); doctor notes close the page in a
@@ -48,32 +59,60 @@ export function StackClient({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [building, setBuilding] = useState(stack?.status === "building" ? stack.id : null);
+  // The build this tap started, kept until the page's data shows it finished (stack-state.ts).
+  const [pending, setPending] = useState<string | null>(() => followed);
+  // A build the server no longer has (deleted with its report): never followed again.
+  const [gone, setGone] = useState<string | null>(null);
+  // A build that outlasted its status checks, or is done but the page won't show it:
+  // the screen says so, with Reload, and stops asking.
+  const [stalled, setStalled] = useState<string | null>(() => (outlasted(followed) ? followed : null));
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [budget, setBudget] = useState(budgetOf(savedBudget)?.id ?? null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
 
+  const watching = watchedBuild(stack, pending, gone);
+  const settled = pending !== null && stack?.id === pending && stack.status !== "building";
+
+  // Once the page shows the build finished, a remount has nothing left to follow.
   useEffect(() => {
-    if (!building) return;
+    if (settled && followed === pending) followed = null;
+  }, [settled, pending]);
+
+  // Ask how the build is going every 3 s. When it's done, refresh the page, and keep
+  // asking and refreshing until the page shows it: only the page's data ends this view,
+  // never the answer alone, so a slow or lost refresh can't drop back to the Build button.
+  // If the page still hasn't caught up after a few tries, or the build outlasts every
+  // check, say it's taking longer than usual, with Reload.
+  useEffect(() => {
+    if (!watching || stalled === watching) return;
     let alive = true;
     (async () => {
-      for (let i = 0; i < 120 && alive; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const res = await fetch(`/api/stack/${building}`, { cache: "no-store" }).catch(() => null);
-        const data = res?.ok ? await res.json().catch(() => null) : null;
-        // Gone (its report was deleted) or done: either way the refreshed page says which.
-        if (res?.status === 404 || (data && data.status !== "building")) {
-          setBuilding(null);
+      for (let i = 0; i < POLL_LIMIT; i++) {
+        await new Promise((r) => setTimeout(r, POLL_EVERY_MS));
+        if (!alive) return;
+        const res = await fetch(`/api/stack/${watching}`, { cache: "no-store" }).catch(() => null);
+        const body = res?.ok ? await res.json().catch(() => null) : null;
+        if (!alive) return;
+        const answer = pollAnswer(res ? res.status : null, body);
+        if (answer === "gone") {
+          if (followed === watching) followed = null;
+          setGone(watching);
           startTransition(() => router.refresh());
           return;
         }
+        if (answer === "done") {
+          doneChecks.set(watching, (doneChecks.get(watching) ?? 0) + 1);
+          if (outlasted(watching)) return setStalled(watching);
+          startTransition(() => router.refresh());
+        }
       }
+      if (alive) setStalled(watching);
     })();
     return () => {
       alive = false;
     };
-  }, [building, router]);
+  }, [watching, stalled, router]);
 
   async function build() {
     if (starting) return;
@@ -85,7 +124,12 @@ export function StackClient({
       return setError(
         r.offline ? OFFLINE : r.data.message ? r.data.message : r.data.error === "ai_off" ? "Stacks aren't switched on yet on this server." : r.data.error === "rate_limited" ? "Try again in a little while." : "We couldn't start your stack. Try again.",
       );
-    if (r.data.id) setBuilding(r.data.id);
+    if (r.data.id) {
+      followed = r.data.id;
+      setGone(null);
+      setStalled(null);
+      setPending(r.data.id);
+    }
   }
 
   // The stack re-fits at once; the choice is saved for next time (and other devices).
@@ -176,7 +220,7 @@ export function StackClient({
 
       {aiOff && !plan && <p className="error-mark mt-6 text-sm">Stacks aren&apos;t switched on yet on this server.</p>}
 
-      {building ? (
+      {watching ? (
         <section className="mt-10" aria-live="polite">
           <p className="text-lg font-semibold">Building your stack…</p>
           <p className="mt-2 text-graphite">
@@ -186,6 +230,7 @@ export function StackClient({
           <div className="mt-6 h-px overflow-hidden bg-line">
             <div className="h-px w-1/3 animate-pulse bg-paper" />
           </div>
+          {stalled === watching && <StallNotice />}
         </section>
       ) : (
         (!plan || stale) && (
@@ -374,7 +419,7 @@ export function StackClient({
             </section>
           )}
 
-          {!building && !stale && (
+          {!watching && !stale && (
             <div className="mt-10 flex flex-wrap items-center gap-3">
               <button type="button" onClick={build} disabled={starting} className="link-quiet min-h-11 text-sm">
                 {starting ? "Starting…" : noPrices && !aiOff ? "Rebuild to get current brand prices" : "Rebuild with my latest food log"}
