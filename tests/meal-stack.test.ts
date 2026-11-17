@@ -60,6 +60,22 @@ async function usualDay(userId: string) {
   });
 }
 
+const ymd = (daysAgo: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(Date.now() - daysAgo * 86400000));
+
+// Three past days, each with two meals of `kcal`; Asha's energy target is about 2,060 kcal.
+async function loggedDays(userId: string, kcal: number) {
+  const d = await db();
+  for (const day of [1, 2, 3]) {
+    for (const meal of ["lunch", "dinner"]) {
+      await d.insert(schema.foodLogs).values({
+        id: `${userId}-${day}-${meal}`, userId, localDate: ymd(day), meal, source: "text", title: "Thali", items: [],
+        kcal, proteinG: 20, carbsG: 100, fatG: 20, fibreG: 8,
+        micros: { iron_mg: 6, calcium_mg: 250, magnesium_mg: 120, zinc_mg: 4, b12_ug: 0.5, folate_ug: 100, vitamin_c_mg: 20, vitamin_d_iu: 30 },
+      });
+    }
+  }
+}
+
 const run = async (userId: string) => {
   const started = await startStack(userId);
   assert.equal(started.kind, "started");
@@ -80,6 +96,39 @@ describe("a stack before any report", () => {
     assert.ok(plan.items.every((i) => i.markers.length === 0 && i.diet_gap), "every item is tied to a food gap");
     assert.ok(!rules.includes("vitamin_d3") && !rules.includes("iron"), "never vitamin D or iron without a test");
     assert.ok(plan.skip.some((s) => s.name === "Multivitamin"));
+  });
+
+  it("says what happened to every food gap, and what the averages came from", async () => {
+    const me = await person("veg");
+    await usualDay(me.id);
+    const plan = (await run(me.id)).plan as { gaps: { key: string; pct: number; outcome: string }[]; gaps_basis: unknown };
+    assert.deepEqual(plan.gaps_basis, { source: "typical_day", days: 0 });
+    assert.deepEqual(
+      plan.gaps.map((x) => [x.key, x.outcome]),
+      [
+        ["vitamin_d_iu", "test"],
+        ["b12_ug", "stack"],
+        ["calcium_mg", "stack"],
+        ["iron_mg", "test"],
+        ["protein", "stack"],
+        ["magnesium_mg", "stack"],
+        ["fibre", "food"],
+        ["vitamin_c_mg", "food"],
+        ["zinc_mg", "food"],
+      ],
+    );
+    assert.ok(plan.gaps.every((x, i, all) => i === 0 || all[i - 1].pct <= x.pct), "lowest first");
+  });
+
+  it("counts a logged day only once it reaches 75% of the energy target", async () => {
+    const partly = await person("veg");
+    await loggedDays(partly.id, 650); // 1,300 kcal a day: about 63% of the target
+    assert.equal((await startStack(partly.id)).kind, "no_data", "partly logged days read as gaps that aren't there");
+
+    const full = await person("veg");
+    await loggedDays(full.id, 800); // 1,600 kcal a day: about 78%
+    const plan = (await run(full.id)).plan as { gaps_basis: unknown };
+    assert.deepEqual(plan.gaps_basis, { source: "logs", days: 3 });
   });
 
   it("says what to do when there's nothing to go on", async () => {

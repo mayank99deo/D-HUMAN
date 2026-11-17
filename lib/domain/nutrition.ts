@@ -18,6 +18,15 @@ export const MICROS = [
 export type MicroKey = (typeof MICROS)[number]["key"];
 export type Micros = Record<MicroKey, number>;
 
+/** Under this share of daily need, a nutrient counts as short (Fuel's diet summary, the stack's food gaps). */
+export const SHORT_OF_NEED = 70;
+
+/**
+ * Vitamin D from food is shown in IU, never as a share of need: most of it comes from sun
+ * on the skin, so meals can't show whether someone is low (Mayank, 2026-11-17).
+ */
+export const inIuOnly = (key: string): key is "vitamin_d_iu" => key === "vitamin_d_iu";
+
 const RDA: Record<"male" | "female", Micros> = {
   male: { iron_mg: 19, calcium_mg: 1000, magnesium_mg: 440, zinc_mg: 17, b12_ug: 2.5, folate_ug: 300, vitamin_c_mg: 80, vitamin_d_iu: 600 },
   female: { iron_mg: 29, calcium_mg: 1000, magnesium_mg: 370, zinc_mg: 13.2, b12_ug: 2.5, folate_ug: 220, vitamin_c_mg: 65, vitamin_d_iu: 600 },

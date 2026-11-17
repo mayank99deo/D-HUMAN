@@ -22,14 +22,13 @@ export const metadata: Metadata = pageMetadata({ path: PATH, title: TITLE, descr
 // What earns each item, in plain words, from the rules in lib/domain/supplements.ts.
 const EARNS: [string, string][] = [
   ["Vitamin D3", "Vitamin D low, or at the bottom of its range"],
-  ["Vitamin B12", "B12 low; at the bottom of its range too, on a vegetarian or vegan diet"],
+  ["Vitamin B12", "B12 low; at the bottom of its range too, on a vegetarian or vegan diet; or, with no B12 result, meals well short of it"],
   ["Iron", "Ferritin measured low, and only once a doctor agrees"],
   ["Folate", "Folate low"],
   ["Magnesium", "Magnesium low, or meals well short of it"],
   ["Omega-3", "Triglycerides high, or near the top of their range"],
   ["Calcium", "Meals well short of calcium"],
   ["Protein", "Meals short of what your training needs; not for people just starting out"],
-  ["Zinc", "Meals short of zinc, on a plant-based diet"],
 ];
 
 const FAQS: Faq[] = [

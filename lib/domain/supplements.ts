@@ -9,7 +9,8 @@
 // result: nothing self-treats a flagged marker, and iron needs a measured low ferritin.
 
 import { markerDef, toCatalogUnit } from "./markers.ts";
-import type { MicroKey } from "./nutrition.ts";
+import { SHORT_OF_NEED, inIuOnly, type MicroKey } from "./nutrition.ts";
+import { RULE_MARKER } from "./safety.ts";
 
 export type StackItem = {
   nutrient: string;
@@ -40,6 +41,9 @@ export type Plan = {
   skip: { name: string; why: string }[];
   food_first: string[];
   see_doctor: string[];
+  /** Since 2026-11-17: what the meals fall short on, and what the stack did about each. */
+  gaps?: FoodGap[];
+  gaps_basis?: GapsBasis | null;
 };
 
 export type RuleMarker = {
@@ -50,7 +54,8 @@ export type RuleMarker = {
   status: string; // low | edge_low | in_range | edge_high | high | unknown
   flag: string | null;
 };
-export type Gap = { key: MicroKey | "protein" | "fibre"; label: string; pct: number };
+/** A nutrient as a share of daily need; vitamin D also carries its IU from food, which is what the screens show. */
+export type Gap = { key: MicroKey | "protein" | "fibre"; label: string; pct: number; iu?: number };
 export type RuleContext = {
   markers: RuleMarker[];
   gaps: Gap[]; // share of daily need, from logs or the typical day; empty when unknown
@@ -65,6 +70,20 @@ export type RuleId = "vitamin_d3" | "b12" | "iron" | "folate" | "magnesium" | "o
 
 const PLANT_DIETS = new Set(["veg", "vegan", "jain", "eggetarian"]);
 const LOW = new Set(["low", "edge_low"]);
+
+// Foods follow the diet in every line: no dairy for vegans; no eggs, fish or chicken for
+// vegetarians and Jains (and no sprouts for Jains); eggs but no fish or chicken for eggetarians.
+const vegan = (ctx: RuleContext) => ctx.diet === "vegan";
+const eatsEggs = (ctx: RuleContext) => ctx.diet === "eggetarian" || ctx.diet === "nonveg";
+/** Protein foods the diet eats, written to follow "add" or to come before "at each meal". */
+const proteinFoods = (ctx: RuleContext) =>
+  vegan(ctx)
+    ? "dal, tofu, soy chunks or sprouts"
+    : ctx.diet === "jain"
+      ? "dal, curd or paneer"
+      : eatsEggs(ctx)
+        ? "dal, curd, paneer, eggs or sprouts"
+        : "dal, curd, paneer or sprouts";
 const HIGH = new Set(["high", "edge_high"]);
 const fmt = (n: number) => (Math.abs(n) >= 100 ? String(Math.round(n)) : String(+n.toFixed(1)));
 
@@ -88,7 +107,7 @@ function vitaminD(ctx: RuleContext): Built | null {
     why: `Your vitamin D is ${reading(m)}, ${m.status === "low" ? "below" : "at the bottom of"} the range.`,
     markers: ["vitamin_d"],
     diet_gap: null,
-    form: "Cholecalciferol (D3), a tablet, capsule or drops",
+    form: vegan(ctx) ? "Vegan D3 (cholecalciferol from lichen), a tablet, capsule or drops" : "Cholecalciferol (D3), a tablet, capsule or drops",
     dose,
     timing: "With your biggest meal; it needs some fat to absorb",
     duration: "12 weeks, then retest vitamin D",
@@ -109,7 +128,7 @@ function b12(ctx: RuleContext): Built | null {
   return {
     rule: "b12",
     nutrient: "Vitamin B12",
-    why: `Your B12 is ${reading(m)}, ${m.status === "low" ? "below" : "at the bottom of"} the range${PLANT_DIETS.has(ctx.diet ?? "") ? ", common on a vegetarian diet" : ""}.`,
+    why: `Your B12 is ${reading(m)}, ${m.status === "low" ? "below" : "at the bottom of"} the range${vegan(ctx) ? ", common on a vegan diet" : PLANT_DIETS.has(ctx.diet ?? "") ? ", common on a vegetarian diet" : ""}.`,
     markers: ["b12"],
     diet_gap: null,
     form: "Methylcobalamin or cyanocobalamin tablet",
@@ -120,16 +139,19 @@ function b12(ctx: RuleContext): Built | null {
   };
 }
 
-// No B12 result to go on (no report yet, or one without B12): meals that are mostly
-// vegetarian and fall well short are the commonest reason for low B12 in India, and B12
-// has no known upper limit, so a food gap alone can earn it, at the lower dose.
+// No B12 result to go on (no report yet, or one without B12): meals that fall well short
+// can earn it, at the lower dose, on any diet (Mayank, 2026-11-17; plant diets only before).
+// Mostly vegetarian meals are the commonest reason for low B12 in India, and B12 has no
+// known upper limit.
 function b12FromFood(ctx: RuleContext): Built | null {
   const gap = gapOf(ctx, "b12_ug");
-  if (!gap || gap.pct >= 50 || !PLANT_DIETS.has(ctx.diet ?? "")) return null;
+  if (!gap || gap.pct >= 50) return null;
   return {
     rule: "b12",
     nutrient: "Vitamin B12",
-    why: `Your meals cover about ${gap.pct}% of your B12 need, common when meals are mostly vegetarian.`,
+    why: PLANT_DIETS.has(ctx.diet ?? "")
+      ? `Your meals cover about ${gap.pct}% of your B12 need, ${vegan(ctx) ? "common on a vegan diet; fortified soy milk or cereals help" : "common when meals are mostly vegetarian"}.`
+      : `Your meals cover about ${gap.pct}% of your B12 need; meat, fish, eggs and milk are its main sources.`,
     markers: [],
     diet_gap: `Vitamin B12 at ${gap.pct}% of daily need`,
     form: "Methylcobalamin or cyanocobalamin tablet",
@@ -151,7 +173,7 @@ function iron(ctx: RuleContext): Built | null {
     diet_gap: null,
     form: "Iron bisglycinate (gentler on the stomach)",
     dose: "About 18–30 mg of elemental iron a day or every other day, once a doctor agrees",
-    timing: "With a vitamin C food, 2 hours away from tea, coffee, milk and calcium",
+    timing: vegan(ctx) ? "With a vitamin C food, 2 hours away from tea, coffee and calcium" : "With a vitamin C food, 2 hours away from tea, coffee, milk and calcium",
     duration: "8–12 weeks, then retest ferritin and haemoglobin",
     cautions:
       "Check with a doctor before starting: the cause of low iron matters, especially for men and women after menopause. Stop and see a doctor for black stools or bad stomach pain. Keep it away from children.",
@@ -244,11 +266,19 @@ function protein(ctx: RuleContext): Built | null {
     dose: "One scoop (20–30 g of protein) on days your meals fall short",
     timing: "After training or with breakfast",
     duration: "While your meals fall short",
-    cautions: "Pick one tested for heavy metals. Food comes first: dal, curd, paneer, eggs or sprouts at each meal.",
+    cautions: `Pick one tested for heavy metals. Food comes first: ${proteinFoods(ctx)} at each meal.`,
   };
 }
 
+// Paused 2026-11-17 (Mayank): zinc earns nothing from food alone for now. Zinc's 17 mg
+// target made 96% of vegetarian men's days short, and the AI read atta meals a third to
+// a half low on zinc (the AI efficiency lead's measurements). A zinc gap shows under
+// "What your food is short of" as food first. The rule, brand look-up and typical price
+// stay, ready to return after a check against IFCT values.
+const ZINC_FROM_FOOD = false;
+
 function zinc(ctx: RuleContext): Built | null {
+  if (!ZINC_FROM_FOOD) return null;
   const gap = gapOf(ctx, "zinc_mg");
   if (!gap || gap.pct >= 60 || !PLANT_DIETS.has(ctx.diet ?? "")) return null;
   return {
@@ -271,29 +301,55 @@ const RULES = [vitaminD, b12, iron, folate, magnesium, omega3, calcium, protein,
 // The order a budget spends in: a result outside its range first, then one at the
 // edge of range, then food gaps, biggest gap first. Ties keep the order above.
 
-const GAP_KEY: Partial<Record<RuleId, Gap["key"]>> = { magnesium: "magnesium_mg", calcium: "calcium_mg", protein: "protein", zinc: "zinc_mg", b12: "b12_ug" };
+/** The food gap each rule answers. Omega-3 answers a marker only. */
+const RULE_GAP: Record<RuleId, Gap["key"] | null> = {
+  vitamin_d3: "vitamin_d_iu",
+  b12: "b12_ug",
+  iron: "iron_mg",
+  folate: "folate_ug",
+  magnesium: "magnesium_mg",
+  omega3: null,
+  calcium: "calcium_mg",
+  protein: "protein",
+  zinc: "zinc_mg",
+};
 
 function rank(ctx: RuleContext, b: Built): [number, number] {
   const statuses = b.markers.map((k) => byKey(ctx, k)?.status);
   if (statuses.some((s) => s === "low" || s === "high")) return [0, 0];
   if (statuses.length) return [1, 0];
-  const key = GAP_KEY[b.rule];
+  const key = RULE_GAP[b.rule];
   return [2, (key && gapOf(ctx, key)?.pct) ?? 100];
 }
 
+/** Held for a kidney condition: the person's doctor decides these. */
+const KIDNEY_HOLDS: RuleId[] = ["magnesium", "protein", "calcium"];
+
 // ── Food first and what to skip ───────────────────────────────────────────
 
+// Lines for each item's nutrient, shown under "Food first". Foods follow the diet: no dairy
+// for vegans, no eggs, fish or chicken for vegetarians and Jains.
 const FOOD_FIRST: Partial<Record<RuleId, (ctx: RuleContext) => string>> = {
-  vitamin_d3: () => "Vitamin D: 15–20 minutes of midday sun on your arms and legs a few days a week; eggs and fortified milk help a little.",
-  b12: (c) => (c.diet === "vegan" ? "B12: fortified soy milk or cereals each day." : "B12: milk, curd and paneer every day, and eggs if you eat them."),
+  vitamin_d3: (c) =>
+    `Vitamin D: 15–20 minutes of midday sun on your arms and legs a few days a week; ${vegan(c) ? "fortified soy milk helps" : eatsEggs(c) ? "eggs and fortified milk help" : "fortified milk helps"} a little.`,
+  b12: (c) =>
+    vegan(c)
+      ? "B12: fortified soy milk or cereals each day."
+      : `B12: milk, curd and paneer every day${c.diet === "nonveg" ? ", plus eggs, fish or chicken" : c.diet === "eggetarian" ? ", plus eggs" : ""}.`,
   iron: () => "Iron: rajma, chana, masoor, palak, til and jaggery, with lemon, amla or tomato in the same meal; keep chai an hour away.",
   folate: () => "Folate: dals, chana, leafy greens like methi and palak, and oranges.",
   magnesium: () => "Magnesium: pumpkin seeds, almonds, peanuts, dals, whole grains and leafy greens.",
   omega3: (c) => (PLANT_DIETS.has(c.diet ?? "") ? "Triglycerides: walnuts and flaxseed, and cut sugar, refined carbs and alcohol, which raise them most." : "Triglycerides: bangda or mathi twice a week, and cut sugar, refined carbs and alcohol, which raise them most."),
-  calcium: () => "Calcium: curd, paneer, ragi, til and leafy greens.",
-  protein: () => "Protein: add dal, curd, paneer, eggs or sprouts to every meal before reaching for a powder.",
+  calcium: (c) => (vegan(c) ? "Calcium: ragi, til, tofu, rajma and leafy greens." : "Calcium: curd, paneer, ragi, til and leafy greens."),
+  protein: (c) => `Protein: add ${proteinFoods(c)} to every meal before reaching for a powder.`,
   zinc: () => "Zinc: pumpkin seeds, chana, cashews and whole grains.",
 };
+
+/** "Food first" for the items in a stack, in their order. Pass the items after the safety floor, so a removed item's food line goes with it. */
+export function foodFirst(ctx: RuleContext, items: readonly { rule?: RuleId | null }[]): string[] {
+  const rules = [...new Set(items.flatMap((i) => (i.rule ? [i.rule] : [])))];
+  return rules.map((r) => FOOD_FIRST[r]?.(ctx)).filter((line): line is string => !!line).slice(0, 4);
+}
 
 function skips(ctx: RuleContext, chosen: Set<RuleId>): Plan["skip"] {
   const out: Plan["skip"] = [
@@ -338,7 +394,7 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
 
   // Kidney disease: no magnesium, protein powder or extra calcium on our say-so.
   if (conditions.has("kidney")) {
-    const held = built.filter((b) => b.rule === "magnesium" || b.rule === "protein" || b.rule === "calcium");
+    const held = built.filter((b) => KIDNEY_HOLDS.includes(b.rule));
     if (held.length) see_doctor.push(`With a kidney condition, ask your doctor before ${held.map((h) => h.nutrient.toLowerCase()).join(" or ")}.`);
     built = built.filter((b) => !held.includes(b));
   }
@@ -352,10 +408,145 @@ export function planStack(ctx: RuleContext): { items: PlannedItem[]; skip: Plan[
   }));
 
   const chosen = new Set(items.map((i) => i.rule));
-  // Big food gaps that never earn a supplement without a test (iron, folate) still get food advice.
-  const foodOnly = (["iron", "folate"] as const).filter((r) => !chosen.has(r) && (gapOf(ctx, r === "iron" ? "iron_mg" : "folate_ug")?.pct ?? 100) < 60);
-  const food_first = [...chosen, ...foodOnly].map((r) => FOOD_FIRST[r]?.(ctx)).filter((s): s is string => !!s).slice(0, 4);
-  return { items, skip: skips(ctx, chosen), food_first, see_doctor };
+  // Food first covers the items only; every other food gap says what to eat in foodGaps.
+  return { items, skip: skips(ctx, chosen), food_first: foodFirst(ctx, items), see_doctor };
+}
+
+// ── What the food falls short on ─────────────────────────────────────────
+// Every nutrient the meals give less than SHORT_OF_NEED of, lowest first, with what the
+// stack did about it, so a big gap on Fuel never just disappears from the stack. The
+// outcome follows the rules above, with no thresholds of its own:
+// - stack: an item in the (floored) stack answers it;
+// - doctor: its blood result is flagged, or a kidney condition holds it (planStack);
+// - test: vitamin D, iron and folate with no result for them; their rules act only on one;
+// - food: everything else, with what to eat.
+// The screen leads each note with its tag ("Food first."), so notes never repeat it.
+
+export const GAP_OUTCOMES = ["stack", "food", "test", "doctor"] as const;
+export type GapOutcome = (typeof GAP_OUTCOMES)[number];
+export type FoodGap = {
+  key: Gap["key"];
+  label: string;
+  pct: number;
+  /** Vitamin D's IU a day from food, shown in place of the share of need (inIuOnly). */
+  iu: number | null;
+  outcome: GapOutcome;
+  note: string;
+  /** For "stack": the rule of the item that answers it, so the screen can link to it. */
+  rule: RuleId | null;
+};
+/** What the gaps were averaged from: logged days (how many), or the normal day they described. */
+export type GapsBasis = { source: "logs" | "typical_day"; days: number };
+
+/** The rule that answers each food gap, and from it the blood result that measures it (RULE_MARKER). */
+const GAP_RULE = new Map((Object.keys(RULE_GAP) as RuleId[]).flatMap((r) => (RULE_GAP[r] ? [[RULE_GAP[r], r] as const] : [])));
+const resultFor = (ctx: RuleContext, key: Gap["key"]) => {
+  const rule = GAP_RULE.get(key);
+  const marker = rule ? RULE_MARKER[rule] : null;
+  return marker ? byKey(ctx, marker) : undefined;
+};
+
+const resultLow = (m: RuleMarker | undefined) => (m?.status === "edge_low" ? "Your result is at the bottom of its range" : "Your result is low");
+
+export const VITAMIN_D_TEST =
+  "Food gives little vitamin D; most comes from sun on your skin, so your meals can't show if you're low. A blood test can. If you already take it, stay under 4,000 IU a day unless your doctor set the dose. One 60,000 IU sachet a week is about twice that.";
+
+type Notes = {
+  /** Food first, with no result for it, or one that doesn't settle it. */
+  eat: (ctx: RuleContext) => string;
+  /** In the stack. `m` is the result that earned the item, if a result did. */
+  stack?: (ctx: RuleContext, m: RuleMarker | undefined) => string;
+  /** Waiting for a blood test (rules that act only on a result). */
+  test?: string;
+  /** Food first, with a result in range. */
+  inRange?: string;
+};
+
+const NOTES: Record<Gap["key"], Notes> = {
+  vitamin_d_iu: {
+    test: VITAMIN_D_TEST,
+    stack: (_, m) => `${resultLow(m)}; midday sun helps too.`,
+    inRange: "Your result is in range, which counts more than food here.",
+    eat: () => "Midday sun on your arms and legs helps most.",
+  },
+  iron_mg: {
+    test: "Worth adding only if a ferritin test shows it low; meanwhile rajma or palak with lemon.",
+    stack: () => "Your ferritin is low; only once a doctor agrees.",
+    inRange: "Your ferritin is fine; rajma or palak with amla keep it there.",
+    eat: () => "Rajma or palak with amla or lemon help.",
+  },
+  folate_ug: {
+    test: "A blood test shows it; dal, methi and palak help meanwhile.",
+    stack: (_, m) => `${resultLow(m)}.`,
+    eat: () => "Dal, chana, methi and oranges cover it.",
+  },
+  calcium_mg: {
+    stack: (c) => (vegan(c) ? "Until ragi, til or tofu close it." : "Until curd, paneer, ragi or til close it."),
+    eat: (c) => (vegan(c) ? "A ragi roti, til or tofu daily closes it." : "Curd, a ragi roti or milk daily closes it."),
+  },
+  magnesium_mg: {
+    stack: () => "Peanuts or pumpkin seeds help too.",
+    eat: () => "A handful of peanuts or pumpkin seeds; whole grains over maida.",
+  },
+  zinc_mg: {
+    stack: () => "Common on vegetarian meals; chana helps too.",
+    eat: (c) => `Chana, cashews or pumpkin seeds${eatsEggs(c) ? ", or eggs" : ""} close it.`,
+  },
+  b12_ug: {
+    stack: (c, m) =>
+      m ? `${resultLow(m)}.` : vegan(c) ? "Common on a vegan diet; a blood test shows your stores." : PLANT_DIETS.has(c.diet ?? "") ? "Common on mostly vegetarian meals; a blood test shows your stores." : "A blood test shows your stores.",
+    eat: (c) =>
+      vegan(c)
+        ? "Fortified soy milk or cereals daily."
+        : `Milk, curd and paneer daily${c.diet === "nonveg" ? ", plus eggs, fish or chicken" : c.diet === "eggetarian" ? ", plus eggs" : ""}.`,
+  },
+  protein: {
+    stack: (c) => `For short days; ${proteinFoods(c)} come first.`,
+    // Only people who don't train yet land here: for everyone else the protein rule adds an item.
+    eat: (c) => `Until you train, food covers it: ${proteinFoods(c)} each meal.`,
+  },
+  fibre: { eat: () => "Swap some white rice for millets or whole atta; add chana or rajma." },
+  vitamin_c_mg: { eat: () => "Raw works best: amla, guava, or lemon on your dal." },
+};
+
+const KIDNEY_GAPS = new Set(KIDNEY_HOLDS.map((r) => RULE_GAP[r]));
+const isFlagged = (m: RuleMarker | undefined) => m?.flag === "doctor" || m?.flag === "urgent";
+
+function foodNote(ctx: RuleContext, notes: Notes, m: RuleMarker | undefined): string {
+  if (!m || m.status === "unknown") return notes.eat(ctx);
+  if (HIGH.has(m.status)) return "Your result is above its range, so add nothing for it.";
+  if (LOW.has(m.status)) return `Your result is on the low side. ${notes.eat(ctx)}`;
+  return notes.inRange ?? notes.eat(ctx);
+}
+
+/**
+ * The food gaps behind a stack and what happened to each. Pass the items after the safety
+ * floor, so an item the floor removed is never reported as covered. Empty when the stack is
+ * held (pregnancy or an urgent result): then nothing but the doctor speaks.
+ */
+export function foodGaps(ctx: RuleContext, items: readonly { rule?: RuleId | null; markers: string[] }[]): FoodGap[] {
+  if (ctx.conditions.includes("pregnant") || ctx.markers.some((m) => m.flag === "urgent")) return [];
+  const coveredBy = new Map<Gap["key"], { rule: RuleId; fromMarker: boolean }>();
+  for (const { rule, markers } of items) {
+    const key = rule ? RULE_GAP[rule] : null;
+    if (rule && key && !coveredBy.has(key)) coveredBy.set(key, { rule, fromMarker: markers.length > 0 });
+  }
+  const kidney = ctx.conditions.includes("kidney");
+
+  return ctx.gaps
+    .filter((g) => g.pct < SHORT_OF_NEED)
+    .sort((a, b) => a.pct - b.pct)
+    .map((g): FoodGap => {
+      const base = { key: g.key, label: g.label, pct: g.pct, iu: inIuOnly(g.key) ? (g.iu ?? null) : null };
+      const notes = NOTES[g.key];
+      const m = resultFor(ctx, g.key);
+      const item = coveredBy.get(g.key);
+      if (item) return { ...base, outcome: "stack", rule: item.rule, note: notes.stack?.(ctx, item.fromMarker ? m : undefined) ?? notes.eat(ctx) };
+      if (isFlagged(m)) return { ...base, outcome: "doctor", rule: null, note: "Your result is flagged; show it to a doctor first." };
+      if (kidney && KIDNEY_GAPS.has(g.key)) return { ...base, outcome: "doctor", rule: null, note: "With a kidney condition, ask your doctor first." };
+      if (notes.test && !m) return { ...base, outcome: "test", rule: null, note: notes.test };
+      return { ...base, outcome: "food", rule: null, note: foodNote(ctx, notes, m) };
+    });
 }
 
 // What to search for when looking up brands for a rule, shared by everyone with that rule and diet.

@@ -2,7 +2,7 @@ import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { monthlyInr } from "@/lib/domain/budget";
-import type { StackBrand } from "@/lib/domain/supplements";
+import { GAP_OUTCOMES, type StackBrand } from "@/lib/domain/supplements";
 import { MODELS, VOICE, anthropic, assertComplete, extractJson, fallbackFor, languageRule, logUsage, runWithWebSearch } from "./client";
 import type { StackPlan } from "./schemas";
 
@@ -58,6 +58,7 @@ export async function findBrands(input: { nutrient: string; form: string; dose: 
 }
 
 // The words of a plan, for translation. Markers, brands and order stay as they are.
+// Food gaps carry their key and outcome only to keep each note on its row; just the note is taken.
 const TranslatedSchema = z.object({
   items: z.array(
     z.object({
@@ -74,19 +75,24 @@ const TranslatedSchema = z.object({
   skip: z.array(z.object({ name: z.string(), why: z.string() })),
   food_first: z.array(z.string()),
   see_doctor: z.array(z.string()),
+  gaps: z.array(z.object({ key: z.string(), outcome: z.enum(GAP_OUTCOMES), note: z.string() })),
 });
 
 /**
  * The same plan in the person's language, or the English plan when the
- * translation doesn't keep exactly the same items, in the same order.
+ * translation doesn't keep exactly the same items, in the same order. Food gaps
+ * must come back with the same keys and outcomes, in the same order; only their
+ * notes are translated, so numbers and outcomes can't change.
  */
 export async function translatePlan(plan: StackPlan, language: string): Promise<{ plan: StackPlan; model: string | null }> {
-  if (language === "en" || (!plan.items.length && !plan.skip.length && !plan.see_doctor.length)) return { plan, model: null };
+  const gaps = plan.gaps ?? [];
+  if (language === "en" || (!plan.items.length && !plan.skip.length && !plan.see_doctor.length && !gaps.length)) return { plan, model: null };
   const words = {
     items: plan.items.map(({ nutrient, why, form, dose, timing, duration, cautions, diet_gap }) => ({ nutrient, why, form, dose, timing, duration, cautions, diet_gap })),
     skip: plan.skip,
     food_first: plan.food_first,
     see_doctor: plan.see_doctor,
+    gaps: gaps.map(({ key, outcome, note }) => ({ key, outcome, note })),
   };
   const t0 = Date.now();
   const message = await anthropic()
@@ -96,7 +102,7 @@ export async function translatePlan(plan: StackPlan, language: string): Promise<
       ...fallbackFor(MODELS.wrap),
       ...(MODELS.wrap.startsWith("claude-haiku") ? { thinking: { type: "disabled" as const } } : {}),
       output_config: { effort: "low", format: betaZodOutputFormat(TranslatedSchema) },
-      system: `You translate a supplement plan for an Indian health app. Keep the meaning exactly, including every caution and every "see a doctor" line. Keep nutrient names, doses, numbers, units and brand names in English. Keep the same number of entries in the same order. ${languageRule(language)}`,
+      system: `You translate a supplement plan for an Indian health app. Keep the meaning exactly, including every caution and every "see a doctor" line. Keep nutrient names, doses, numbers, units and brand names in English. Keep the same number of entries in the same order, and copy every "key" and "outcome" unchanged. ${languageRule(language)}`,
       messages: [{ role: "user", content: JSON.stringify(words) }],
     })
     .finalMessage();
@@ -108,18 +114,25 @@ export async function translatePlan(plan: StackPlan, language: string): Promise<
     out.items.length === plan.items.length &&
     out.skip.length === plan.skip.length &&
     out.food_first.length === plan.food_first.length &&
-    out.see_doctor.length === plan.see_doctor.length;
+    out.see_doctor.length === plan.see_doctor.length &&
+    sameGaps(out.gaps, gaps);
   if (!out || !same) {
     console.warn("[stack] Translation changed the plan's shape; showing it in English.");
     return { plan, model: null };
   }
   return {
     plan: {
+      ...plan,
       items: plan.items.map((item, i) => ({ ...item, ...out.items[i], markers: item.markers, brands: item.brands })),
       skip: out.skip,
       food_first: out.food_first,
       see_doctor: out.see_doctor,
+      gaps: plan.gaps?.map((gap, i) => ({ ...gap, note: out.gaps[i].note })),
     },
     model: message.model,
   };
 }
+
+/** A translation keeps every food gap, in order, with its outcome. */
+const sameGaps = (out: { key: string; outcome: string }[], gaps: { key: string; outcome: string }[]) =>
+  out.length === gaps.length && out.every((g, i) => g.key === gaps[i].key && g.outcome === gaps[i].outcome);

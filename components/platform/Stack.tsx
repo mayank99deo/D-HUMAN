@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { BUDGETS, budgetOf, fitBudget, rupees, typicalFor } from "@/lib/domain/budget";
+import { SHORT_OF_NEED } from "@/lib/domain/nutrition";
 import { OFFLINE, send } from "./net";
 import { StallNotice } from "./Stall";
 import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "./stack-state";
@@ -17,6 +18,8 @@ export type Flagged = { name: string; urgent: boolean };
 const madeOn = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(iso));
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const pricedBrands = (item: Item) => item.brands.some((b) => typeof b.monthly_inr === "number");
+/** An item card's id, so a food gap's "In your stack." can link to it. */
+const cardId = (item: { rule?: string | null }) => (item.rule ? `stack-${item.rule}` : undefined);
 
 // Outside React state, so they survive the screen being remounted (a refresh can swap it
 // for the loading screen and back). A full reload starts them afresh, and then the page's
@@ -160,6 +163,7 @@ export function StackClient({
   const meals = basis === "meals";
   const stale = staleReason !== null;
   const items = useMemo(() => plan?.items ?? [], [plan]);
+  const gaps = plan?.gaps ?? [];
   const fit = useMemo(() => fitBudget(items, budget), [items, budget]);
   const chosen = budgetOf(budget);
   const capped = chosen?.cap != null;
@@ -184,11 +188,15 @@ export function StackClient({
           : `${fit.included.length} for you. Nothing else.`
         : fit.later.length
           ? "Nothing fits this budget yet."
-          : doctorNames.length || doctorNotes.length
+          : doctorNames.length || doctorNotes.length || gaps.some((g) => g.outcome === "doctor")
             ? "Nothing to add for now."
-            : meals
-              ? "Nothing to add from your meals."
-              : "You don't need anything.";
+            : gaps.some((g) => g.outcome === "test")
+              ? "Nothing to add. Food first, then a blood test."
+              : gaps.length
+                ? "Nothing to add. Food can close your gaps."
+                : meals
+                  ? "Nothing to add from your meals."
+                  : "You don't need anything.";
 
   // "About ₹0" never shows: a stack we can't price at all just doesn't state a total.
   const about = fit.total > 0 ? `About ${rupees(fit.total)} a month` : null;
@@ -302,7 +310,7 @@ export function StackClient({
                 const typical = typicalFor(it);
                 const others = it.brands.map((b, j) => ({ b, j })).filter(({ j }) => j !== pick);
                 return (
-                  <li key={i} className="border border-line-strong">
+                  <li key={i} id={cardId(it)} className="scroll-mt-6 border border-line-strong">
                     {/* Numbered like the pointers: an order to read in, most important first. */}
                     <div className="grid grid-cols-[2.5rem_1fr] items-baseline gap-x-3 p-5">
                       <span aria-hidden className="display-num text-3xl text-graphite">
@@ -374,7 +382,7 @@ export function StackClient({
                   const cheapest = Math.min(...it.brands.map((b) => b.monthly_inr ?? Infinity));
                   const from = Number.isFinite(cheapest) ? cheapest : (typicalFor(it)?.[0] ?? null);
                   return (
-                    <li key={i} className="border-t border-line py-4">
+                    <li key={i} id={cardId(it)} className="scroll-mt-6 border-t border-line py-4">
                       <p className="font-semibold">{it.nutrient}</p>
                       <p className="mt-1 text-graphite">
                         {it.why}
@@ -385,6 +393,11 @@ export function StackClient({
                 })}
               </ul>
             </section>
+          )}
+
+          {/* Every nutrient the meals fall short on, and what the stack did about it. Older stacks have none. */}
+          {gaps.length > 0 && (
+            <FoodGaps gaps={gaps} basis={plan.gaps_basis ?? null} later={new Set(fit.later.map((i) => items[i].rule).filter((r): r is string => !!r))} />
           )}
 
           {/* Before any report: what food can't show, and the way to cover it. */}
@@ -477,6 +490,69 @@ export function StackClient({
         </section>
       )}
     </main>
+  );
+}
+
+type Gap = NonNullable<StackPlan["gaps"]>[number];
+
+const GAP_TAG: Record<Gap["outcome"], string> = { stack: "In your stack.", food: "Food first.", test: "Test first.", doctor: "Doctor first." };
+
+// What the food falls short on, lowest first, so every big number on Fuel has an answer
+// here. Each row: the nutrient and how much of the need food covers (vitamin D in IU, as
+// most of it comes from sun), Fuel's bar, then the tag leading its note as one sentence.
+function FoodGaps({ gaps, basis, later }: { gaps: Gap[]; basis: StackPlan["gaps_basis"]; later: Set<string> }) {
+  const allFood = gaps.every((g) => g.outcome === "food");
+  return (
+    <section className="mt-12" aria-labelledby="short">
+      <h2 id="short" className="text-2xl font-bold semiwide">
+        What your food is short of
+      </h2>
+      <p className="mt-2 text-graphite">
+        {basis ? (basis.source === "logs" ? `Averaged from AI estimates of your ${basis.days} full logged days. ` : "From the usual day you described, as AI estimates. ") : ""}
+        Anything under {SHORT_OF_NEED}% of your need, lowest first.{allFood && " None needs a supplement; each line says what to eat."}
+      </p>
+      <ul className="mt-4">
+        {gaps.map((g) => {
+          const tag = g.outcome === "stack" && g.rule && later.has(g.rule) ? "When your budget allows." : GAP_TAG[g.outcome];
+          return (
+            <li key={g.key} className="border-t border-line py-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <p className="font-semibold">{g.label}</p>
+                {g.iu != null ? (
+                  <p>
+                    <span className="display-num text-2xl">{g.iu}</span> <span className="text-sm text-graphite">IU a day from food</span>
+                  </p>
+                ) : (
+                  <p>
+                    <span className="display-num text-2xl">{g.pct}%</span> <span className="text-sm text-graphite">of your need</span>
+                  </p>
+                )}
+              </div>
+              {g.iu == null && (
+                <div className="mt-2 h-1 bg-line" aria-hidden>
+                  <div className="h-1 bg-paper" style={{ width: `${Math.min(100, g.pct)}%` }} />
+                </div>
+              )}
+              <p className="mt-2 text-[0.9375rem]">
+                {g.outcome === "stack" && g.rule ? (
+                  <a href={`#stack-${g.rule}`} className="font-semibold underline decoration-1 underline-offset-4">
+                    {tag}
+                  </a>
+                ) : (
+                  <span className="font-semibold">{tag}</span>
+                )}{" "}
+                <span className="text-graphite">{g.note}</span>
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      {allFood && (
+        <Link href="/fuel" className="button-ghost mt-6 h-12">
+          Log a meal
+        </Link>
+      )}
+    </section>
   );
 }
 

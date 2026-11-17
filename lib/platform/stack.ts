@@ -7,7 +7,7 @@ import { db, schema } from "@/lib/db";
 import type { Profile } from "@/lib/db/schema";
 import { markerDef } from "@/lib/domain/markers";
 import { asFlag, floorStack } from "@/lib/domain/safety";
-import { planStack } from "@/lib/domain/supplements";
+import { foodFirst, foodGaps, planStack, type RuleContext } from "@/lib/domain/supplements";
 import { brandsFor } from "./brands";
 import { dietPicture } from "./food";
 import { getProfile } from "./profile";
@@ -132,21 +132,30 @@ export async function startStack(userId: string): Promise<StackStart> {
   const work = async () => {
     const markers = report ? await d.select().from(schema.markers).where(eq(schema.markers.reportId, report.id)) : [];
     const picture = await dietPicture(userId, profile);
-    const planned = planStack({
+    const ctx: RuleContext = {
       markers: markers.map((m) => ({ key: m.key, name: markerDef(m.key)?.name ?? m.name, value: m.value, unit: m.unit, status: m.status, flag: m.flag })),
       gaps: picture.source === "none" ? [] : picture.gaps,
       diet: profile.diet,
       level: profile.level,
       conditions: profile.conditions,
       medications: profile.medications,
-    });
+    };
+    const planned = planStack(ctx);
     // Items keep their rule (typical prices for budgets) and come in priority order.
     const items = await Promise.all(planned.items.map(async (item) => ({ ...item, brands: await brandsFor(item.rule, profile.diet) })));
-    const english = floorStack(
+    const floored = floorStack(
       { items, skip: planned.skip, food_first: planned.food_first, see_doctor: planned.see_doctor },
       markers.map((m) => ({ key: m.key, name: markerDef(m.key)?.name ?? m.name, status: m.status, flag: asFlag(m.flag) })),
     );
-    if (english.items.length !== items.length) console.info(`[stack] ${id}: safety floor removed ${items.length - english.items.length} item(s)`);
+    if (floored.items.length !== items.length) console.info(`[stack] ${id}: safety floor removed ${items.length - floored.items.length} item(s)`);
+    // Food first and what the food falls short on, from the stack as the floor left it, so
+    // an item it removed is never shown as covered, nor its food line kept.
+    const english = {
+      ...floored,
+      food_first: foodFirst(ctx, floored.items),
+      gaps: foodGaps(ctx, floored.items),
+      gaps_basis: picture.source === "none" ? null : { source: picture.source, days: picture.days },
+    };
     const translated = mode === "live" ? await translatePlan(english, profile.language) : { plan: english, model: null };
     await finish({ status: "ready", plan: { ...translated.plan, inputs: stackInputs(profile) }, model: translated.model ? `rules+${translated.model}` : "rules" });
   };

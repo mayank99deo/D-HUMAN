@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EXTRACT_KEYS } from "@/lib/domain/markers";
 import { SPOKEN_IDS } from "@/lib/domain/speech";
+import { GAP_OUTCOMES } from "@/lib/domain/supplements";
 
 // Output shapes Claude must return. Structured-output shapes (extract, read,
 // meal, day, wrap) have every field required, nullable where it may be absent:
@@ -195,5 +196,21 @@ export const StackSchema = z.object({
   skip: lenientArray(z.object({ name: z.string(), why: text })),
   food_first: lenientArray(line),
   see_doctor: lenientArray(line),
+  // Since 2026-11-17, worked out in code (foodGaps): what the meals fall short on, what the
+  // stack did about each, and what the averages came from. Older stacks have neither.
+  gaps: z
+    .array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        pct: z.number(),
+        iu: z.number().nullable().optional(),
+        outcome: z.enum(GAP_OUTCOMES),
+        note: z.string(),
+        rule: z.string().nullable(),
+      }),
+    )
+    .optional(),
+  gaps_basis: z.object({ source: z.enum(["logs", "typical_day"]), days: z.number() }).nullable().optional(),
 });
 export type StackPlan = z.infer<typeof StackSchema>;

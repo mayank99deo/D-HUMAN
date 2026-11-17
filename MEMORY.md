@@ -55,8 +55,22 @@ The running record of this project: where things stand, why they are the way the
 - **A stack before any report (2026-11-17, from user feedback: most people have no report with them):**
   - **What it's built from:** with no ready report, `startStack` builds from food gaps alone. That's `dietPicture`, measured against `targetsFor` (age, sex, height, weight, training level, goals). It uses the same rules, safety floor, brands, prices and budgets as report stacks.
   - **How it's marked:** such a stack has `report_id` null. Migration `0008` removed the older report-less leftovers, so null now always means "from meals", and `deleteReports` keeps these stacks.
-  - **What food alone can earn:** magnesium, calcium, protein and zinc (as before), and B12 at 500 mcg for mostly vegetarian meals under 50% of need when there's no B12 result (`b12FromFood`). Never vitamin D, iron, folate or omega-3. Big iron and folate gaps get food advice only.
-  - **What counts as data:** a day counts only with two or more meals and at least 40% of the energy target (`PLAUSIBLE_SHARE` in `lib/platform/food.ts`), and a "usual day" only past the same 40%. This came from QA: two cups of chai a day had earned five supplements.
+  - **What food alone can earn** (updated later on 2026-11-17, Mayank's calls after the crew's research):
+    - Magnesium under 60% of need, calcium under 50%, and protein under 70% for people who train.
+    - B12 at 500 mcg under 50% on any diet, when there's no B12 result.
+    - Zinc is paused (`ZINC_FROM_FOOD = false`): the AI reads atta meals a third to a half low on zinc, and the 17 mg target made 96% of vegetarian men's days "short". Its gap shows as "Food first." until the AI efficiency lead's IFCT check.
+    - Never vitamin D, iron, folate or omega-3 ("Test first.").
+  - **What counts as data:**
+    - A logged day counts only with two or more meals and at least 75% of the energy target. A "usual day" counts from 40%. Both are constants in `lib/platform/food.ts`.
+    - Why: run-to-run noise in the AI's estimates flips at most about 6% of 3-day averages. Partly logged days were the real bias: magnesium came out short on 91% of days logged at 65% of energy, against 13% at full energy.
+    - Two cups of chai a day had once earned five supplements.
+  - **What your food is short of** (`foodGaps` in `lib/domain/supplements.ts`, saved in the plan as `gaps` and `gaps_basis`):
+    - **What it lists:** every nutrient under 70% of need, lowest first, each tagged "In your stack.", "Food first.", "Test first." or "Doctor first." (for a flagged result, or a kidney condition with calcium, magnesium or protein), with a one-line note in the designer's words.
+    - **The titles:** "Nothing to add. Food can close your gaps." or "Nothing to add. Food first, then a blood test." when nothing is added.
+    - **Vitamin D:** shown in IU, never as a % (here and on Fuel), with the sachet warning in its "Test first." note.
+    - **Translation:** the notes are translated with the plan, and fall back to English if the gaps change.
+    - **Fuel:** says "This is today so far. Your stack goes by your average across days, not one meal."
+  - **Safety floor for food-earned items:** an item earned by a food gap is removed when that nutrient's own blood result is flagged (`RULE_MARKER` in `lib/domain/safety.ts`). Before this fix, a flagged calcium of 11.5 mg/dL still kept "Calcium 500 mg a day". Food lines follow each diet: no eggs for vegetarians or Jains, no dairy for vegans.
   - **Not enough data:** `no_data`, and the Stack screen's "Your stack starts with your food." (progress "1 of 3 days", a link to `/fuel?usual=1`, which opens Fuel at "How you usually eat").
   - **The screens:**
     - The Stack screen says it's "Built … from AI estimates of your meals, against targets for you (…)", with a card asking for a blood report for vitamin D, B12 stores and iron.
@@ -66,8 +80,8 @@ The running record of this project: where things stand, why they are the way the
     - Safety flags always come from the newest report, so an urgent result holds the page whichever report the stack was built from.
     - A held stack (urgent, or pregnancy added later) shows no items.
   - **Mayank's calls, 2026-11-17:**
-    - Keep B12 from a food gap alone; it's on the doctor review below.
-    - Keep the 40% floor.
+    - Keep B12 from a food gap alone; it's on the doctor review below. Later the same day, after the product lead's research: allow it for every diet. Vitamin D stays "Test first" (Endocrine Society 2024: no benefit above the 600 IU RDA for healthy adults). Keep the five thresholds.
+    - The 40% floor, later replaced: logged days need 75%, after the AI efficiency lead's measurements.
     - An old meals stack may come back, dated, after all reports are deleted.
     - A stack goes out of date when diet, medicines or conditions change since it was built. It saves them (`inputs` in the plan, `stackInputs`/`inputsChanged` in `lib/platform/stack.ts`), shows no doses, and offers "Rebuild my stack". Stacks built before this never count as changed.
 - **Past meals (2026-11-17, from user feedback):** `/fuel/past` lists the 28 days before today (`HISTORY_DAYS` in `lib/domain/meals.ts`), only days with meals, newest first, yesterday open, each meal with its time and Delete. Older logs are kept and still count in wraps. Reached from "Past meals" beside the Fuel title and from Home ("Yesterday: X kcal and Y g protein."). Meal delete stays one tap, as on Today.
@@ -206,6 +220,23 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-17
+- **"What your food is short of" on the Stack screen, and the stack rules after the crew's research (Mayank: Fuel showed deficits his stack didn't act on):** design and rules in Decisions ("A stack before any report").
+  - **Why it happened:** his stack came from his usual day's averages, not the one lunch on Fuel. The rules (vitamin D never without a test; zinc and B12 only for plant diets then; magnesium 60%, calcium 50%, protein 70%) found nothing, and nothing on the screen said why.
+  - **The crew, in parallel:**
+    - **Staff engineer:** built the gaps analysis, translation of its notes, the section, Fuel's line, the diet-aware food lines, and a safety fix it found itself: food-earned items now answer to their nutrient's flagged result (`RULE_MARKER`).
+    - **Product lead:** researched the decisions: vitamin D test-first (Endocrine Society 2024), keep the thresholds, B12 for every diet, zinc plant-only.
+    - **UX designer:** the wording and layout, and the new "Nothing to add…" titles.
+    - **AI efficiency lead:** measured estimate noise (51 calls, $0.022). Noise is small, but partly logged days made missing meals look like deficits, and zinc triggered for 96% of vegetarian men's days. Then checked the AI against IFCT 2017 ($0.028): paneer under half its real calcium, zinc and iron, and rice minerals about 3 times too high.
+    - **QA:** proved it on a production build in 7 cases. A fail (the protein caution named eggs to vegetarians and dairy to vegans) was fixed and re-proved for five diets.
+  - **Mayank's calls:**
+    - Vitamin D "Test first", in IU on Fuel.
+    - Keep the 5 thresholds.
+    - B12 for every diet.
+    - Zinc "Food first" only, for now.
+    - A logged day counts at 75% of energy.
+    - Next batch: usual day at 60%, IFCT reference values in the meal prompt, the usual day averaged over 3 runs.
+  - **Checked:** typecheck, lint, 272 tests (new: the safety floor for food-earned items, every outcome, vitamin D IU, zinc paused, B12 for all diets, no excluded food in any text for any diet, the 75% rule against the database, translation).
+- **Push `ce1dc46`:** the slow-network follow-up (in the entry below). Live about 30 s later. Signed out, `/stack` sends visitors to `/signin`, and the landing gives 200.
 - **Push `da1a583`:** the entry below. Live about 24 s later. Signed out, `/stack` and `/home` send visitors to `/signin`, `GET /api/stack/x` gives 401, and the landing gives 200.
 - **Stack screen fell back to "Build" after a build (Mayank, iPhone, live site; fixed by the crew):**
   - **Seen:** with no report, after a usual day: "Building your stack…", then the loading screen's "This is taking longer than usual.", then the pre-build screen (title "Your stack", the Build button, no error).

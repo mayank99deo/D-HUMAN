@@ -180,7 +180,8 @@ export function FuelLogger({
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
   totals: Totals;
-  micros: { label: string; pct: number }[];
+  /** A share of daily need, or IU for vitamin D, which mostly comes from sun. */
+  micros: ({ label: string; pct: number } | { label: string; iu: number })[];
   logs: Log[];
   typical: { description: string; patterns: string[] } | null;
   gaps: { label: string; pct: number }[];
@@ -791,17 +792,22 @@ export function FuelLogger({
           )}
           {sorted.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-graphite">Micronutrients today, as a share of your daily need</h3>
+              <h3 className="text-sm font-semibold text-graphite">Micronutrients today, as a share of your daily need; vitamin D in IU</h3>
+              <p className="mt-1 text-sm text-graphite">This is today so far. Your stack goes by your average across days, not one meal.</p>
               <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
                 {micros.map((m) => (
                   <li key={m.label}>
                     <div className="flex justify-between text-sm">
                       <span>{m.label}</span>
-                      <span className="text-graphite">{m.pct}%</span>
+                      <span className="text-graphite">{"iu" in m ? `${m.iu} IU` : `${m.pct}%`}</span>
                     </div>
-                    <div className="mt-1 h-1 bg-line" aria-hidden>
-                      <div className="h-1 bg-paper" style={{ width: `${Math.min(100, m.pct)}%` }} />
-                    </div>
+                    {"iu" in m ? (
+                      <p className="mt-1 text-xs text-graphite">Most vitamin D comes from sun; a blood test shows your level.</p>
+                    ) : (
+                      <div className="mt-1 h-1 bg-line" aria-hidden>
+                        <div className="h-1 bg-paper" style={{ width: `${Math.min(100, m.pct)}%` }} />
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

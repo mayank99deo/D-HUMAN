@@ -8,9 +8,10 @@ import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
 import { HISTORY_DAYS, type MealView } from "@/lib/domain/meals";
-import { MICROS, emptyMicros, targetsFor, type MicroKey, type Micros } from "@/lib/domain/nutrition";
+import { MICROS, SHORT_OF_NEED, emptyMicros, inIuOnly, targetsFor, type Micros } from "@/lib/domain/nutrition";
 import { addDays } from "@/lib/domain/periods";
 import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
+import type { Gap } from "@/lib/domain/supplements";
 import { localDate, personaFor } from "./profile";
 
 export type MealKind = "breakfast" | "lunch" | "dinner" | "snack";
@@ -184,17 +185,23 @@ export type DietPicture = {
   /** Days in the window with at least two meals logged; three make the picture come from logs. */
   fullDays: number;
   perDay: Totals | null;
-  gaps: { key: MicroKey | "protein" | "fibre"; label: string; pct: number }[];
+  /** Lowest first. Vitamin D also carries its IU from food, which the screens show instead of the share (inIuOnly). */
+  gaps: Gap[];
   patterns: string[];
 };
 
 // What the person eats on an average day: from logs when there are at least
 // three properly logged days in the window, else from their typical day.
-// "Properly logged" means it looks like a day of eating: two meals or more, and at least
-// PLAUSIBLE_SHARE of their energy target. Two cups of chai aren't a day's food, and the
-// "gaps" they'd show aren't real, so they never earn a supplement (QA, 2026-11-17). A usual
-// day that describes almost no food doesn't count either.
-export const PLAUSIBLE_SHARE = 0.4;
+//
+// A logged day counts only with two meals or more and LOGGED_DAY_SHARE of their energy
+// target (Mayank, 2026-11-17; it was 40%). Partly logged days read as gaps that aren't
+// there: in the AI efficiency lead's measurements, days logged at 65% of energy showed
+// magnesium short on 91% of days, against 13% when judged at full energy. Two cups of chai
+// a day (QA, 2026-11-17) are the extreme case.
+export const LOGGED_DAY_SHARE = 0.75;
+// A usual day describes a whole day by design, so it only has to look like a day's food:
+// one that describes almost no food doesn't count.
+export const USUAL_DAY_SHARE = 0.4;
 
 export async function dietPicture(userId: string, profile: Profile, days = 14): Promise<DietPicture> {
   const today = localDate(profile.timezone);
@@ -204,11 +211,11 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     sex: profile.sex, age: persona.age, heightCm: profile.heightCm, weightKg: profile.weightKg,
     level: profile.level, archetype: persona.archetype, goals: profile.goals,
   });
-  const enough = (kcal: number) => kcal >= targets.kcal * PLAUSIBLE_SHARE;
+  const reaches = (kcal: number, share: number) => kcal >= targets.kcal * share;
   const logs = await logsBetween(userId, from, today);
   const byDay = new Map<string, FoodLog[]>();
   for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), l]);
-  const fullDays = [...byDay.values()].filter((meals) => meals.length >= 2 && enough(meals.reduce((t, m) => t + m.kcal, 0)));
+  const fullDays = [...byDay.values()].filter((meals) => meals.length >= 2 && reaches(meals.reduce((t, m) => t + m.kcal, 0), LOGGED_DAY_SHARE));
 
   let perDay: Totals | null = null;
   let source: DietPicture["source"] = "none";
@@ -229,7 +236,7 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
       const t = totalsOf(est.meals.map((m) => ({ kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g, fibreG: m.fibre_g, micros: {} })));
       // Patterns still show on Fuel; the numbers only count when they describe a day's food.
       patterns = est.patterns;
-      if (enough(t.kcal)) {
+      if (reaches(t.kcal, USUAL_DAY_SHARE)) {
         perDay = { ...t, micros: est.micros };
         source = "typical_day";
       }
@@ -241,7 +248,10 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     const pct = (v: number, t: number) => Math.round((v / t) * 100);
     gaps.push({ key: "protein", label: "Protein", pct: pct(perDay.proteinG, targets.proteinG) });
     gaps.push({ key: "fibre", label: "Fibre", pct: pct(perDay.fibreG, targets.fibreG) });
-    for (const { key, label } of MICROS) gaps.push({ key, label, pct: pct(perDay.micros[key], targets.micros[key]) });
+    for (const { key, label } of MICROS) {
+      const amount = perDay.micros[key];
+      gaps.push({ key, label, pct: pct(amount, targets.micros[key]), ...(inIuOnly(key) ? { iu: Math.round(amount) } : {}) });
+    }
     gaps.sort((a, b) => a.pct - b.pct);
   }
   return { source, days: source === "logs" ? fullDays.length : 0, fullDays: fullDays.length, perDay, gaps, patterns };
@@ -250,8 +260,10 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
 export function dietText(p: DietPicture): string | null {
   if (!p.perDay) return null;
   const from = p.source === "logs" ? `${p.days} logged days` : "their description of a typical day";
-  const low = p.gaps.filter((g) => g.pct < 70).map((g) => `${g.label} ${g.pct}% of target`);
+  // Vitamin D isn't a food gap: most comes from sun, so food can't show a shortfall.
+  const low = p.gaps.filter((g) => g.pct < SHORT_OF_NEED && !inIuOnly(g.key)).map((g) => `${g.label} ${g.pct}% of target`);
+  const vitaminD = `Vitamin D from food: about ${Math.round(p.perDay.micros.vitamin_d_iu)} IU a day; most comes from sun, so food alone can't show a shortfall.`;
   return `From ${from}: about ${Math.round(p.perDay.kcal)} kcal and ${Math.round(p.perDay.proteinG)} g protein a day. ${
-    low.length ? `Below 70% of target: ${low.join(", ")}.` : "No big gaps against targets."
-  }${p.patterns.length ? ` Patterns: ${p.patterns.join(" ")}` : ""}`;
+    low.length ? `Below ${SHORT_OF_NEED}% of target: ${low.join(", ")}.` : "No big gaps against targets."
+  } ${vitaminD}${p.patterns.length ? ` Patterns: ${p.patterns.join(" ")}` : ""}`;
 }

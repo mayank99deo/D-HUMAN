@@ -123,7 +123,8 @@ describe("the read's verdict", () => {
 });
 
 describe("the stack (QA H2)", () => {
-  const item = (nutrient: string, markers: string[], form = "Tablet") => ({
+  const item = (nutrient: string, markers: string[], form = "Tablet", rule: string | null = null) => ({
+    rule,
     nutrient,
     why: "",
     markers,
@@ -153,6 +154,14 @@ describe("the stack (QA H2)", () => {
       const out = floorStack(plan([item("Vitamin D3", [written]), item("Magnesium", ["magnesium"])]), flagged);
       assert.deepEqual(out.items.map((i) => i.nutrient), ["Magnesium"], written);
     }
+  });
+  it("removes an item earned by a food gap when that nutrient's result is flagged (2026-11-17)", () => {
+    const fromFood = (nutrient: string, rule: string) => item(nutrient, [], "Tablet", rule);
+    const items = [fromFood("Calcium", "calcium"), fromFood("Magnesium", "magnesium"), fromFood("Zinc", "zinc"), fromFood("Protein top-up", "protein")];
+    const flagged = [marker("calcium", "Calcium", "high", "doctor"), marker("zinc", "Zinc", "low", "doctor"), marker("magnesium", "Magnesium", "low")];
+    const out = floorStack(plan(items), flagged);
+    assert.deepEqual(out.items.map((i) => i.rule), ["magnesium", "protein"], "an unflagged result keeps its item; protein has no result");
+    assert.equal(floorStack(plan([fromFood("Calcium", "constructor")]), flagged).items.length, 1, "an unknown rule matches nothing");
   });
   it("adds every flagged marker to see_doctor unless it's already there", () => {
     const flagged = [marker("hba1c", "HbA1c", "high", "doctor"), marker("tsh", "Thyroid-stimulating hormone", "high", "doctor")];

@@ -3,6 +3,8 @@
 // and no self-treatment in the stack. Never weaken these without Mayank's
 // explicit approval. Pure functions, tested in tests/safety.test.ts.
 
+import type { RuleId } from "./supplements.ts";
+
 export type Flag = "doctor" | "urgent";
 export type Level = "go" | "go_with_tweaks" | "build" | "doctor_first";
 export type Verdict = { level: Level; line: string; detail: string };
@@ -86,7 +88,26 @@ export function floorVerdict(verdict: Verdict, o: { markers: SafetyMarker[]; unc
 
 // ---- The stack --------------------------------------------------------------
 
-type StackItem = { nutrient: string; form: string; markers: string[] };
+type StackItem = { nutrient: string; form: string; markers: string[]; rule?: string | null };
+
+/**
+ * The blood result that answers for each stack rule (lib/domain/supplements.ts). An item
+ * earned by a food gap lists no markers, so the floor finds its result here: a flagged
+ * calcium removes a calcium item earned by a calcium gap (2026-11-17). The food-gaps
+ * analysis uses it to find each nutrient's result too.
+ */
+export const RULE_MARKER: Record<RuleId, string | null> = {
+  vitamin_d3: "vitamin_d",
+  b12: "b12",
+  iron: "ferritin",
+  folate: "folate",
+  magnesium: "magnesium",
+  omega3: "triglycerides",
+  calcium: "calcium",
+  protein: null,
+  zinc: "zinc",
+};
+const ruleMarker = (item: StackItem) => (item.rule && Object.hasOwn(RULE_MARKER, item.rule) ? RULE_MARKER[item.rule as RuleId] : null);
 type StackLike<I extends StackItem> = { items: I[]; skip: { name: string; why: string }[]; see_doctor: string[] };
 
 // Lower-case words with single spaces and a space at each end, so "vitamin_d",
@@ -105,7 +126,8 @@ export const seeDoctorLine = (m: SafetyMarker) =>
 
 /**
  * The stack after the floor, whatever the model returned:
- * - No item treats a flagged marker; every flagged marker is in see_doctor.
+ * - No item treats a flagged marker, whether it lists the marker or was earned by a food
+ *   gap for the nutrient that marker measures; every flagged marker is in see_doctor.
  * - Any urgent flag: no items at all, only food first and the doctor.
  * - Iron only when ferritin was measured and is low.
  */
@@ -118,6 +140,9 @@ export function floorStack<I extends StackItem, P extends StackLike<I>>(plan: P,
   const items = plan.items.filter((item) => {
     if (urgent) return false;
     if (flagged.some((m) => item.markers.some((x) => mentions(x, m)))) return false;
+    // An item earned by a food gap answers to its nutrient's result too.
+    const result = ruleMarker(item);
+    if (result && flagged.some((m) => m.key === result)) return false;
     // Iron answers to ferritin, whatever markers the item lists.
     if (isIronItem(item) && ferritin?.flag) return false;
     if (isIronItem(item) && ferritin?.status !== "low") {
