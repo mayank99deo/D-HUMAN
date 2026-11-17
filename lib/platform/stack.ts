@@ -4,6 +4,7 @@ import { aiMode } from "@/lib/ai/client";
 import { translatePlan } from "@/lib/ai/stack";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
+import type { Profile } from "@/lib/db/schema";
 import { markerDef } from "@/lib/domain/markers";
 import { asFlag, floorStack } from "@/lib/domain/safety";
 import { planStack } from "@/lib/domain/supplements";
@@ -26,6 +27,27 @@ export const STACK_MESSAGES = {
   stale: "This stack stopped partway. Try again.",
   no_data: "Log meals on three days, or describe a normal day on Fuel, and we'll build your stack from them.",
 };
+
+/**
+ * The health answers a stack depends on besides markers and meals: diet (which rules and
+ * forms apply), medicines (cautions) and conditions (a kidney condition holds some items,
+ * pregnancy holds all). Saved with each stack; when they change, the stack is out of date
+ * and shows no doses until it's rebuilt (Mayank, 2026-11-17).
+ */
+export type StackInputs = { diet: string | null; medications: string | null; conditions: string[] };
+export const stackInputs = (p: Pick<Profile, "diet" | "medications" | "conditions">): StackInputs => ({
+  diet: p.diet ?? null,
+  medications: p.medications?.trim().toLowerCase() || null,
+  conditions: [...p.conditions].sort(),
+});
+/** True when a stack was built with other health answers than the profile has now. Stacks built before these were saved never count as changed. */
+export function inputsChanged(plan: unknown, profile: Pick<Profile, "diet" | "medications" | "conditions">): boolean {
+  const saved = (plan as { inputs?: StackInputs } | null)?.inputs;
+  if (!saved) return false;
+  // Field by field: Postgres stores JSON with its keys reordered, so the text of the two differs.
+  const now = stackInputs(profile);
+  return saved.diet !== now.diet || saved.medications !== now.medications || saved.conditions.join("|") !== now.conditions.join("|");
+}
 
 export async function latestReadyReport(userId: string) {
   const d = await db();
@@ -126,7 +148,7 @@ export async function startStack(userId: string): Promise<StackStart> {
     );
     if (english.items.length !== items.length) console.info(`[stack] ${id}: safety floor removed ${items.length - english.items.length} item(s)`);
     const translated = mode === "live" ? await translatePlan(english, profile.language) : { plan: english, model: null };
-    await finish({ status: "ready", plan: translated.plan, model: translated.model ? `rules+${translated.model}` : "rules" });
+    await finish({ status: "ready", plan: { ...translated.plan, inputs: stackInputs(profile) }, model: translated.model ? `rules+${translated.model}` : "rules" });
   };
 
   const job = (async () => {

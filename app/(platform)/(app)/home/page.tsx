@@ -14,6 +14,7 @@ import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { homeData } from "@/lib/platform/dashboard";
 import { localDate } from "@/lib/platform/profile";
 import { printedFor } from "@/lib/platform/reports";
+import { inputsChanged } from "@/lib/platform/stack";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -92,7 +93,11 @@ async function Dashboard({ searchParams }: { searchParams: Promise<Record<string
   const stackCopy =
     stackReady && read && fromMeals
       ? { line: "Your report is read. Rebuild your stack so it covers your markers too.", button: "Rebuild with my report" }
-      : stackReady
+      : stackReady && read && data.stack!.reportId !== data.view!.id
+        ? { line: "A newer report is in. Rebuild your stack from it.", button: "Rebuild my stack" }
+        : stackReady && inputsChanged(data.stack!.plan, profile)
+          ? { line: "Your diet, medicines or health details changed. Rebuild your stack so it fits them.", button: "Rebuild my stack" }
+          : stackReady
         ? { line: stackLine(data.stack!.plan as { items: unknown[]; see_doctor: unknown[] } | null, fromMeals), button: "Open my stack" }
         : read
           ? { line: "Built from this report and what you eat. Only what a marker or a real gap points to.", button: "Build my stack" }

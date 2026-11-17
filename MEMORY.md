@@ -65,6 +65,11 @@ The running record of this project: where things stand, why they are the way the
     - The meals stack is out of date. It shows no doses, only "Rebuild with my blood report".
     - Safety flags always come from the newest report, so an urgent result holds the page whichever report the stack was built from.
     - A held stack (urgent, or pregnancy added later) shows no items.
+  - **Mayank's calls, 2026-11-17:**
+    - Keep B12 from a food gap alone; it's on the doctor review below.
+    - Keep the 40% floor.
+    - An old meals stack may come back, dated, after all reports are deleted.
+    - A stack goes out of date when diet, medicines or conditions change since it was built. It saves them (`inputs` in the plan, `stackInputs`/`inputsChanged` in `lib/platform/stack.ts`), shows no doses, and offers "Rebuild my stack". Stacks built before this never count as changed.
 - **Past meals (2026-11-17, from user feedback):** `/fuel/past` lists the 28 days before today (`HISTORY_DAYS` in `lib/domain/meals.ts`), only days with meals, newest first, yesterday open, each meal with its time and Delete. Older logs are kept and still count in wraps. Reached from "Past meals" beside the Fuel title and from Home ("Yesterday: X kcal and Y g protein."). Meal delete stays one tap, as on Today.
 - **Deleting reports (2026-11-17, from user feedback: people tried the app with a friend's report and had none of their own):**
   - **Where:** `/reports` lists every upload with Open and Delete. "Start fresh" deletes them all, and shows only from 2 reports.
@@ -117,6 +122,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Full-page screenshots lie about screen-sized slides:** stretching the emulated window to the page's height (how `cdp.mjs` takes a full page) makes every `svh`/`dvh` slide that tall too, so the landing looked 19,000 px long in landscape. Judge those pages from screen-sized shots taken while scrolling.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
+- **jsonb reorders keys:** an object saved in a `jsonb` column comes back with its keys in Postgres's order (shorter keys first), so never compare saved JSON as text with `JSON.stringify`; compare fields (`inputsChanged` in `lib/platform/stack.ts`).
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
 - **Headless Chrome and the mic:** `getUserMedia` never resolves headlessly on this Mac even with permission granted, so real mic levels can't be tested here; use a synthetic stream or a device.
 - **Scrolling chip rows:** hidden radios (`sr-only`, absolutely placed) inside a sideways-scrolling row widen the page unless the scroller is `relative`.
@@ -144,12 +150,7 @@ The running record of this project: where things stand, why they are the way the
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
-- [ ] Decide (Mayank) on the stack before a report:
-  - B12 at 500 mcg from a food gap alone, without a test (needs a doctor's look too).
-  - The 40% energy floor for a day to count: a day logged without breakfast (about 60%) still counts, so calcium under 50% can still come from it. The options are a higher share, or scaling gaps by how much of the day was logged.
-  - Should a stack go out of date when diet, medicines or a kidney condition change? Pregnancy already holds it.
-  - Should an old meals stack come back after all reports are deleted? It does now, dated, with Rebuild.
-  - Accounts made before the 18+ rule can get stacks without a report.
+- [ ] Accounts made before the 18+ rule can get stacks without a report (part of the 18+ decision below).
 - [ ] Daily caps reset when reports are deleted (QA, 2026-11-17): `readLimitReached` counts today's report rows and the stack cap counts stacks, so delete-and-retry gets around the 10 reads and 5 stacks a day (the plan's own read limits still hold; a junk file whose read fails costs an AI extraction each round, up to 6 an hour per server). Fix: count attempts where deletes don't reach (a ledger, needs a migration).
 - [ ] Home and wraps pick the "latest" report by upload order, not by when the blood was taken: uploading last year's report after this year's makes Home show last year's as current, and wraps compare in upload order.
 - [ ] Upgrade Next.js from 16.4.2 to 16.4.6 or later: moderate advisory GHSA-mfr8-8qww-v76h (information disclosure when a `"use cache"` function runs through `unstable_cache()`). D-Human uses neither, so it isn't exposed; `next build` asks for it.
@@ -169,7 +170,7 @@ The running record of this project: where things stand, why they are the way the
 - [ ] Run `tests/billing.test.ts` once against real Postgres: PGlite runs one query at a time, so it can't prove the locks under real parallel load
 - [ ] Re-run Lighthouse on the live site after the open landing page and Speed Insights
 - [ ] Decide: purging report files after a read, Supabase Pro, share-card content, Hindi and Hinglish versions of the fixed doctor wording, and what to do about accounts made before the 18+ rule
-- [ ] Human review before inviting people: a doctor on the safety thresholds and wording, and a DPDP Act privacy check
+- [ ] Human review before inviting people: a doctor on the safety thresholds and wording (now including B12 at 500 mcg from a food gap alone, and the meals-only stack rules), and a DPDP Act privacy check
 - [ ] Check `TYPICAL_MONTHLY_INR` in `lib/domain/budget.ts` against real Indian prices: these are Claude's rough 2026 figures, used only when the brand search found no price
 - [ ] Brand searches with prices cost more: about $0.09 (vitamin D3) and $0.17 (iron) each with 3 searches on 2026-11-13, now capped at 2. They run once a month per supplement and diet variant, shared by everyone; re-measure the next time a cache key refreshes
 - [ ] D-Human's own supplements (announced as coming soon in the product film, 2026-11-13, at the co-founder's request): the stack's note says D-Human partners with no brand and earns nothing from them. Decide how own-brand products appear in a stack, and reword that note, before they launch
@@ -204,6 +205,13 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-17
+- **Stacks go out of date when health answers change (Mayank affirmed the four stack decisions; this was the one that needed building):**
+  - **What:** a stack saves the diet, medicines and conditions it was built with. When any of them changes, the Stack page says "Time to rebuild your stack.", explains why, shows no doses and offers "Rebuild my stack"; Home says the same. Home now also says when a newer report than the stack's is in.
+  - **Gotcha found on the way:** Postgres stores JSON with its keys reordered, so saved objects can't be compared as text; `inputsChanged` compares field by field.
+  - **Checked:**
+    - Typecheck, lint, 231 tests (a new one: diet, medicines and conditions count; name, city and weight don't; old stacks never do), the production build.
+    - On a database copy as a phone: a stack built for a vegetarian, then diet changed to vegan, showed out of date with no doses. After "Rebuild my stack" it was current, with "Pea or soy protein powder" in place of whey.
+- **Push `69cf772`:** the entry below. Live about 25 s after the previous build was seen, served from `bom1`. A new build going live means Supabase took migration `0008`. Signed out, `/stack`, `/fuel`, `/home`, `/reports` and `/fuel/past` send visitors to `/signin`, `POST /api/stack` gives 401, and the landing gives 200.
 - **A stack before any report (Mayank, from user feedback):** design in Decisions ("A stack before any report").
   - **New:** migration `0008_meal_stacks` (deletes stacks without a report made before 2026-11-17; safe to run twice) and `tests/meal-stack.test.ts`. QA added `tests/qa-meal-stack.test.ts`.
   - **Changed:**

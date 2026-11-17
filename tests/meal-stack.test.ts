@@ -20,7 +20,7 @@ allowAppImports({
 const removeDatabase = tempDatabase();
 const { eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
-const { latestStack, startStack, STACK_MESSAGES } = await import("../lib/platform/stack.ts");
+const { inputsChanged, latestStack, startStack, STACK_MESSAGES } = await import("../lib/platform/stack.ts");
 const { deleteReports } = await import("../lib/platform/reports.ts");
 const { POST: stackRoute } = await import("../app/api/stack/route.ts");
 
@@ -98,6 +98,24 @@ describe("a stack before any report", () => {
     await d.update(schema.profiles).set({ conditions: ["pregnant"] }).where(eq(schema.profiles.userId, me.id));
     const stack = await run(me.id);
     assert.deepEqual((stack.plan as { items: unknown[] }).items, []);
+  });
+
+  it("goes out of date when diet, medicines or conditions change, and only then", async () => {
+    const me = await person("veg");
+    await usualDay(me.id);
+    const stack = await run(me.id);
+    const d = await db();
+    const now = async () => (await d.select().from(schema.profiles).where(eq(schema.profiles.userId, me.id)))[0];
+    assert.equal(inputsChanged(stack.plan, await now()), false, "fresh stack");
+    await d.update(schema.profiles).set({ name: "Asha K", city: "Pune", weightKg: 56 }).where(eq(schema.profiles.userId, me.id));
+    assert.equal(inputsChanged(stack.plan, await now()), false, "other answers don't count");
+    for (const change of [{ diet: "vegan" }, { medications: "Metformin 500" }, { conditions: ["kidney"] }]) {
+      await d.update(schema.profiles).set({ diet: "veg", medications: null, conditions: [], ...change }).where(eq(schema.profiles.userId, me.id));
+      assert.equal(inputsChanged(stack.plan, await now()), true, JSON.stringify(change));
+    }
+    await d.update(schema.profiles).set({ diet: "veg", medications: "  ", conditions: [] }).where(eq(schema.profiles.userId, me.id));
+    assert.equal(inputsChanged(stack.plan, await now()), false, "blank medicines are none");
+    assert.equal(inputsChanged({ items: [] }, await now()), false, "a stack from before inputs were saved never counts");
   });
 
   it("stays when reports are deleted, and a report's stack replaces it as the latest", async () => {

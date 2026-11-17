@@ -12,7 +12,7 @@ import type { Persona } from "@/lib/domain/persona";
 import { asFlag } from "@/lib/domain/safety";
 import { dietPicture } from "@/lib/platform/food";
 import { requireMember } from "@/lib/platform/member";
-import { latestReadyReport, latestStack } from "@/lib/platform/stack";
+import { inputsChanged, latestReadyReport, latestStack } from "@/lib/platform/stack";
 import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Stack" };
@@ -69,7 +69,10 @@ async function Stack() {
   }
   // A stack built from meals has no report; once a report is read, it's out of date.
   const basis = stack ? (stack.reportId ? "report" : "meals") : report ? "report" : "meals";
-  const stale = !!report && !!stack && stack.reportId !== report.id;
+  // Out of date: a newer report than the one it was built from (or the first, for a stack
+  // from meals), or changed health answers (diet, medicines, conditions) since it was built.
+  const staleReason =
+    report && stack && stack.reportId !== report.id ? "report" : stack?.status === "ready" && inputsChanged(stack.plan, profile) ? "profile" : null;
   const names = Object.fromEntries(
     ((stack?.plan as StackPlan | null)?.items ?? []).flatMap((i) => i.markers).map((k) => [k, markerDef(k)?.name ?? k]),
   );
@@ -90,7 +93,7 @@ async function Stack() {
     <StackClient
       aiOff={aiMode() === "off"}
       stack={stack ? { id: stack.id, status: stack.status, error: stack.error, plan: stack.plan as StackPlan | null, demo: stack.model === "mock", made: stack.createdAt.toISOString() } : null}
-      stale={stale}
+      staleReason={staleReason}
       basis={basis}
       hasReport={!!report}
       body={bodyLine(profile, persona)}

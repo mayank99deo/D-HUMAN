@@ -23,7 +23,7 @@ const pricedBrands = (item: Item) => item.brands.some((b) => typeof b.monthly_in
 // report to cover what food can't show.
 export function StackClient({
   stack,
-  stale,
+  staleReason,
   basis,
   hasReport,
   body,
@@ -34,7 +34,8 @@ export function StackClient({
   hold,
 }: {
   stack: StackState | null;
-  stale: boolean;
+  /** Out of date: a newer (or first) report, or changed diet, medicines or conditions. */
+  staleReason: "report" | "profile" | null;
   basis: "report" | "meals";
   hasReport: boolean;
   /** "24, 175 cm, 70 kg, regular lifter": what the targets were set from. */
@@ -97,6 +98,7 @@ export function StackClient({
 
   const plan = stack?.status === "ready" ? stack.plan : null;
   const meals = basis === "meals";
+  const stale = staleReason !== null;
   const items = useMemo(() => plan?.items ?? [], [plan]);
   const fit = useMemo(() => fitBudget(items, budget), [items, budget]);
   const chosen = budgetOf(budget);
@@ -164,7 +166,11 @@ export function StackClient({
 
       {plan && stale && !hold && (
         <p className="mt-4 max-w-prose text-lg">
-          {meals ? "Your report is read. Rebuild your stack so it covers your markers too." : "A newer report is in. Rebuild your stack from it."}
+          {staleReason === "profile"
+            ? "Your diet, medicines or health details changed since this stack was built. Rebuild it so it fits them."
+            : meals
+              ? "Your report is read. Rebuild your stack so it covers your markers too."
+              : "A newer report is in. Rebuild your stack from it."}
         </p>
       )}
 
@@ -185,7 +191,17 @@ export function StackClient({
         (!plan || stale) && (
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button type="button" onClick={build} disabled={starting} className="button-primary h-13 px-8">
-              {starting ? "Starting…" : plan ? (meals ? "Rebuild with my blood report" : "Rebuild from my latest report") : hasReport ? "Build my stack" : "Build my stack from my meals"}
+              {starting
+                ? "Starting…"
+                : plan
+                  ? staleReason === "profile"
+                    ? "Rebuild my stack"
+                    : meals
+                      ? "Rebuild with my blood report"
+                      : "Rebuild from my latest report"
+                  : hasReport
+                    ? "Build my stack"
+                    : "Build my stack from my meals"}
             </button>
             {stack?.status === "failed" && <p className="error-mark text-sm">{stack.error}</p>}
             {error && <p className="error-mark text-sm">{error}</p>}
