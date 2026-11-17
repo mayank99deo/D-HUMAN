@@ -206,6 +206,7 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-17
+- **Push `da1a583`:** the entry below. Live about 24 s later. Signed out, `/stack` and `/home` send visitors to `/signin`, `GET /api/stack/x` gives 401, and the landing gives 200.
 - **Stack screen fell back to "Build" after a build (Mayank, iPhone, live site; fixed by the crew):**
   - **Seen:** with no report, after a usual day: "Building your stack…", then the loading screen's "This is taking longer than usual.", then the pre-build screen (title "Your stack", the Build button, no error).
   - **Cause:** found by the staff engineer, from the code. The screen cleared its building view as soon as the status check said done, then waited on `router.refresh()`. On a phone over mobile data that refresh was slow or lost, so the screen showed the data it was opened with: no stack yet. Locally the refresh takes about 50 ms, so no test saw it.
@@ -214,7 +215,14 @@ Newest first. One entry per change; pushes carry their commit hash.
     - `Stack.tsx` follows a build until the page's own data shows it finished, refreshing and asking again. After 5 "done" checks the page doesn't reflect, or 120 checks, it shows Stall's "taking longer" notice with Reload.
     - Home says "Building your stack…" with "See progress" while one builds.
   - **Proven (QA engineer, production build, demo mode, 390 px touch):** the tap-only path; refreshes held 8 s; a refresh aborted (Next falls back to a full load); two refreshes returning old data; a stack already building when the tab opens; Home before and after. Every case ended on the built stack and never showed Build mid-build. Typecheck, lint, 241 tests.
-  - **Follow-up, in progress:** on a slow network, each 3 s refresh cancels the one still loading, so the stack shows about 9 s later, after the "taking longer" notice. Fix: don't refresh while one is loading.
+  - **Follow-up, done (staff engineer, `onDone` in `stack-state.ts`, 6 more tests):**
+    - **What it fixed:** on a slow network each 3 s refresh cancelled the one still loading, so the stack showed about 9 s later, after the "taking longer" notice.
+    - **What changed:** one refresh at a time. A "done" check isn't counted while one is loading, and a refresh older than 10 s counts as lost.
+    - **QA re-proved it on a production build:**
+      - Every refresh held 8 s: the stack shows 8.1 s after "ready", with no notice.
+      - A first refresh that never answers is replaced at about 12 s and lands.
+      - When every refresh hangs, the notice with Reload shows at about 49 s and the building view stays.
+      - The plain, aborted, stale and already-building cases still pass, with 247 tests.
   - **Not known:** why the live refresh stalled (mobile data, a cold function); there are no Vercel logs from here.
 - **Push `4ee82a3`:** the entry below. Live about 36 s later. Signed out, `/stack` and `/home` send visitors to `/signin`, `POST /api/stack` gives 401, and the landing gives 200.
 - **Stacks go out of date when health answers change (Mayank affirmed the four stack decisions; this was the one that needed building):**

@@ -7,7 +7,7 @@ import type { StackPlan } from "@/lib/ai/schemas";
 import { BUDGETS, budgetOf, fitBudget, rupees, typicalFor } from "@/lib/domain/budget";
 import { OFFLINE, send } from "./net";
 import { StallNotice } from "./Stall";
-import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, pollAnswer, watchedBuild } from "./stack-state";
+import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "./stack-state";
 
 type StackState = { id: string; status: string; error: string | null; plan: StackPlan | null; demo: boolean; made: string };
 type Item = StackPlan["items"][number];
@@ -26,6 +26,8 @@ let followed: string | null = null;
 /** By build: status checks that found it done while the page still didn't show it. */
 const doneChecks = new Map<string, number>();
 const outlasted = (id: string | null) => id !== null && (doneChecks.get(id) ?? 0) >= STALL_AFTER_DONE;
+/** When the last refresh started; null once new page data arrived (see onDone). */
+let refreshStartedAt: number | null = null;
 
 // The Stack screen. The supplements lead, in priority order and fitted to the
 // person's monthly budget (lib/domain/budget.ts); doctor notes close the page in a
@@ -79,9 +81,18 @@ export function StackClient({
     if (settled && followed === pending) followed = null;
   }, [settled, pending]);
 
+  // New page data arrived, so no refresh is loading any more. Every page render sends new
+  // props (`flagged` is a new list each time, even when `stack` is null both times), so
+  // this also sees a refresh that came back without the stack. (The transition's own
+  // pending flag isn't used: it's lost when a refresh swaps this screen for the loading one.)
+  useEffect(() => {
+    refreshStartedAt = null;
+  }, [stack, flagged]);
+
   // Ask how the build is going every 3 s. When it's done, refresh the page, and keep
   // asking and refreshing until the page shows it: only the page's data ends this view,
   // never the answer alone, so a slow or lost refresh can't drop back to the Build button.
+  // One refresh at a time: a check that finds one still loading waits for it (onDone).
   // If the page still hasn't caught up after a few tries, or the build outlasts every
   // check, say it's taking longer than usual, with Reload.
   useEffect(() => {
@@ -102,9 +113,13 @@ export function StackClient({
           return;
         }
         if (answer === "done") {
-          doneChecks.set(watching, (doneChecks.get(watching) ?? 0) + 1);
-          if (outlasted(watching)) return setStalled(watching);
-          startTransition(() => router.refresh());
+          const step = onDone(doneChecks.get(watching) ?? 0, refreshStartedAt, Date.now());
+          doneChecks.set(watching, step.checks);
+          if (step.next === "stall") return setStalled(watching);
+          if (step.next === "refresh") {
+            refreshStartedAt = Date.now();
+            startTransition(() => router.refresh());
+          }
         }
       }
       if (alive) setStalled(watching);
@@ -126,6 +141,7 @@ export function StackClient({
       );
     if (r.data.id) {
       followed = r.data.id;
+      refreshStartedAt = null;
       setGone(null);
       setStalled(null);
       setPending(r.data.id);

@@ -4,7 +4,7 @@
 // the data it had before the tap.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { pollAnswer, watchedBuild } from "../components/platform/stack-state.ts";
+import { REFRESH_LOST_AFTER_MS, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "../components/platform/stack-state.ts";
 
 const building = (id: string) => ({ id, status: "building" });
 const ready = (id: string) => ({ id, status: "ready" });
@@ -66,5 +66,37 @@ describe("one status check", () => {
     assert.equal(pollAnswer(200, null), "unknown");
     assert.equal(pollAnswer(200, {}), "unknown");
     assert.equal(pollAnswer(200, "ready"), "unknown");
+  });
+});
+
+describe("a check that finds the stack done before the page shows it", () => {
+  const t = 1_000_000;
+
+  it("refreshes the first time, and counts it", () => {
+    assert.deepEqual(onDone(0, null, t), { next: "refresh", checks: 1 });
+  });
+
+  it("waits for a refresh still loading, without counting, so a slow one can land", () => {
+    // QA, 2026-11-17: with each refresh held 8 s, a new one every 3 s dropped the one
+    // loading, and the stack showed 17 s after it was ready instead of 8.
+    assert.deepEqual(onDone(1, t, t + 3000), { next: "wait", checks: 1 });
+    assert.deepEqual(onDone(1, t, t + REFRESH_LOST_AFTER_MS - 1), { next: "wait", checks: 1 });
+  });
+
+  it("takes a refresh with no new page data after 10 s as lost, and tries again", () => {
+    assert.deepEqual(onDone(1, t, t + REFRESH_LOST_AFTER_MS), { next: "refresh", checks: 2 });
+  });
+
+  it("refreshes again once a refresh came back without the stack", () => {
+    assert.deepEqual(onDone(2, null, t), { next: "refresh", checks: 3 });
+  });
+
+  it("says it's taking longer once the page has failed to catch up enough times", () => {
+    assert.deepEqual(onDone(STALL_AFTER_DONE - 1, null, t), { next: "stall", checks: STALL_AFTER_DONE });
+    assert.deepEqual(onDone(STALL_AFTER_DONE - 1, t, t + REFRESH_LOST_AFTER_MS), { next: "stall", checks: STALL_AFTER_DONE });
+  });
+
+  it("never stalls while a refresh is still loading", () => {
+    assert.equal(onDone(STALL_AFTER_DONE - 1, t, t + 1000).next, "wait");
   });
 });

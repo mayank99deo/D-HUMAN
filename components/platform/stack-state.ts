@@ -12,8 +12,24 @@
 export const POLL_EVERY_MS = 3000;
 /** How many times it asks (about 6 minutes) before saying it's taking longer than usual. */
 export const POLL_LIMIT = 120;
-/** Asks after the stack is done but the page still doesn't show it, before saying so. */
+/** Refreshes after the stack is done that bring the page no closer, before saying so. */
 export const STALL_AFTER_DONE = 5;
+/** A refresh that hasn't brought new page data after this long is taken as lost. */
+export const REFRESH_LOST_AFTER_MS = 10_000;
+
+/**
+ * What to do when a status check finds the stack done but the page doesn't show it yet.
+ * A refresh still loading is left alone ("wait", not counted): starting another would make
+ * Next drop it, so on a slow connection none would ever land. Otherwise the check counts,
+ * and it's "refresh" again, or "stall" (say it's taking longer, with Reload) once the page
+ * has failed to catch up enough times.
+ * `refreshStartedAt` is when the last refresh started, or null once new page data arrived.
+ */
+export function onDone(checks: number, refreshStartedAt: number | null, now: number): { next: "wait" | "refresh" | "stall"; checks: number } {
+  if (refreshStartedAt !== null && now - refreshStartedAt < REFRESH_LOST_AFTER_MS) return { next: "wait", checks };
+  const counted = checks + 1;
+  return { next: counted >= STALL_AFTER_DONE ? "stall" : "refresh", checks: counted };
+}
 
 /** The page's stack, as far as building goes. */
 type Shown = { id: string; status: string } | null;
