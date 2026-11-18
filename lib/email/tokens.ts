@@ -86,7 +86,7 @@ export function readStopToken(token: unknown): StopTokenPayload | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** The footer's "Stop weekly wraps": a page that stops it by a POST once it has loaded, never on opening. */
+/** The footer's "Stop weekly wraps": a page where one tap stops it; opening it changes nothing. */
 export function stopPageUrl(userId: string, category: EmailCategory, origin?: string): string {
   return `${base(origin)}/email/stop?t=${stopToken(userId, category)}`;
 }

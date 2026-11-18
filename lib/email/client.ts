@@ -9,6 +9,20 @@ import { KIND_CATEGORY, type EmailKind } from "./types";
 let client: Resend | null = null;
 
 /**
+ * Lifecycle email and the founders' alert go only from production: VERCEL_ENV=production
+ * on Vercel, or a local run with EMAIL_SEND_LOCAL=1 (to try the pipeline; without a
+ * RESEND_API_KEY it then logs instead of sending). Preview deployments and ordinary local
+ * runs send nothing, even with a key and a real database.
+ */
+export function sendingAllowed(): boolean {
+  if (process.env.VERCEL_ENV === "production") return true;
+  return !process.env.VERCEL && process.env.EMAIL_SEND_LOCAL === "1";
+}
+
+/** For the log line when sending is held back: where we are, never who it was for. */
+export const whereRunning = () => (process.env.VERCEL ? `VERCEL_ENV=${process.env.VERCEL_ENV ?? "unset"}` : "local run without EMAIL_SEND_LOCAL=1");
+
+/**
  * "live": RESEND_API_KEY is set. "log": local dev without a key; sends are logged (kind and
  * send id only) and recorded as sent, as sign-in codes are logged. "off": production
  * without a key; nothing is claimed or sent.

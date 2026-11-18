@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 }
 
 // Opening the link (a person, a mail scanner, a prefetcher) never unsubscribes: it goes to
-// the stop page, which asks the server by a POST once it has loaded.
+// the stop page, where the person taps to stop it (a POST).
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const t = url.searchParams.get("t") ?? "";

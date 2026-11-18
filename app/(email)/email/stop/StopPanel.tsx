@@ -1,23 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { send } from "@/components/platform/net";
 import type { EmailCategory } from "@/lib/email/types";
 
-// The stop page's body. Every action is a real form posting to /api/email/prefs, so it
-// works without JavaScript (the server answers 303 back here). With JavaScript the page
-// stops the email itself once it is showing on screen, so one tap in the email is enough;
-// opening the link alone (what mail scanners do) changes nothing, because the server
-// render only reads.
+// The stop page's body. Nothing changes until the person taps "Stop weekly wraps" here:
+// some work mail scanners open every link and run the page's JavaScript too, so the page
+// never acts on its own. (The mail app's own Unsubscribe button is a separate one-click
+// POST, RFC 8058, and needs no page.) Every action is a real form posting to
+// /api/email/prefs, so it works without JavaScript too (the server answers 303 back here).
 
 type Prefs = { weekly: boolean; questions: boolean; weeklyPaused: boolean };
 type Phase = "ready" | "stopping" | "stopped" | "restarted";
 
-const COPY: Record<EmailCategory, { label: string; hint: string; confirm: string; done: string; after: string; back: string }> = {
+const COPY: Record<EmailCategory, { label: string; hint: string; ask: string; confirm: string; done: string; after: string; back: string }> = {
   weekly: {
     label: "Weekly wrap",
     hint: "Sunday evenings, only after a week with something in it.",
+    ask: "Stop weekly wraps by email?",
     confirm: "Stop weekly wraps",
     done: "Done. No more weekly wraps by email.",
     after: "Your wraps are still in the app whenever you want them.",
@@ -26,6 +27,7 @@ const COPY: Record<EmailCategory, { label: string; hint: string; confirm: string
   questions: {
     label: "Questions from the team",
     hint: "A few taps, at most once every 3 months.",
+    ask: "Stop questions from the team?",
     confirm: "Stop questions from the team",
     done: "Done. No more questions from the team.",
     after: "You can still tell us what to build from Settings, any time.",
@@ -77,7 +79,6 @@ export function StopPanel({ token, category, initial }: { token: string; categor
   const [phase, setPhase] = useState<Phase>(initial[category] ? "ready" : "stopped");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const started = useRef(false);
   const copy = COPY[category];
   const other = OTHER[category];
 
@@ -98,24 +99,7 @@ export function StopPanel({ token, category, initial }: { token: string; categor
     if (next) setPhase(next);
   }
 
-  // Stop on arrival, but only once the page is actually on screen: a tab opened in the
-  // background waits until someone looks at it.
-  useEffect(() => {
-    if (!initial[category] || started.current) return;
-    const go = () => {
-      if (started.current || document.visibilityState !== "visible") return;
-      started.current = true;
-      document.removeEventListener("visibilitychange", go);
-      void change({ [category]: false }, "stopped");
-    };
-    document.addEventListener("visibilitychange", go);
-    go();
-    return () => document.removeEventListener("visibilitychange", go);
-    // Runs once for the page's first settings; later changes come from the buttons.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const heading = phase === "stopped" ? copy.done : phase === "restarted" ? copy.back : phase === "stopping" ? "Stopping…" : copy.confirm;
+  const heading = phase === "stopped" ? copy.done : phase === "restarted" ? copy.back : phase === "stopping" ? "Stopping…" : copy.ask;
   // A paused weekly email counts as off here; turning it on clears the pause.
   const otherOn = prefs[other] && !(other === "weekly" && prefs.weeklyPaused);
 
@@ -127,7 +111,7 @@ export function StopPanel({ token, category, initial }: { token: string; categor
 
       {phase === "ready" && (
         <div className="mt-6">
-          <p className="text-graphite">One tap and it stops. Nothing else about your account changes.</p>
+          <p className="text-graphite">One tap below and it stops. Nothing else about your account changes.</p>
           <div className="mt-6">
             <PrefForm token={token} changes={{ [category]: false }} onSubmit={(c) => change(c, "stopped")} disabled={busy} className="button-primary h-13 w-full">
               {copy.confirm}

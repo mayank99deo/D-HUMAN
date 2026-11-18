@@ -7,7 +7,7 @@ import { StopPanel } from "./StopPanel";
 
 // The page behind "Stop weekly wraps" (and "Stop questions") in an email's footer. No
 // sign-in: the signed link names the person and the kind of email. Rendering it only
-// reads; the panel stops the email by a POST once the page is on screen. The address is
+// reads; the email stops only when the person taps the button (a POST). The address is
 // never shown, so a forwarded email reveals nothing about whose it was.
 
 export const metadata: Metadata = {

@@ -4,8 +4,9 @@ import type { CreateEmailOptions, ErrorResponse } from "resend";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema, type Db } from "@/lib/db";
 import { absoluteUrl } from "@/lib/site-url";
-import { dailyAllowance, utcDayStart } from "./budget";
-import { emailMode, fromAddress, replyToFor, resend } from "./client";
+import { lifecycleLeft, utcDayStart } from "./budget";
+import { emailMode, fromAddress, replyToFor, resend, sendingAllowed, whereRunning } from "./client";
+import { countOtherSend, otherSentToday } from "./counts";
 import { kindAllowed, type EmailPrefs } from "./prefs";
 import { emailLinksReady, oneClickUrl, stopPageUrl } from "./tokens";
 import { DEFAULT_EMAIL_PREFS, KIND_CATEGORY, batchIdempotencyKey, sendIdempotencyKey, type EmailFrame, type EmailKind, type RenderedEmail } from "./types";
@@ -25,6 +26,9 @@ import { DEFAULT_EMAIL_PREFS, KIND_CATEGORY, batchIdempotencyKey, sendIdempotenc
 //      the same key, for the jobs lane's sweep. A 409 (the key was used for different
 //      content, or is in flight): "unknown", never resent, since a missed email beats a
 //      double one.
+//
+// Only from production (sendingAllowed in client.ts): anywhere else every call is a
+// logged no-op that claims nothing.
 
 const sends = schema.emailSends;
 
@@ -36,6 +40,8 @@ export const SENDING_GRACE_MS = 10 * 60 * 1000;
 export const SENDING_MAX_AGE_MS = 23 * 60 * 60 * 1000;
 const RESEND_BATCH_MAX = 100;
 const REQUEST_TIMEOUT_MS = 15_000;
+/** One by one, at most 4 a second, leaving Resend's 10 a second for sign-in codes. */
+const PACE_MS = 250;
 
 export type LifecycleEmail = {
   userId: string;
@@ -62,8 +68,8 @@ export type SendOutcome =
   | { status: "pending"; sendId: string; error: string }
   /** Can't tell whether it went; marked "unknown" and never resent. */
   | { status: "unknown"; sendId: string; error: string }
-  /** Production without RESEND_API_KEY or EMAIL_LINK_SECRET: nothing claimed. */
-  | { status: "not_configured" };
+  /** Nothing claimed or sent: not production, or RESEND_API_KEY or EMAIL_LINK_SECRET missing. */
+  | { status: "not_configured"; reason: "not_production" | "no_api_key" | "no_link_secret" };
 
 export type SendOptions = { now?: Date; origin?: string };
 
@@ -78,9 +84,15 @@ const originOf = (opts: SendOptions) => (opts.origin ?? absoluteUrl("/")).replac
 export const attemptKey = (kind: EmailKind, userId: string, dedupeKey: string, refusals: number) =>
   `${sendIdempotencyKey(kind, userId, dedupeKey)}${refusals > 0 ? `:r${refusals}` : ""}`;
 
-function ready(kinds: EmailKind[]): boolean {
-  if (emailMode() === "off") return false;
-  return kinds.every((k) => !KIND_CATEGORY[k]) || emailLinksReady();
+/** Why nothing may be sent right now, or null when sending can go ahead. */
+function holdBack(kinds: EmailKind[]): Extract<SendOutcome, { status: "not_configured" }> | null {
+  if (!sendingAllowed()) {
+    console.info(`[email] ${[...new Set(kinds)].join(", ")} not sent (${kinds.length}): lifecycle email goes only from production (${whereRunning()})`);
+    return { status: "not_configured", reason: "not_production" };
+  }
+  if (emailMode() === "off") return { status: "not_configured", reason: "no_api_key" };
+  if (kinds.some((k) => KIND_CATEGORY[k]) && !emailLinksReady()) return { status: "not_configured", reason: "no_link_secret" };
+  return null;
 }
 
 // ── People ──────────────────────────────────────────────────────────────────
@@ -142,20 +154,22 @@ async function alreadyClaimed(d: Db, emails: LifecycleEmail[]): Promise<Set<stri
 // never take it.
 const BUDGET_LOCK = sql`select pg_advisory_xact_lock(hashtext('d-human:email-budget'))`;
 
-export type BudgetToday = { left: number; codesToday: number; lifecycleToday: number; allowance: number };
+export type BudgetToday = { left: number; codesToday: number; lifecycleToday: number; otherToday: number };
 
-// Two range counts over the UTC day: email_sends by its sent_at index; login_codes has no
-// created_at index, but the jobs lane's housekeeping keeps it to two days of rows.
+// Three counts over the UTC day, read again before every send: email_sends by its sent_at
+// index, email_daily_counts by its key, and login_codes (no created_at index, but the jobs
+// lane's housekeeping keeps it to two days of rows).
 async function countToday(d: Db, now: Date): Promise<BudgetToday> {
   const from = utcDayStart(now);
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const codes = schema.loginCodes;
-  const [[c], [l]] = await Promise.all([
+  const [[c], [l], other] = await Promise.all([
     d.select({ n: count() }).from(codes).where(and(gte(codes.createdAt, from), lt(codes.createdAt, to))),
     d.select({ n: count() }).from(sends).where(and(gte(sends.sentAt, from), lt(sends.sentAt, to))),
+    otherSentToday(d, now),
   ]);
-  const allowance = dailyAllowance({ codesToday: c.n });
-  return { left: Math.max(0, allowance - l.n), codesToday: c.n, lifecycleToday: l.n, allowance };
+  const left = lifecycleLeft({ codesToday: c.n, lifecycleToday: l.n, otherToday: other });
+  return { left, codesToday: c.n, lifecycleToday: l.n, otherToday: other };
 }
 
 /** Today's numbers, for the jobs lane (alerts, dry runs, job_runs.last_result). */
@@ -313,24 +327,44 @@ export async function sendLifecycle(email: LifecycleEmail, opts: SendOptions = {
 }
 
 /**
- * Sends many in Resend batch calls of up to 100 (one claim, one call and one write per
- * batch). Pass them in priority order: when the budget runs short, the first ones go.
- * Outcomes come back in the same order.
+ * Sends a list, in priority order: when the budget runs short, the first ones go, and the
+ * rest come back "budget" for the next run. Outcomes come back in the same order.
  *
- * Trade-off: a batch is retried as a whole or not at all, so an unclear answer on a batch
- * leaves its rows for the sweep to mark "unknown" (never resent). On Resend's free plan
- * (70 a day) one-by-one sendLifecycle calls, paced at 4 a second, are the safer choice.
+ * One by one by default (at most 4 a second), each with its own key and its own budget
+ * check, so an unclear answer strands one email at most. EMAIL_BATCH=1 switches to Resend
+ * batch calls of up to 100 (one claim, one call, one write each): worth it on a paid plan
+ * with thousands a run, but a batch with no clear answer is marked "unknown" whole and
+ * never resent.
  */
-export async function sendLifecycleBatch(emails: LifecycleEmail[], opts: SendOptions = {}): Promise<SendOutcome[]> {
+export async function sendLifecycleBatch(emails: LifecycleEmail[], opts: SendOptions & { paceMs?: number } = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
-  for (let i = 0; i < emails.length; i += RESEND_BATCH_MAX) out.push(...(await sendMany(emails.slice(i, i + RESEND_BATCH_MAX), opts, true)));
+  if (process.env.EMAIL_BATCH === "1") {
+    for (let i = 0; i < emails.length; i += RESEND_BATCH_MAX) out.push(...(await sendMany(emails.slice(i, i + RESEND_BATCH_MAX), opts, true)));
+    return out;
+  }
+  const pace = opts.paceMs ?? PACE_MS;
+  let lastCall = 0;
+  for (const email of emails) {
+    // Once the budget or the setup says no, it says no to the rest of the list too.
+    const stop = out.at(-1);
+    if (stop?.status === "budget" || stop?.status === "not_configured") {
+      out.push(stop);
+      continue;
+    }
+    const wait = lastCall + pace - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const outcome = await sendLifecycle(email, opts);
+    if ("sendId" in outcome) lastCall = Date.now(); // it reached Resend
+    out.push(outcome);
+  }
   return out;
 }
 
 async function sendMany(emails: LifecycleEmail[], opts: SendOptions, asBatch: boolean): Promise<SendOutcome[]> {
   if (!emails.length) return [];
   for (const e of emails) if (!LOCAL_DATE.test(e.localDate)) throw new Error(`localDate must be YYYY-MM-DD, got "${e.localDate}"`);
-  if (!ready(emails.map((e) => e.kind))) return emails.map(() => ({ status: "not_configured" }));
+  const held = holdBack(emails.map((e) => e.kind));
+  if (held) return emails.map(() => held);
 
   const now = opts.now ?? new Date();
   const origin = originOf(opts);
@@ -424,7 +458,8 @@ export async function retrySend(sendId: string, render: LifecycleEmail["render"]
   const [row] = await d.select().from(sends).where(eq(sends.id, sendId)).limit(1);
   if (!row) return { status: "skipped", reason: "no_person" };
   const kind = row.kind as EmailKind;
-  if (!ready([kind])) return { status: "not_configured" };
+  const held = holdBack([kind]);
+  if (held) return held;
   if (row.status !== "failed" && row.status !== "sending") return { status: "duplicate" };
 
   const markUnknown = async (error: string): Promise<SendOutcome> => {
@@ -512,4 +547,43 @@ export async function recordTap(userId: string, sendId: string, now = new Date()
     .where(and(eq(sends.id, sendId), eq(sends.userId, userId), isNull(sends.firstTapAt)))
     .returning({ id: sends.id });
   return rows.length > 0;
+}
+
+// ── The founders' alert ─────────────────────────────────────────────────────
+
+/** ALERT_EMAILS, or BLOG_OWNER_EMAILS when unset: comma-separated. */
+export function alertRecipients(): string[] {
+  const raw = process.env.ALERT_EMAILS?.trim() || process.env.BLOG_OWNER_EMAILS || "";
+  return [...new Set(raw.split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^[^\s@]+@[^\s@]+$/.test(a)))];
+}
+
+export type AlertOutcome = { status: "sent" } | { status: "failed"; error: string } | { status: "not_configured"; reason: "not_production" | "no_api_key" | "no_recipients" };
+
+/**
+ * A plain-text note to the founders (the jobs lane's "weekly list nearing the cap" alert).
+ * Only from production, like lifecycle email; counted in today's budget as "founder_alert".
+ * `key` makes it once-only at Resend for 24 hours (e.g. "weekly-cap:2026-11-16"); the jobs
+ * lane keeps its own once-a-week marker in job_runs. Counts in the text, never addresses
+ * or anything about anyone's health.
+ */
+export async function sendFounderAlert(alert: { key: string; subject: string; text: string }, now = new Date()): Promise<AlertOutcome> {
+  if (!sendingAllowed()) {
+    console.info(`[email] founders' alert ${alert.key} not sent: goes only from production (${whereRunning()})`);
+    return { status: "not_configured", reason: "not_production" };
+  }
+  const to = alertRecipients();
+  if (!to.length) return { status: "not_configured", reason: "no_recipients" };
+  const mode = emailMode();
+  if (mode === "off") return { status: "not_configured", reason: "no_api_key" };
+  // Counted first: a failed send over-counts by one, the safe side.
+  await countOtherSend("founder_alert", to.length, now).catch((error) => console.error("[email] counting the founders' alert failed:", error instanceof Error ? error.message : error));
+  if (mode === "log") {
+    console.info(`[email] founders' alert ${alert.key}: logged, not sent (no RESEND_API_KEY)`);
+    return { status: "sent" };
+  }
+  const { error } = await resend()!.emails.send(
+    { from: fromAddress(), to, subject: alert.subject, text: alert.text, tags: [{ name: "kind", value: "founder_alert" }] },
+    { idempotencyKey: `alert:${alert.key}`.slice(0, 256), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  );
+  return error ? { status: "failed", error: `${error.name}${error.statusCode ? ` ${error.statusCode}` : ""}` } : { status: "sent" };
 }

@@ -71,6 +71,13 @@
       "when": 1795023677927,
       "tag": "0009_blog_and_email",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795025977677,
+      "tag": "0010_email_daily_counts",
+      "breakpoints": true
     }
   ]
 }

@@ -267,15 +267,20 @@ Plus people with a report read that week and no meals (a second small query on `
 2. **Send** with Resend's idempotency key `${kind}:${userId}:${dedupeKey}` (designer's format).
 3. **Record:** `status = 'sent'`, `provider_id`, `sent_at`. On an error *response*: `failed`, `attempts + 1`, `error`. On a timeout or crash: the row stays `sending` and the sweep decides (3.3 step 4).
 
-**Batches:** claim up to 100 rows with one `batch_id`, then one `resend.batch.send()` with idempotency key `batch:${batchId}`. Rebuilding a batch must give the same payload (same rows, same order, no timestamps in the body), or Resend answers 409. Map returned ids back to rows by position.
+**One by one by default** (built 2026-11-18, follow-up): `sendLifecycleBatch` sends each email on its own, with its own key and its own budget check, at most 4 a second. An unclear answer then strands one email at most. `EMAIL_BATCH=1` switches to the batches below, worth it only on a paid plan with thousands a run.
+
+**Batches (`EMAIL_BATCH=1`):** claim up to 100 rows with one `batch_id`, then one `resend.batch.send()` with idempotency key `batch:${batchId}`. Rebuilding a batch must give the same payload (same rows, same order, no timestamps in the body), or Resend answers 409. Map returned ids back to rows by position. A batch with no clear answer is marked `unknown` whole and never resent.
 
 **Rate:** at most 4 requests a second from the job, leaving room in Resend's 10 a second for sign-in codes. On 429, wait the `retry-after` and retry twice, then stop the run; the next run continues.
 
+**Only from production:** lifecycle sends and the founders' alert go only when `VERCEL_ENV=production`, or on a local run with `EMAIL_SEND_LOCAL=1`. Preview deployments and ordinary local runs log a line and send nothing (`not_configured`, reason `not_production`), even with a key and a real database.
+
 **Daily budget** (Mayank: stay on Resend's free plan, 100 a day shared with sign-in codes, until revenue starts). Constants in `EMAIL_BUDGET` (`lib/email/types.ts`):
 
-- Lifecycle sends allowed in a UTC day: `min(EMAIL_DAILY_CAP or 70, 100 − max(sign-in codes today, 30))`, minus lifecycle sends already made today. Codes today come from `login_codes.created_at`; lifecycle sends from `email_sends.sent_at`. So lifecycle email never takes more than 70, codes always keep at least 30, and a busy sign-in day shrinks lifecycle email rather than codes.
-- **Overflow rolls to the next run.** Order when it's short: welcome, welcome_unfinished, weekly, feedback. The Sunday 19:30 run and Monday's 10:30 run fall on different UTC days, so a Sunday list of up to about 140 still all goes out by Monday morning; past that, those people skip that week.
-- An onboarding-time welcome that finds the budget used up leaves its row `failed` with `error = 'budget'`; the next run picks it up.
+- Lifecycle sends allowed right now: `min(EMAIL_DAILY_CAP or 70 − lifecycle today, (100 − 30) − (codes today + lifecycle today + other email today))`, read again under the budget lock before every send. Codes today come from `login_codes.created_at`; lifecycle sends from `email_sends.sent_at`; other email (the waitlist welcome and the founders' alert) from `email_daily_counts` (migration `0010`). So a lifecycle email goes only while at least 30 of the day's 100 are still free for codes, counting the codes already sent.
+- **The edge that remains:** lifecycle email can't see codes that haven't been asked for yet. A run can fill the day up to 70; if more than 30 codes are asked for after it, the ones past 100 bounce off Resend's limit. On a quiet day that needs 31+ codes in the hours after a run; a launch push or a busy sign-up day is the real risk, and the answer then is Resend Pro (section 3.12). Also not counted: anything sent by hand from Resend's dashboard.
+- **Overflow rolls to the next run.** Order when it's short: welcome, welcome_unfinished, weekly, feedback. The Sunday 19:30 run and Monday's 10:30 run fall on different UTC days, so a Sunday list still goes out by Monday morning up to about two days' room (each day's room is 70 minus that day's codes and other email); past that, those people skip that week.
+- An onboarding-time welcome that finds the budget used up writes no row; the next run's welcome catch-up sees it as not yet sent and picks it up.
 - **Alert:** when a Sunday weekly list reaches 80% of the cap (56 people at 70), the job emails the founders once that week (marker `alert:weekly-cap:<week>` in `job_runs`; recipients `ALERT_EMAILS`, or `BLOG_OWNER_EMAILS` when unset): how many are due, how many fit, and that Resend Pro ($20 a month) removes the daily limit. A second line when it overflowed.
 - When Resend is upgraded: raise `EMAIL_DAILY_CAP` and `EMAIL_BUDGET.resendDailyLimit` together; nothing else changes.
 
@@ -320,7 +325,7 @@ The purpose is inside the signed payload, so a stop token can't be used as a fee
 | --- | --- | --- |
 | `POST /api/email/unsubscribe?t=…` | stop token | RFC 8058 one-click: turns that kind off, answers 200 with an empty body, no cookies, no redirect. Body `List-Unsubscribe=One-Click` accepted and not required. |
 | `GET /api/email/unsubscribe?t=…` | none | 303 to `/email/stop?t=…` (a GET must never unsubscribe) |
-| `/email/stop?t=…&kind=…` | stop token | The designer's page. Turns the kind off by a POST from the page after it loads (link scanners don't run it); a "Confirm" button without JavaScript. Undo and the other toggles on the same page. |
+| `/email/stop?t=…` | stop token | The designer's page. Opening it changes nothing: the kind stops only when the person taps "Stop weekly wraps" (a POST), because some work mail scanners open every link and run its JavaScript too. Every button is a real form, so it works without JavaScript. Undo and the other toggle on the same page. (Changed 2026-11-18 from stopping automatically on load.) |
 | `GET/POST /api/email/prefs` | session **or** stop token | Read or change `weekly`, `questions`; turning weekly back on clears `weekly_paused_at` |
 | `POST /api/email/tap` | session | `{ e }`: sets `first_tap_at` on that send if it belongs to the signed-in person and isn't set yet |
 
@@ -363,15 +368,17 @@ The purpose is inside the signed payload, so a stop token can't be used as a fee
 
 | Event | We do |
 | --- | --- |
-| `email.bounced` | Upsert `email_suppressions` (SHA-256 of the lowercase address, `bounce`); mark the send `bounced` |
+| `email.bounced` | Mark the send `bounced`; a `Permanent` bounce also upserts `email_suppressions` (SHA-256 of the lowercase address, `bounce`). A `Transient` or `Undetermined` one doesn't, since Resend doesn't suppress those |
 | `email.complained` | Suppression (`complaint`); turn off weekly and questions for that person (`updated_via = 'complaint'`); mark the send |
 | `email.suppressed` | Mark the send `suppressed`; upsert the suppression |
 | `email.failed` | Mark the send `failed` with the reason |
+| `suppression.added` | Upsert the suppression (`bounce`, `complaint`, or `resend` for one added by hand) |
+| `suppression.removed` | Delete our copy, so an address Mayank takes off Resend's list in its dashboard is mailed again here too |
 | anything else | 200, ignore |
 
-Every write is an upsert, so Resend's retries (same `svix-id`) are harmless; no event table needed. Answer 500 only on a database error, so Resend tries again.
+Every write is an upsert or a guarded update, so Resend's retries (same `svix-id`) are harmless and a late event can't undo a stronger one; no event table needed. Answer 500 only on a database error, so Resend tries again.
 
-**Sign-in after a spam report.** Resend suppresses *all* mail to a suppressed address, including sign-in codes. When `/api/auth/code` gets an address in `email_suppressions`, the sign-in screen should say: "Emails to this address bounced or were marked as spam. Write to hello@dhuman.fit and we'll sort it out." Mayank removes the address in Resend's dashboard. Rare, but otherwise a silent lockout.
+**Sign-in after a spam report.** Resend suppresses *all* mail to a suppressed address, including sign-in codes. When `/api/auth/code` gets an address in `email_suppressions`, it still sends the code (our copy may be out of date) and answers `{ status: "sent", notice: "suppressed", message }`; the sign-in screen shows `message`: "Emails to this address bounced or were marked as spam, so your code may not arrive. Write to hello@dhuman.fit and we'll sort it out." Mayank removes the address in Resend's dashboard; `suppression.removed` then clears ours. Rare, but otherwise a silent lockout.
 
 ### 3.11 Domain and DNS (checked with `dig` today)
 
@@ -430,6 +437,7 @@ The privacy policy should name Resend as a processor outside India, as onboardin
 - **Steps:** edit `lib/db/schema.ts` (every table with `.enableRLS()`; partial indexes with `.where(sql\`…\`)`; reuse the existing `bytea` custom type), run `npm run db:generate` to get the snapshot and journal entry, then replace the generated SQL with Appendix A's. Its journal `when` is the generation time, which is later than 0008's `1794927340536`; `tests/migrations.test.ts` checks the order.
 - **Extend `tests/migrations.test.ts`:** `assertCurrentShape` checks the new tables, `blog_posts_one_featured_idx`, `email_sends_dedupe_idx`, `feedback_answers_question_idx` and `wraps.finished_at`. The existing "every table keeps row-level security" check covers RLS.
 - **No new index on `food_logs`:** the existing `(user_id, local_date)` index serves the weekly query (section 0).
+- **Then `0010_email_daily_counts`** (2026-11-18, follow-up): one small table, `email_daily_counts (day, stream, sent)`, keyed by UTC day and stream, RLS on, safe to run twice. It counts the email that uses Resend's 100 a day outside the send ledger and sign-in codes (the waitlist welcome, the founders' alert), so the budget sees it. Counts only, no addresses; one row per stream a day. Tested: deploy then paste, paste then deploy, and 0010 pasted onto a database at 0009 before the deploy.
 
 ## 5. Environment variables (names only)
 
@@ -442,15 +450,17 @@ The privacy policy should name Resend as a processor outside India, as onboardin
 | `EMAIL_DAILY_CAP` | Vercel, optional | Lifecycle sends a day; 70 when unset (30 kept for sign-in codes on Resend's free 100); raise on Resend Pro |
 | `ALERT_EMAILS` | Vercel, optional | Who gets the "weekly list nearing the cap" alert; falls back to `BLOG_OWNER_EMAILS` |
 | `FEEDBACK_REPLY_TO` | Vercel, optional | Reply-To for feedback emails; falls back to `RESEND_REPLY_TO` |
+| `EMAIL_BATCH` | Vercel, optional | `1` sends lifecycle email in Resend batches of up to 100; unset sends one by one (the default, safer on the free plan) |
+| `EMAIL_SEND_LOCAL` | `.env.local` only, optional | `1` lets a local run send lifecycle email (or log it, without a key). Ignored on Vercel, where only `VERCEL_ENV=production` sends |
 | Already set, reused | | `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`, `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_WEBHOOK_SECRET`, `AUTH_SECRET`, `DATABASE_URL` / `POSTGRES_URL` |
 
-Locally `RESEND_API_KEY` is empty, so lifecycle sends log a line instead (as sign-in codes do), and `/api/email-preview?kind=…` renders each email (404 in production).
+Lifecycle email and the founders' alert go only from production (section 3.4). A local run sends nothing unless `EMAIL_SEND_LOCAL=1`; then, with `RESEND_API_KEY` empty, sends log a line instead (as sign-in codes do). `/api/email-preview?kind=…` renders each email (404 in production).
 
 ## 6. Tests
 
 | File | Covers |
 | --- | --- |
-| `tests/migrations.test.ts` | 0009 in all three orders; new shape checks |
+| `tests/migrations.test.ts` | 0009 and 0010 in all three orders; new shape checks |
 | `tests/blog-blocks.test.ts` | The block schema refuses `javascript:`, `data:` and `vbscript:` links, unknown block types, oversize text, an image id that doesn't exist, more than one level of list. The renderer never outputs raw HTML. |
 | `tests/blog-store.test.ts` (PGlite) | Publish copies draft to live; drafts never appear in registry reads; version conflict gives 409; slug change keeps a redirect; deleted slugs are never reused; one featured post; a non-author is refused; a stale session can't publish |
 | `tests/blog-images.test.ts` | First-byte checks, size and width rules, immutable headers, 404 for unknown files |
@@ -526,7 +536,7 @@ Then these run in parallel. Each lane owns its files; no file appears in two lan
 
 **Resend:**
 
-1. Webhooks → Add endpoint `https://www.d-human.fit/api/email/webhook` with `email.bounced`, `email.complained`, `email.suppressed`, `email.failed`. Copy its signing secret into `RESEND_WEBHOOK_SECRET`.
+1. Webhooks → Add endpoint `https://www.d-human.fit/api/email/webhook` with six events: `email.bounced`, `email.complained`, `email.suppressed`, `email.failed`, `suppression.added` and `suppression.removed` (the last two keep our suppression list in step with Resend's dashboard). Copy its signing secret into `RESEND_WEBHOOK_SECRET`.
 2. Domains → `dhuman.fit` → open and click tracking off.
 3. Stay on the free plan for now (Mayank). Upgrade to Pro when revenue starts or the weekly cap alert arrives, then raise `EMAIL_DAILY_CAP`.
 

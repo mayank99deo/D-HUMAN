@@ -1,7 +1,8 @@
 // Sending lifecycle email (lib/email/send.ts) against a real embedded database, with the
 // Resend SDK replaced by a fake: one send per (person, kind, key) however many calls race;
 // the day's budget holds and leaves codes their share; stopped, paused and bounced people
-// get nothing; Resend's answers are recorded so a retry can never send twice.
+// get nothing; Resend's answers are recorded so a retry can never send twice; nothing
+// goes from anywhere but production.
 import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { allowAppImports, tempDatabase } from "./support/app.ts";
@@ -14,7 +15,7 @@ type Payload = {
   html: string;
   text: string;
   headers?: Record<string, string>;
-  tags: { name: string; value: string }[];
+  tags?: { name: string; value: string }[];
 };
 type Reply = { data: unknown; error: { statusCode: number | null; name: string; message: string } | null; headers: Record<string, string> | null };
 type Fake = { calls: { kind: "send" | "batch"; payloads: Payload[]; key: string }[]; replies: Reply[]; onSend?: (sendId: string) => Promise<void> };
@@ -23,7 +24,7 @@ g.__fake = { calls: [], replies: [] };
 
 allowAppImports({
   resend: `
-    const sendId = (p) => p.tags.find((t) => t.name === "send_id").value;
+    const sendId = (p) => p.tags?.find((t) => t.name === "send_id")?.value ?? "other";
     export class Resend {
       constructor(key) {
         this.emails = { send: async (p, o) => {
@@ -44,6 +45,11 @@ process.env.RESEND_API_KEY = "re_test";
 process.env.EMAIL_LINK_SECRET = "test-email-link-secret";
 process.env.RESEND_REPLY_TO = "team@example.com";
 process.env.FEEDBACK_REPLY_TO = "feedback@example.com";
+// A local run that opts in; the "only from production" tests below change it.
+process.env.EMAIL_SEND_LOCAL = "1";
+delete process.env.VERCEL;
+delete process.env.VERCEL_ENV;
+delete process.env.EMAIL_BATCH;
 
 const { eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
@@ -51,6 +57,7 @@ const send = await import("../lib/email/send.ts");
 const { setPrefs, pauseWeekly } = await import("../lib/email/prefs.ts");
 const { suppress } = await import("../lib/email/suppress.ts");
 const { readStopToken } = await import("../lib/email/tokens.ts");
+const { sendWelcomeEmail } = await import("../lib/waitlist/email.ts");
 type Frame = import("../lib/email/types.ts").EmailFrame;
 
 after(async () => {
@@ -96,6 +103,19 @@ const rowsFor = async (userId: string) => {
   const d = await db();
   return d.select().from(schema.emailSends).where(eq(schema.emailSends.userId, userId));
 };
+async function withEnv(env: Record<string, string | undefined>, run: () => Promise<void>) {
+  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+  const put = (vars: Record<string, string | undefined>) => {
+    for (const [k, v] of Object.entries(vars)) if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  };
+  put(env);
+  try {
+    await run();
+  } finally {
+    put(saved);
+  }
+}
 const fail = (statusCode: number | null, name: string, headers: Record<string, string> = {}): Reply => ({ data: null, error: { statusCode, name, message: name }, headers });
 
 describe("one send per person, kind and key", () => {
@@ -113,8 +133,8 @@ describe("one send per person, kind and key", () => {
     assert.equal(payload.headers, undefined, "welcomes carry no List-Unsubscribe");
     assert.match(payload.from, /dhuman\.fit/);
     // Tags carry ids only: never an address, a name or anything about health.
-    assert.deepEqual(payload.tags.map((t) => t.name), ["kind", "send_id"]);
-    assert.deepEqual(payload.tags.map((t) => t.value), ["welcome", (first as { sendId: string }).sendId]);
+    assert.deepEqual(payload.tags!.map((t) => t.name), ["kind", "send_id"]);
+    assert.deepEqual(payload.tags!.map((t) => t.value), ["welcome", (first as { sendId: string }).sendId]);
 
     const frame = frames.at(-1)!;
     assert.equal(frame.sendId, (first as { sendId: string }).sendId);
@@ -144,7 +164,7 @@ describe("one send per person, kind and key", () => {
     }
     assert.equal(weekly.replyTo, "team@example.com");
     assert.equal(feedback.replyTo, "feedback@example.com");
-    const weeklyFrame = frames.find((f) => f.sendId === weekly.tags[1].value)!;
+    const weeklyFrame = frames.find((f) => f.sendId === weekly.tags![1].value)!;
     assert.equal(new URL(weeklyFrame.stopUrl!).pathname, "/email/stop");
     assert.equal(weeklyFrame.firstName, null);
   });
@@ -188,47 +208,63 @@ describe("who gets nothing", () => {
 });
 
 describe("the day's budget", () => {
-  // A day of its own, far from the other tests' sends.
+  // Days of their own, far from the other tests' sends.
   const day = new Date("2030-01-10T09:00:00Z");
   const at = (minutes: number) => new Date(day.getTime() + minutes * 60_000);
+  let codeN = 0;
+  const code = async (createdAt: Date) => {
+    const d = await db();
+    await d.insert(schema.loginCodes).values({ id: `code-${++codeN}`, email: "busy@example.com", codeHash: "x", expiresAt: createdAt, createdAt });
+  };
 
-  it("counts codes and sends since UTC midnight, and leaves nothing written when it runs out", async () => {
+  it("keeps 30 free for codes, counting codes, lifecycle and other email, and re-reads before every send", async () => {
     const d = await db();
     const filler = await person();
-    // 45 codes today (and some yesterday, which don't count): 100 − 45 = 55 allowed.
-    await d.insert(schema.loginCodes).values(
-      Array.from({ length: 47 }, (_, i) => ({
-        id: `code-${i}`,
-        email: "busy@example.com",
-        codeHash: "x",
-        expiresAt: at(10),
-        createdAt: i < 45 ? at(-60 + i) : new Date("2030-01-09T23:00:00Z"),
-      })),
-    );
-    // 53 lifecycle sends already today: 2 places left.
+    // 45 codes today (and 2 yesterday, which don't count), 3 waitlist welcomes, 19 lifecycle
+    // sends: 45 + 3 + 19 = 67 of the 70 that may go before codes' last 30. 3 places left.
+    for (let i = 0; i < 45; i++) await code(at(-60 + i));
+    for (let i = 0; i < 2; i++) await code(new Date("2030-01-09T23:00:00Z"));
+    await d.insert(schema.emailDailyCounts).values({ day: "2030-01-10", stream: "waitlist_welcome", sent: 3 });
     await d.insert(schema.emailSends).values(
-      Array.from({ length: 53 }, (_, i) => ({ id: `old-${i}`, userId: filler.id, kind: "weekly", dedupeKey: `k-${i}`, localDate: "2030-01-10", status: "sent", sentAt: at(-30) })),
+      Array.from({ length: 19 }, (_, i) => ({ id: `old-${i}`, userId: filler.id, kind: "weekly", dedupeKey: `k-${i}`, localDate: "2030-01-10", status: "sent", sentAt: at(-30) })),
     );
-    assert.deepEqual(await send.budgetToday(at(0)), { left: 2, codesToday: 45, lifecycleToday: 53, allowance: 55 });
+    assert.deepEqual(await send.budgetToday(at(0)), { left: 3, codesToday: 45, lifecycleToday: 19, otherToday: 3 });
 
+    // A sign-in code is asked for while the first email is going out: it takes a place.
+    let first = true;
+    g.__fake.onSend = async () => {
+      if (first) await code(at(1));
+      first = false;
+    };
     const people = [await person(), await person(), await person(), await person()];
     const outcomes = await send.sendLifecycleBatch(
       people.map((p) => email(p.id, "weekly", "2030-01-06")),
-      { now: at(1), origin: ORIGIN },
+      { now: at(1), origin: ORIGIN, paceMs: 0 },
     );
     assert.deepEqual(outcomes.map((o) => o.status), ["sent", "sent", "budget", "budget"], "the first in priority order go");
-    assert.equal(g.__fake.calls.length, 1);
-    const call = g.__fake.calls[0];
-    assert.equal(call.kind, "batch");
-    assert.match(call.key, /^batch:[0-9a-f-]{36}$/);
-    // Ids map back by position: each row holds the id Resend gave its own email.
-    for (const o of outcomes.slice(0, 2)) {
-      const s = o as { sendId: string; providerId: string };
-      assert.equal((await row(s.sendId)).providerId, `re_${s.sendId}`);
-    }
+    // One by one by default: each with its own key.
+    assert.deepEqual(
+      g.__fake.calls.map((c) => [c.kind, c.key]),
+      people.slice(0, 2).map((p) => ["send", `weekly:${p.id}:2030-01-06`]),
+    );
     for (const p of people.slice(2)) assert.equal((await rowsFor(p.id)).length, 0, "over budget: no row, so the next run picks them up");
-    assert.equal((await send.budgetToday(at(2))).left, 0);
+    assert.deepEqual(await send.budgetToday(at(2)), { left: 0, codesToday: 46, lifecycleToday: 21, otherToday: 3 });
     assert.equal((await send.sendLifecycle(email(people[2].id, "weekly", "2030-01-06"), { now: at(3) })).status, "budget");
+  });
+
+  it("with EMAIL_BATCH=1, one Resend batch call, ids mapped back by position", async () => {
+    const people = [await person(), await person(), await person()];
+    await withEnv({ EMAIL_BATCH: "1" }, async () => {
+      const outcomes = await send.sendLifecycleBatch(people.map((p) => email(p.id, "weekly", "2030-02-04")), { now: new Date("2030-02-05T09:00:00Z"), origin: ORIGIN });
+      assert.deepEqual(outcomes.map((o) => o.status), ["sent", "sent", "sent"]);
+      assert.equal(g.__fake.calls.length, 1);
+      assert.equal(g.__fake.calls[0].kind, "batch");
+      assert.match(g.__fake.calls[0].key, /^batch:[0-9a-f-]{36}$/);
+      for (const o of outcomes) {
+        const sent = o as { sendId: string; providerId: string };
+        assert.equal((await row(sent.sendId)).providerId, `re_${sent.sendId}`);
+      }
+    });
   });
 });
 
@@ -297,14 +333,26 @@ describe("Resend's answers", () => {
     assert.equal((o as { retryAfterSeconds?: number }).retryAfterSeconds, 2);
   });
 
-  it("an unclear batch answer is never retried email by email", async () => {
+  it("with EMAIL_BATCH=1, an unclear batch answer is never retried email by email", async () => {
     const [a, b] = [await person(), await person()];
     g.__fake.replies.push(fail(null, "application_error"));
-    const outcomes = await send.sendLifecycleBatch([email(a.id, "weekly", "2026-11-02"), email(b.id, "weekly", "2026-11-02")]);
-    assert.deepEqual(outcomes.map((o) => o.status), ["pending", "pending"]);
+    await withEnv({ EMAIL_BATCH: "1" }, async () => {
+      const outcomes = await send.sendLifecycleBatch([email(a.id, "weekly", "2026-11-02"), email(b.id, "weekly", "2026-11-02")]);
+      assert.deepEqual(outcomes.map((o) => o.status), ["pending", "pending"]);
+      const id = (outcomes[0] as { sendId: string }).sendId;
+      const later = new Date(Date.now() + 11 * 60_000);
+      assert.equal((await send.retrySend(id, render, { now: later })).status, "unknown");
+    });
+  });
+
+  it("one by one (the default), an unclear answer strands only that email", async () => {
+    const [a, b] = [await person(), await person()];
+    g.__fake.replies.push(fail(null, "application_error"));
+    const outcomes = await send.sendLifecycleBatch([email(a.id, "weekly", "2026-11-02"), email(b.id, "weekly", "2026-11-02")], { paceMs: 0 });
+    assert.deepEqual(outcomes.map((o) => o.status), ["pending", "sent"]);
     const id = (outcomes[0] as { sendId: string }).sendId;
     const later = new Date(Date.now() + 11 * 60_000);
-    assert.equal((await send.retrySend(id, render, { now: later })).status, "unknown");
+    assert.equal((await send.retrySend(id, render, { now: later })).status, "sent", "retried under its own key");
   });
 
   it("keeps a bounce that Resend's webhook recorded before its own answer came back", async () => {
@@ -344,7 +392,7 @@ describe("configuration", () => {
     delete process.env.RESEND_API_KEY;
     (process.env as Record<string, string>).NODE_ENV = "production";
     try {
-      assert.deepEqual(await send.sendLifecycle(email(p.id, "welcome")), { status: "not_configured" });
+      assert.deepEqual(await send.sendLifecycle(email(p.id, "welcome")), { status: "not_configured", reason: "no_api_key" });
     } finally {
       process.env.RESEND_API_KEY = saved.key;
       if (saved.env === undefined) delete (process.env as Record<string, string | undefined>).NODE_ENV;
@@ -383,5 +431,120 @@ describe("taps", () => {
     assert.ok(first);
     assert.equal(await send.recordTap(p.id, o.sendId, new Date(Date.now() + 60_000)), false);
     assert.deepEqual((await row(o.sendId)).firstTapAt, first);
+  });
+});
+
+describe("only from production", () => {
+  const logs: string[] = [];
+  const quiet = async (run: () => Promise<void>) => {
+    const info = console.info;
+    console.info = (...args: unknown[]) => void logs.push(args.join(" "));
+    try {
+      await run();
+    } finally {
+      console.info = info;
+    }
+  };
+
+  it("a local run without EMAIL_SEND_LOCAL=1 claims and sends nothing, and says why", async () => {
+    const p = await person();
+    await quiet(() =>
+      withEnv({ EMAIL_SEND_LOCAL: undefined }, async () => {
+        assert.deepEqual(await send.sendLifecycle(email(p.id, "welcome")), { status: "not_configured", reason: "not_production" });
+        const list = await send.sendLifecycleBatch([email(p.id, "weekly"), email(p.id, "feedback", "fb-1")], { paceMs: 0 });
+        assert.deepEqual(list.map((o) => o.status), ["not_configured", "not_configured"]);
+      }),
+    );
+    assert.equal((await rowsFor(p.id)).length, 0);
+    assert.equal(g.__fake.calls.length, 0);
+    assert.ok(logs.some((l) => /goes only from production/.test(l) && !l.includes("@")), "a log line, with no address in it");
+  });
+
+  it("a preview deployment sends nothing, even with a key, a real database and EMAIL_SEND_LOCAL=1", async () => {
+    const p = await person();
+    await quiet(() =>
+      withEnv({ VERCEL: "1", VERCEL_ENV: "preview", EMAIL_SEND_LOCAL: "1" }, async () => {
+        assert.deepEqual(await send.sendLifecycle(email(p.id, "welcome")), { status: "not_configured", reason: "not_production" });
+      }),
+    );
+    assert.equal(g.__fake.calls.length, 0);
+  });
+
+  it("production sends", async () => {
+    const p = await person();
+    await withEnv({ VERCEL: "1", VERCEL_ENV: "production", EMAIL_SEND_LOCAL: undefined }, async () => {
+      assert.equal((await send.sendLifecycle(email(p.id, "welcome"), { origin: ORIGIN })).status, "sent");
+    });
+    assert.equal(g.__fake.calls.length, 1);
+  });
+
+  it("retries are held back outside production too", async () => {
+    const p = await person();
+    g.__fake.replies.push(fail(422, "validation_error"));
+    const o = (await send.sendLifecycle(email(p.id, "weekly", "2026-07-06"))) as { sendId: string };
+    await quiet(() =>
+      withEnv({ EMAIL_SEND_LOCAL: undefined }, async () => {
+        assert.deepEqual(await send.retrySend(o.sendId, render), { status: "not_configured", reason: "not_production" });
+      }),
+    );
+    assert.equal(g.__fake.calls.length, 1);
+  });
+});
+
+describe("the founders' alert", () => {
+  const alert = { key: "weekly-cap:2026-11-16", subject: "Weekly email: 60 due, 55 fit today", text: "60 people are due a weekly email; 55 fit in today's budget." };
+  const countToday = async (stream: string) => {
+    const d = await db();
+    const rows = await d.select().from(schema.emailDailyCounts);
+    return rows.filter((r) => r.stream === stream && r.day === new Date().toISOString().slice(0, 10)).reduce((n, r) => n + r.sent, 0);
+  };
+
+  it("goes from production to ALERT_EMAILS, once per key, and counts in today's budget", async () => {
+    const before = (await send.budgetToday()).otherToday;
+    await withEnv({ VERCEL: "1", VERCEL_ENV: "production", ALERT_EMAILS: " Founder@Example.com, cofounder@example.com,, not-an-address ", BLOG_OWNER_EMAILS: "owner@example.com" }, async () => {
+      assert.deepEqual(await send.sendFounderAlert(alert), { status: "sent" });
+    });
+    const call = g.__fake.calls[0];
+    assert.equal(call.key, "alert:weekly-cap:2026-11-16");
+    assert.deepEqual(call.payloads[0].to, ["founder@example.com", "cofounder@example.com"]);
+    assert.equal(await countToday("founder_alert"), 2);
+    assert.equal((await send.budgetToday()).otherToday, before + 2);
+  });
+
+  it("falls back to BLOG_OWNER_EMAILS, and does nothing without anyone to tell", async () => {
+    await withEnv({ VERCEL: "1", VERCEL_ENV: "production", ALERT_EMAILS: undefined, BLOG_OWNER_EMAILS: "owner@example.com" }, async () => {
+      assert.deepEqual(await send.sendFounderAlert(alert), { status: "sent" });
+      assert.deepEqual(g.__fake.calls[0].payloads[0].to, ["owner@example.com"]);
+    });
+    await withEnv({ VERCEL: "1", VERCEL_ENV: "production", ALERT_EMAILS: undefined, BLOG_OWNER_EMAILS: undefined }, async () => {
+      assert.deepEqual(await send.sendFounderAlert(alert), { status: "not_configured", reason: "no_recipients" });
+    });
+    assert.equal(g.__fake.calls.length, 1);
+  });
+
+  it("goes only from production", async () => {
+    const info = console.info;
+    console.info = () => {};
+    try {
+      await withEnv({ VERCEL: "1", VERCEL_ENV: "preview", ALERT_EMAILS: "founder@example.com" }, async () => {
+        assert.deepEqual(await send.sendFounderAlert(alert), { status: "not_configured", reason: "not_production" });
+      });
+      await withEnv({ EMAIL_SEND_LOCAL: undefined, ALERT_EMAILS: "founder@example.com" }, async () => {
+        assert.deepEqual(await send.sendFounderAlert(alert), { status: "not_configured", reason: "not_production" });
+      });
+    } finally {
+      console.info = info;
+    }
+    assert.equal(g.__fake.calls.length, 0);
+  });
+});
+
+describe("the waitlist welcome", () => {
+  it("counts in today's budget, alongside the send", async () => {
+    const before = (await send.budgetToday()).otherToday;
+    await sendWelcomeEmail("waitlist@example.com");
+    assert.equal(g.__fake.calls.length, 1);
+    assert.equal(g.__fake.calls[0].payloads[0].to, "waitlist@example.com");
+    assert.equal((await send.budgetToday()).otherToday, before + 1);
   });
 });

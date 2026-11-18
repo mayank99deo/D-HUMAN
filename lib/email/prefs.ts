@@ -82,8 +82,8 @@ export type StopLinkState =
 
 /**
  * What the stop page shows for a link. Reads only: opening a link must never change
- * anything, because mail scanners open every link. The page itself stops the email with
- * a POST after it has loaded.
+ * anything, because mail scanners open every link (some run its JavaScript too). The
+ * email stops only when the person taps the page's button.
  */
 export async function stopLinkState(token: unknown): Promise<StopLinkState> {
   const payload = readStopToken(token);

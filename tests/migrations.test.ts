@@ -76,11 +76,15 @@ async function assertCurrentShape(pg: PGlite) {
   for (const r of partial.rows) assert.match(r.def, / WHERE /, `${r.name} is partial`);
   const finished = await pg.query(`select 1 from information_schema.columns where table_name = 'wraps' and column_name = 'finished_at'`);
   assert.equal(finished.rows.length, 1, "wraps.finished_at exists");
+
+  // 0010: the daily count of emails sent outside the lifecycle ledger, keyed by day and stream.
+  const pk = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'email_daily_counts_day_stream_pk'`);
+  assert.equal(pk?.def, "PRIMARY KEY (day, stream)");
 }
 
 const BLOG_AND_EMAIL_TABLES = [
   "blog_authors", "blog_posts", "blog_slugs", "blog_images", "blog_image_files", "blog_publishes", "blog_reviews",
-  "email_prefs", "email_sends", "email_suppressions", "feedback_answers", "job_runs",
+  "email_prefs", "email_sends", "email_suppressions", "feedback_answers", "job_runs", "email_daily_counts",
 ];
 const BLOG_AND_EMAIL_INDEXES = [
   "blog_posts_live_idx", "blog_posts_one_featured_idx", "blog_publishes_post_idx", "blog_reviews_post_idx",
@@ -158,6 +162,21 @@ describe("migrations", () => {
     await deploy(pg);
     await assertCurrentShape(pg);
     assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from wraps where finished_at is null`)).n, 1, "existing wraps kept");
+    await pg.close();
+  });
+
+  // Production with 0009, then only 0010 pasted into Supabase (twice), then the deploy.
+  it("0010 pasted onto production, then the deploy", async () => {
+    const at = journal.entries.findIndex((e) => e.tag.startsWith("0010_"));
+    assert.ok(at > 0, "0010 is in the journal");
+    const pg = new PGlite();
+    await deploy(pg, at);
+    await pg.exec(files[at]);
+    await pg.exec(`insert into email_daily_counts (day, stream, sent) values ('2026-11-18', 'waitlist_welcome', 2)`);
+    await pg.exec(files[at]);
+    await deploy(pg);
+    await assertCurrentShape(pg);
+    assert.equal((await one<{ n: number }>(pg, `select sent as n from email_daily_counts`)).n, 2, "counts kept");
     await pg.close();
   });
 

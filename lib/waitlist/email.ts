@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { countOtherSend } from "@/lib/email/counts";
 import { siteUrl } from "@/lib/site-url";
 import { welcomeEmail } from "./welcome-email";
 
@@ -25,18 +26,23 @@ export async function sendWelcomeEmail(email: string) {
     siteUrl: site?.startsWith("https://") ? site : undefined,
     canReply: Boolean(process.env.RESEND_REPLY_TO),
   });
-  const { error } = await r.emails.send(
-    {
-      // dhuman.fit is verified in Resend, so any address on it can send.
-      from: process.env.RESEND_FROM || "D-Human <hello@dhuman.fit>",
-      to: email,
-      replyTo: process.env.RESEND_REPLY_TO || undefined,
-      subject: "You're on the D-Human waitlist",
-      html,
-      text,
-    },
-    { idempotencyKey: `welcome/${email}` },
-  );
+  const [{ error }] = await Promise.all([
+    r.emails.send(
+      {
+        // dhuman.fit is verified in Resend, so any address on it can send.
+        from: process.env.RESEND_FROM || "D-Human <hello@dhuman.fit>",
+        to: email,
+        replyTo: process.env.RESEND_REPLY_TO || undefined,
+        subject: "You're on the D-Human waitlist",
+        html,
+        text,
+      },
+      { idempotencyKey: `welcome/${email}` },
+    ),
+    // It uses the same 100 a day as sign-in codes, so lifecycle email's budget counts it.
+    // Alongside the send, and never able to hold it up or fail it.
+    countOtherSend("waitlist_welcome").catch((err) => console.error("[waitlist] Counting the welcome email failed:", err instanceof Error ? err.message : err)),
+  ]);
   if (error) console.error("[waitlist] Welcome email failed:", error.name, error.message);
 }
 

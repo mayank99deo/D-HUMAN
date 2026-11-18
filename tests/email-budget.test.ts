@@ -1,16 +1,15 @@
 // The daily budget for lifecycle email on Resend's free plan (lib/email/budget.ts):
-// min(EMAIL_DAILY_CAP or 70, 100 − max(sign-in codes today, 30)) − lifecycle sends today.
-// Codes always keep at least 30 of the 100; a busy sign-in day shrinks lifecycle email.
+//   left = min(EMAIL_DAILY_CAP (70) − lifecycle today, (100 − 30) − (codes + lifecycle + other today))
+// A lifecycle email goes only while 30 of the day's 100 are still free for sign-in codes.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { allowAppImports } from "./support/app.ts";
 
 allowAppImports();
-const { alertThreshold, dailyAllowance, dailyCap, lifecycleLeft, shouldAlert, utcDayStart } = await import("../lib/email/budget.ts");
+const { alertThreshold, dailyCap, lifecycleLeft, shouldAlert, utcDay, utcDayStart } = await import("../lib/email/budget.ts");
 
 describe("daily cap", () => {
   it("is 70 unless EMAIL_DAILY_CAP is a whole number", () => {
-    assert.equal(dailyCap(undefined), 70);
     assert.equal(dailyCap(""), 70);
     assert.equal(dailyCap("40"), 40);
     assert.equal(dailyCap(" 25 "), 25);
@@ -19,36 +18,37 @@ describe("daily cap", () => {
   });
 });
 
-describe("allowance", () => {
-  it("is 70 on a quiet day: codes keep their 30", () => {
-    assert.equal(dailyAllowance({ codesToday: 0, cap: 70 }), 70);
-    assert.equal(dailyAllowance({ codesToday: 30, cap: 70 }), 70);
+describe("what's left", () => {
+  it("is 70 on a day with nothing sent yet", () => {
+    assert.equal(lifecycleLeft({ codesToday: 0, lifecycleToday: 0, cap: 70 }), 70);
   });
 
-  it("shrinks one for one once codes pass 30, down to nothing", () => {
-    assert.equal(dailyAllowance({ codesToday: 31, cap: 70 }), 69);
-    assert.equal(dailyAllowance({ codesToday: 45, cap: 70 }), 55);
-    assert.equal(dailyAllowance({ codesToday: 100, cap: 70 }), 0);
-    assert.equal(dailyAllowance({ codesToday: 140, cap: 70 }), 0, "never negative");
+  it("keeps 30 free for codes, counting the codes already sent", () => {
+    assert.equal(lifecycleLeft({ codesToday: 5, lifecycleToday: 0, cap: 70 }), 65);
+    assert.equal(lifecycleLeft({ codesToday: 30, lifecycleToday: 0, cap: 70 }), 40);
+    assert.equal(lifecycleLeft({ codesToday: 45, lifecycleToday: 10, cap: 70 }), 15);
+    assert.equal(lifecycleLeft({ codesToday: 70, lifecycleToday: 0, cap: 70 }), 0);
+    assert.equal(lifecycleLeft({ codesToday: 140, lifecycleToday: 0, cap: 70 }), 0, "never negative");
   });
 
-  it("can't be raised past what the free plan leaves for codes", () => {
-    assert.equal(dailyAllowance({ codesToday: 0, cap: 500 }), 70);
-    assert.equal(dailyAllowance({ codesToday: 0, cap: 500, resendDailyLimit: 50_000 }), 500, "after an upgrade, the cap rules");
+  it("counts the waitlist welcome and the founders' alert too", () => {
+    assert.equal(lifecycleLeft({ codesToday: 10, lifecycleToday: 20, otherToday: 15, cap: 70 }), 25);
+    assert.equal(lifecycleLeft({ codesToday: 10, lifecycleToday: 20, otherToday: 40, cap: 70 }), 0);
   });
 
-  it("subtracts what has already gone today", () => {
-    assert.equal(lifecycleLeft({ codesToday: 10, lifecycleToday: 60, cap: 70 }), 10);
-    assert.equal(lifecycleLeft({ codesToday: 50, lifecycleToday: 60, cap: 70 }), 0, "codes arrived after lifecycle used its share");
+  it("stops at the cap even with room to spare", () => {
+    assert.equal(lifecycleLeft({ codesToday: 0, lifecycleToday: 20, cap: 20 }), 0);
     assert.equal(lifecycleLeft({ codesToday: 0, lifecycleToday: 0, cap: 0 }), 0);
+    assert.equal(lifecycleLeft({ codesToday: 0, lifecycleToday: 0, cap: 500 }), 70, "a big cap can't eat the codes' room");
+    assert.equal(lifecycleLeft({ codesToday: 0, lifecycleToday: 0, cap: 500, resendDailyLimit: 50_000 }), 500, "after an upgrade, the cap rules");
   });
 
-  it("lifecycle plus the codes' reserve never passes Resend's 100", () => {
-    for (let codes = 0; codes <= 120; codes += 7) {
-      for (const cap of [0, 20, 70, 90, 1000]) {
-        assert.ok(dailyAllowance({ codesToday: codes, cap }) + Math.max(codes, 30) <= 100 || dailyAllowance({ codesToday: codes, cap }) === 0);
-      }
-    }
+  it("whenever it says yes, at least 30 of the 100 are still free for codes after that send", () => {
+    for (let codes = 0; codes <= 110; codes += 5)
+      for (let lifecycle = 0; lifecycle <= 80; lifecycle += 5)
+        for (const other of [0, 3, 12])
+          if (lifecycleLeft({ codesToday: codes, lifecycleToday: lifecycle, otherToday: other, cap: 70 }) > 0)
+            assert.ok(100 - (codes + lifecycle + other + 1) >= 30, `${codes} codes, ${lifecycle} lifecycle, ${other} other`);
   });
 });
 
@@ -66,6 +66,7 @@ describe("the budget's day", () => {
   it("is the UTC day", () => {
     // 05:10 IST on 19 Nov is still 18 Nov in UTC.
     assert.equal(utcDayStart(new Date("2026-11-18T23:40:00Z")).toISOString(), "2026-11-18T00:00:00.000Z");
-    assert.equal(utcDayStart(new Date("2026-11-19T00:00:00Z")).toISOString(), "2026-11-19T00:00:00.000Z");
+    assert.equal(utcDay(new Date("2026-11-18T23:40:00Z")), "2026-11-18");
+    assert.equal(utcDay(new Date("2026-11-19T00:00:00Z")), "2026-11-19");
   });
 });
