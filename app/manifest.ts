@@ -1,14 +1,19 @@
 import type { MetadataRoute } from "next";
+import { SPOKEN } from "@/lib/domain/speech";
 import { isWaitlist } from "@/lib/site-mode";
 
 // Lets phones add D-Human to the home screen as a full-screen web app.
+// Same copy rules as lib/seo.ts: "Free to start", no price.
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "D-Human",
     short_name: "D-Human",
     description: isWaitlist
       ? "Test first. Supplement second. Join the D-Human waitlist."
-      : "Track calories and protein in Indian meals, in your own language. Start free with D-Human.",
+      : `Track calories and protein in Indian meals in ${SPOKEN.length} languages, see your weekly Wraps, and let AI read your blood report. Free to start.`,
+    lang: "en-IN",
+    categories: ["health", "food", "fitness"],
     start_url: "/",
     scope: "/",
     display: "standalone",

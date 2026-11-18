@@ -9,7 +9,9 @@
 //   layouts say noindex. No public page may start with one of those prefixes.
 
 import type { Metadata } from "next";
+import { HISTORY_DAYS } from "./domain/meals.ts";
 import { PLAN } from "./domain/plan.ts";
+import { SPOKEN } from "./domain/speech.ts";
 import { isWaitlist } from "./site-mode.ts";
 import { absoluteUrl } from "./site-url.ts";
 
@@ -59,16 +61,20 @@ export const GUIDES = [
 export type GuidePath = (typeof GUIDES)[number]["path"];
 export const guide = (path: GuidePath) => GUIDES.find((g) => g.path === path)!;
 
-/** The landing page's own last change, for the sitemap. */
-export const HOME_UPDATED = "2026-11-13";
+/** The landing page's own last change, for the sitemap. 2026-11-18: description and app markup. */
+export const HOME_UPDATED = "2026-11-18";
 
 // The landing page's title and description. Waitlist mode keeps the words it always had.
 // Open mode: the brand first (people who heard the name search it), then the two jobs
 // people search for, inside about 60 characters so results pages show it whole.
+// The description adds what the title doesn't say. Phones show about its first 135
+// characters, so the order is: how you log, the languages, Wraps, then the blood report
+// and supplements. Copy rules: "Free to start" (never "free" alone), no price, no
+// "accurate", and reads are AI-analysed, never reviewed by a doctor.
 export const HOME_TITLE = isWaitlist ? "D-Human | Your body speaks data" : "D-Human | Indian calorie tracker and AI blood report reads";
 export const HOME_DESCRIPTION = isWaitlist
   ? "Test first. Supplement second. D-Human tests your blood, gut and body, analyses the results with AI, and recommends supplements only where your markers point. Join the waitlist."
-  : "Track calories and protein in Indian meals by photo, voice or text, in 12 languages. Upload a blood report and AI reads it for how you train. Start free.";
+  : `Track calories and protein in Indian meals by photo, voice or text, in Hindi and ${SPOKEN.length - 1} more languages, with weekly Wraps. AI reads your blood report; supplements only where markers point. Free to start.`;
 
 /**
  * The signed-in app and the API. robots.txt disallows each as a prefix, so a public
@@ -141,6 +147,34 @@ export function websiteLd(): Json {
   };
 }
 
+const listed = (names: readonly string[]) => `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+/**
+ * What the app does, one feature a line, for search engines and AI answers. Every line is
+ * true of the app today (each names the code it comes from), and none is coming soon.
+ * Wraps and Past meals aren't on the landing page yet: give them a line there (the Fuel
+ * slide) so the markup and the page say the same things.
+ */
+export const APP_FEATURES: readonly string[] = [
+  // lib/ai/food.ts, lib/domain/food-table.ts
+  "Calorie and protein tracking for Indian meals, counted in Indian household portions",
+  "Log a meal by photo, by voice or in a few typed words",
+  // lib/domain/speech.ts
+  `Meal logging in ${SPOKEN.length} languages: ${listed(SPOKEN.map((s) => s.name))}`,
+  // lib/domain/nutrition.ts
+  "Daily calorie and protein targets set for your body and training, with vitamins and minerals against ICMR-NIN 2020 allowances",
+  "Food gaps from two weeks of meals, or from a usual day described once",
+  // lib/domain/meals.ts, components/platform/PastMeals.tsx
+  `Past meals: the ${HISTORY_DAYS} days before today, day by day`,
+  // lib/ai/wrap.ts
+  "Weekly, monthly and yearly Wraps: a short story of what you ate and what moved",
+  // lib/platform/analyze.ts, lib/domain/safety.ts
+  "AI-analysed blood report reads in plain words, from a PDF or photos, in English, Hindi or Hinglish, aimed at how you train. Not a diagnosis.",
+  // lib/domain/supplements.ts, lib/domain/budget.ts
+  "A supplement stack only where a blood marker or a food gap points, with doses, cautions and food first, fitted to a monthly budget",
+  "A retest date from your read, to see what moved",
+];
+
 /**
  * The app and its free start, as the landing page's Start free form states it. Open mode only.
  * No pass price: the landing page doesn't show it, and structured data must match the page.
@@ -151,8 +185,8 @@ export function appLd(): Json {
     "@id": ids.app(),
     name: SITE_NAME,
     url: absoluteUrl("/"),
-    description:
-      "Calorie and protein tracking for Indian meals by photo, voice or text in 12 languages, and AI-analysed reads of blood test reports.",
+    description: `Calorie and protein tracking for Indian meals by photo, voice or text in ${SPOKEN.length} languages, with weekly, monthly and yearly Wraps. AI-analysed reads of blood test reports, and supplements only where a marker or a food gap points.`,
+    featureList: APP_FEATURES,
     applicationCategory: "HealthApplication",
     operatingSystem: "Any (runs in a web browser)",
     inLanguage: "en-IN",

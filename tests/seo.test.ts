@@ -13,7 +13,8 @@ allowAppImports();
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { LEGACY_HOSTS, SITE_ORIGIN, absoluteUrl, siteUrl } = await import("../lib/site-url.ts");
 const { SESSION_COOKIE } = await import("../lib/auth/cookie.ts");
-const { APP_PATHS, GUIDES, guideLd, homeLd, ldJson } = await import("../lib/seo.ts");
+const { APP_FEATURES, APP_PATHS, GUIDES, HOME_DESCRIPTION, appLd, guideLd, homeLd, ldJson, organizationLd } = await import("../lib/seo.ts");
+const { SPOKEN } = await import("../lib/domain/speech.ts");
 
 const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, vercel: process.env.VERCEL };
 afterEach(() => {
@@ -158,5 +159,62 @@ describe("structured data", () => {
   });
   it("can't be closed early by text inside it", () => {
     assert.ok(!ldJson({ a: "</script><script>alert(1)</script>" }).includes("<"));
+  });
+  it("lists what the app does, Wraps and Past meals included", () => {
+    const app = appLd() as { featureList: string[]; description: string };
+    assert.deepEqual(app.featureList, [...APP_FEATURES]);
+    const all = app.featureList.join("\n");
+    for (const s of SPOKEN) assert.ok(all.includes(s.name), s.name);
+    for (const word of ["photo", "voice", "Wraps", "Past meals", "blood report", "supplement", "budget"]) {
+      assert.ok(all.includes(word), word);
+    }
+  });
+});
+
+// The words search engines and phones show for the landing page follow the house copy rules.
+describe("search copy", async () => {
+  const manifest = (await import("../app/manifest.ts")).default;
+  const texts = () => [HOME_DESCRIPTION, (appLd() as { description: string }).description, ...APP_FEATURES, manifest().description ?? ""];
+
+  it("says what the app does, in the order phones show it", () => {
+    assert.match(HOME_DESCRIPTION, new RegExp(`Hindi and ${SPOKEN.length - 1} more languages`));
+    assert.ok(HOME_DESCRIPTION.indexOf("Wraps") < 135, "Wraps should show before a phone cuts the description");
+    assert.ok(HOME_DESCRIPTION.includes("blood report"));
+  });
+  it("never claims a doctor's review, accuracy, a price or a free product", () => {
+    for (const text of texts()) {
+      assert.doesNotMatch(text, /doctor[- ]review|reviewed by a doctor|medically reviewed/i, text);
+      assert.doesNotMatch(text, /accura/i, text);
+      assert.doesNotMatch(text, /₹|\bINR\b|rupee/i, text);
+      assert.doesNotMatch(text.replace(/Free to start/g, ""), /\bfree\b/i, text);
+    }
+  });
+});
+
+// Google shows one favicon per host (developers.google.com/search/docs/appearance/favicon-in-search):
+// square, in a format it lists (not SVG), and ideally larger than 48 x 48 px.
+describe("icons", () => {
+  const pngSize = (file: string) => {
+    const b = readFileSync(file);
+    assert.equal(b.subarray(1, 4).toString(), "PNG", file);
+    return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+  };
+
+  it("give search engines a square PNG favicon larger than 48 px, in steps of 48", () => {
+    const { width, height } = pngSize(path.join(root, "app/icon0.png"));
+    assert.equal(width, height);
+    assert.ok(width > 48 && width % 48 === 0, `${width} px`);
+  });
+  it("keep a 48 px image inside favicon.ico", () => {
+    const ico = readFileSync(path.join(root, "app/favicon.ico"));
+    const sizes = Array.from({ length: ico.readUInt16LE(4) }, (_, i) => ico[6 + 16 * i] || 256);
+    assert.ok(sizes.includes(48), `favicon.ico has ${sizes.join(", ")} px`);
+  });
+  it("point the Organization logo at a real, square image of at least 112 px", () => {
+    const logo = (organizationLd() as { logo: { url: string; width: number; height: number } }).logo;
+    const file = path.join(root, "public", new URL(logo.url).pathname);
+    const { width, height } = pngSize(file);
+    assert.deepEqual([width, height], [logo.width, logo.height]);
+    assert.ok(width === height && width >= 112);
   });
 });

@@ -237,6 +237,26 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-18
+- **Search fixes, the missing logo explained, and plans for a blog and lifecycle emails (Mayank and his co-founder):**
+  - **The logo:** nothing in our code blocked it. Google keeps one favicon per hostname and had only fetched it for the dhuman.fit hosts (its favicon service gave a globe for d-human.fit and our D for dhuman.fit); a new one takes days to weeks.
+  - **The SEO lead's fixes:**
+    - `app/icon0.png`, a 192 px PNG; Google wants an icon over 48 px.
+    - A new home description naming Hindi and 11 more languages and weekly Wraps.
+    - A 10-line `featureList` in the WebApplication JSON-LD (`lib/seo.ts`).
+    - `app/manifest.ts` says "Free to start", with `id`, `lang` and `categories`.
+    - Tests for the copy rules and icons in `tests/seo.test.ts`.
+  - **Search Console:** Mayank verified https://www.d-human.fit/ (the file above) and submitted `sitemap.xml`. "Couldn't fetch" at first is normal; Googlebot gets it with a 200.
+  - **His next steps** (`docs/team/seo/2026-11-18-blog-and-search.md` §2):
+    - Request indexing of `/`.
+    - Domain properties for d-human.fit and dhuman.fit, and Change of Address from the dhuman.fit hosts.
+    - Removals → "Clear snippet" for the stale "doctor review" dhuman.fit result.
+    - In Vercel, point dhuman.fit straight at www.d-human.fit.
+    - Bing Site Move.
+  - **Plans written in parallel by the crew** (not built yet; decisions pending with Mayank):
+    - The blog spec, `docs/team/specs/2026-11-18-blog.md` (product designer: `/blog`, an in-app editor at `/write`).
+    - The lifecycle emails spec, `docs/team/specs/2026-11-18-lifecycle-emails.md` (UX designer: welcome when onboarding finishes, a Monday 8 am weekly wrap, feedback on day 10).
+    - Blog SEO in the SEO doc §4.
+    - Two found issues: Resend's free plan is 100 emails a day, shared with sign-in codes; and sign-in can't return people to the page they came from.
 - **Search Console verification file:** `public/googleb5c5563161c95155.html` (Google's one-line token) verifies the URL-prefix property https://www.d-human.fit/. Never delete it, or the property loses its verification. The old domain can't verify by file, because every page request on it 308s to d-human.fit; verify dhuman.fit by DNS TXT (a Domain property) for Change of Address.
 - **Push `499bd2d`:** the entry below. Live about 54 s later. `/sources-and-safety` and `/calorie-tracker` show the USDA line and no IFCT; `POST /api/food` gives 401 signed out, and the landing gives 200.
 - **Minerals worked out in code from USDA, honest guide copy, and the NIN request draft (Mayank: "USDA now, ask NIN too", textbook portions; decisions in Decisions):**
