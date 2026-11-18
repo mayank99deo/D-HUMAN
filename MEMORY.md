@@ -237,6 +237,8 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-18
+- **Search Console verification file:** `public/googleb5c5563161c95155.html` (Google's one-line token) verifies the URL-prefix property https://www.d-human.fit/. Never delete it, or the property loses its verification. The old domain can't verify by file, because every page request on it 308s to d-human.fit; verify dhuman.fit by DNS TXT (a Domain property) for Change of Address.
+- **Push `499bd2d`:** the entry below. Live about 54 s later. `/sources-and-safety` and `/calorie-tracker` show the USDA line and no IFCT; `POST /api/food` gives 401 signed out, and the landing gives 200.
 - **Minerals worked out in code from USDA, honest guide copy, and the NIN request draft (Mayank: "USDA now, ask NIN too", textbook portions; decisions in Decisions):**
   - **Systems and data engineer:**
     - Built `lib/domain/food-table.ts` (125 foods, USDA SR Legacy, public domain, each with its FDC id) and `lib/domain/meal-minerals.ts` (ingredient codes and raw grams, minerals in code, and an energy check that only lowers grams), plus schema, prompt and mock changes and 29 tests.
