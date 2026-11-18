@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Block, DataTable, FaqList, GuideCta, GuideHero, JsonLd, Points, Section, SourcesAndMore, Steps, TextLink } from "@/components/site/Guide";
 import { nativeStyle } from "@/components/site/native";
-import { ICMR_ENERGY, ICMR_NIN_2020, IFCT_2017, MIFFLIN_1990 } from "@/components/site/sources";
+import { ICMR_ENERGY, ICMR_NIN_2020, KHANNA_2007, MIFFLIN_1990, RAINA_2011, USDA_FDC } from "@/components/site/sources";
+import { FOOD_CODES } from "@/lib/domain/food-table";
 import { ACTIVITY_FACTOR, MICROS } from "@/lib/domain/nutrition";
 import { PLAN, PRICE_TEXT } from "@/lib/domain/plan";
 import { SPOKEN } from "@/lib/domain/speech";
@@ -10,8 +11,9 @@ import { isWaitlist } from "@/lib/site-mode";
 
 // Intent: "I want an app that counts calories in the Indian food I actually eat."
 // Every product fact here comes from the code it describes: languages from
-// lib/domain/speech.ts, targets from lib/domain/nutrition.ts, portions from
-// lib/ai/food.ts (FOOD_RULES), limits from lib/domain/plan.ts.
+// lib/domain/speech.ts, targets from lib/domain/nutrition.ts, portions and the computed
+// minerals from lib/domain/food-table.ts (PORTIONS, FOODS) and lib/ai/food.ts, limits from
+// lib/domain/plan.ts.
 
 const PATH = "/calorie-tracker";
 const TITLE = "Calorie tracker for Indian food, by photo or voice | D-Human";
@@ -95,9 +97,10 @@ export default function CalorieTrackerPage() {
       <Section id="indian" title="Built for the way India eats">
         <Block title="Portions the way you serve them">
           <p>
-            D-Human&apos;s AI is told to count in household measures: a katori as about 150 mL, a medium roti as about 35 g of atta,
-            a cup of cooked rice as about 150 g, and a tablespoon of oil or ghee as about 14 g. For Indian foods it works from the
-            Indian Food Composition Tables (IFCT 2017) where it knows the dish.
+            D-Human&apos;s AI counts in household measures and works back to the raw food: a roti as 20 g of atta and a bowl of
+            dal as 30 g of dry dal, as two Indian cookery textbooks give them. For {FOOD_CODES.length} common foods, iron,
+            calcium, magnesium, zinc and vitamin B12 are then worked out in code from USDA FoodData Central. Calories, protein, the
+            other vitamins and any food off that list are the AI&apos;s estimates.
           </p>
         </Block>
         <Block title="In the language you think in">
@@ -175,7 +178,7 @@ export default function CalorieTrackerPage() {
 
       <GuideCta title="Start with your next meal." body="Snap it, say it or type it, in your language." />
 
-      <SourcesAndMore path={PATH} sources={[ICMR_NIN_2020, IFCT_2017, MIFFLIN_1990]} />
+      <SourcesAndMore path={PATH} sources={[ICMR_NIN_2020, USDA_FDC, KHANNA_2007, RAINA_2011, MIFFLIN_1990]} />
     </>
   );
 }

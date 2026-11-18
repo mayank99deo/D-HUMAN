@@ -9,7 +9,8 @@ import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
 import { HISTORY_DAYS, type MealView } from "@/lib/domain/meals";
 import { MICROS, SHORT_OF_NEED, emptyMicros, inIuOnly, targetsFor, type Micros } from "@/lib/domain/nutrition";
-import { averageDays, sumMicros } from "@/lib/domain/food-sums";
+import { sumMicros } from "@/lib/domain/food-sums";
+import { averageUsualDay, basisLine, basisOf, resolveItem } from "@/lib/domain/meal-minerals";
 import { addDays } from "@/lib/domain/periods";
 import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
 import type { Gap } from "@/lib/domain/supplements";
@@ -70,7 +71,11 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
   const reply = settleReply(data.reply_language, words);
   console.info(`[food] reply ${reply.id} (expected ${words.reply.id}, model said ${data.reply_language ?? "nothing"})`);
 
-  const sum = (k: "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fibre_g") => data.items.reduce((t, i) => t + (i[k] || 0), 0);
+  // Minerals worked out in code from each ingredient's code and raw grams (lib/domain/meal-minerals.ts).
+  const items = data.items.map(resolveItem);
+  const basis = basisOf(items);
+  console.info(basisLine(basis));
+  const sum = (k: "kcal" | "protein_g" | "carbs_g" | "fat_g" | "fibre_g") => items.reduce((t, i) => t + (i[k] || 0), 0);
   const row = {
     // The caller's id when given: it is also the meal's entry in the usage ledger.
     id: input.id ?? newId(),
@@ -81,15 +86,15 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     // Their own words, so the log shows what they said, not the translation.
     inputText: words.said || null,
     title: data.title,
-    items: data.items,
+    items,
     kcal: sum("kcal"),
     proteinG: sum("protein_g"),
     carbsG: sum("carbs_g"),
     fatG: sum("fat_g"),
     fibreG: sum("fibre_g"),
-    // lang: the reply language, kept with the tip (no column needed).
-    // Added up from the items, not taken from the model (lib/domain/food-sums.ts).
-    micros: { ...sumMicros(data.items), tip: data.tip, lang: reply.id },
+    // lang: the reply language, kept with the tip (no column needed); basis: how the minerals were
+    // worked out. Added up from the items, not taken from the model (lib/domain/food-sums.ts).
+    micros: { ...sumMicros(items), tip: data.tip, lang: reply.id, basis },
     confidence: data.confidence,
     model,
   };
@@ -103,7 +108,8 @@ export async function saveTypicalDay(userId: string, profile: Profile, descripti
   if (mode === "off") throw new AiUnavailableError();
   const context = { language: profile.language, diet: profile.diet, focus: await focusMarkers(userId) };
   const { data, model } =
-    mode === "mock" ? await mockDay().then((r) => ({ data: averageDays([r.data]), model: r.model })) : await estimateUsualDay(description, context);
+    mode === "mock" ? await mockDay().then((r) => ({ data: averageUsualDay([r.data]), model: r.model })) : await estimateUsualDay(description, context);
+  if (data.basis) console.info(basisLine(data.basis));
   const d = await db();
   await d
     .insert(schema.dietBaselines)

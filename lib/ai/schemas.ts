@@ -1,5 +1,8 @@
 import { z } from "zod";
+import { FOOD_CODES } from "@/lib/domain/food-table";
 import { EXTRACT_KEYS } from "@/lib/domain/markers";
+import type { Ingredient, MineralBasis } from "@/lib/domain/meal-minerals";
+import type { Micros } from "@/lib/domain/nutrition";
 import { SPOKEN_IDS } from "@/lib/domain/speech";
 import { GAP_OUTCOMES } from "@/lib/domain/supplements";
 
@@ -60,28 +63,45 @@ export const ReadSchema = z.object({
 });
 export type Read = z.infer<typeof ReadSchema>;
 
-const MicrosSchema = z.object({
+// Since 2026-11-18 (second change that day) the model no longer gives minerals for foods on the
+// food list: it names each ingredient's code and raw grams, and code works the minerals out
+// (lib/domain/meal-minerals.ts). It still gives the vitamins for each item, and the minerals of
+// foods off the list. Meals and usual days saved before then have per-item `micros` from the model.
+const MineralsSchema = z.object({
   iron_mg: z.number(),
   calcium_mg: z.number(),
   magnesium_mg: z.number(),
   zinc_mg: z.number(),
   b12_ug: z.number(),
+});
+
+const IngredientSchema = z.object({
+  food: z.enum([...FOOD_CODES, "other"]).describe("The code from the food list, or 'other' when nothing on it fits"),
+  name: z.string().describe("Short, e.g. 'toor dal'"),
+  raw_g: z.number().describe("Edible weight before cooking or soaking (dry dal, raw rice, atta, raw meat without bone). Never cooked weight"),
+  kcal: z.number().describe("Energy of this ingredient alone"),
+  minerals: MineralsSchema.nullable().describe("Only when food is 'other': its iron, calcium, magnesium, zinc and B12 in raw_g. Otherwise null"),
+});
+
+const VitaminsSchema = z.object({
   folate_ug: z.number(),
   vitamin_c_mg: z.number(),
   vitamin_d_iu: z.number(),
 });
 
+// Ingredients come before the item's own totals, so the model lists them first and then estimates
+// the whole portion. With the totals first, a live test returned 0 kcal and 0 macros for the item.
 const ItemSchema = z.object({
   name: z.string(),
   portion: z.string().describe("Household measure, e.g. '2 rotis' or '1 katori (150 mL)'"),
   grams: z.number().nullable(),
-  kcal: z.number(),
+  ingredients: z.array(IngredientSchema),
+  kcal: z.number().describe("The whole portion as eaten, including cooking fat"),
   protein_g: z.number(),
   carbs_g: z.number(),
   fat_g: z.number(),
   fibre_g: z.number(),
-  // Per item since 2026-11-18; the app adds them up (sumMicros), so meals carry no model total.
-  micros: MicrosSchema,
+  vitamins: VitaminsSchema.describe("For the whole portion as eaten"),
 });
 
 export const MealSchema = z.object({
@@ -90,7 +110,7 @@ export const MealSchema = z.object({
   reply_language: z.enum(SPOKEN_IDS).describe("The language you write the title and tip in"),
   title: z.string(),
   meal_guess: z.enum(["breakfast", "lunch", "dinner", "snack"]).nullable(),
-  items: z.array(ItemSchema),
+  items: z.array(ItemSchema).describe("One per dish or food named: '2 rotis, dal and curd' is three items"),
   confidence: z.enum(["high", "medium", "low"]),
   tip: z.string().nullable().describe("One short, specific tip linked to their markers or goal, or null"),
 });
@@ -101,28 +121,35 @@ export const DaySchema = z.object({
     z.object({
       meal: z.enum(["breakfast", "lunch", "dinner", "snack"]),
       title: z.string(),
-      kcal: z.number(),
+      ingredients: z.array(IngredientSchema),
+      kcal: z.number().describe("The whole meal as eaten, including cooking fat"),
       protein_g: z.number(),
       carbs_g: z.number(),
       fat_g: z.number(),
       fibre_g: z.number(),
-      micros: MicrosSchema,
+      vitamins: VitaminsSchema.describe("For the whole meal as eaten"),
     }),
   ),
   patterns: z.array(z.string()).describe("2–4 plain observations about how they eat"),
 });
 export type Day = z.infer<typeof DaySchema>;
 
+/** A usual day's meal as saved: ingredients resolved, micronutrients worked out in code. */
+export type SavedDayMeal = Omit<Day["meals"][number], "ingredients" | "vitamins"> & { ingredients: Ingredient[]; micros: Micros };
+
 /**
  * A usual day as saved: the average of up to USUAL_DAY_RUNS estimates (averageDays), with the
- * day's micronutrients added up in code. Days saved before 2026-11-18 have the model's own
- * day total and no micronutrients per meal.
+ * day's micronutrients added up in code. Older days have less:
+ * - before 2026-11-18: the model's own day total, no micronutrients per meal;
+ * - from 2026-11-18 until the food table: the model's micronutrients per meal, no ingredients or basis.
  */
 export type SavedDay = {
-  meals: (Omit<Day["meals"][number], "micros"> & { micros?: Day["meals"][number]["micros"] })[];
-  micros: Day["meals"][number]["micros"];
+  meals: (Omit<SavedDayMeal, "micros" | "ingredients"> & { micros?: Micros; ingredients?: Ingredient[] })[];
+  micros: Micros;
   patterns: string[];
   runs?: number;
+  /** How the minerals were worked out (since the food table). */
+  basis?: MineralBasis;
 };
 
 export const WrapStorySchema = z.object({

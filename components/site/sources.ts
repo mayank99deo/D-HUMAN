@@ -10,9 +10,24 @@ export const ICMR_NIN_2020: Source = {
   url: "https://www.nin.res.in/rdabook/brief_note.pdf",
 };
 
-export const IFCT_2017: Source = {
-  id: "ifct-2017",
-  text: "Longvah T, et al. Indian Food Composition Tables (IFCT) 2017. ICMR-National Institute of Nutrition, Hyderabad.",
+// Meal minerals for the foods in lib/domain/food-table.ts are worked out from this. Citation as
+// FoodData Central's home page asks (read 2026-11-18); its data are public domain (CC0 1.0).
+// IFCT 2017 isn't used or cited until ICMR-NIN grants written permission (MEMORY.md, 2026-11-18).
+export const USDA_FDC: Source = {
+  id: "usda-fdc",
+  text: "U.S. Department of Agriculture, Agricultural Research Service, Beltsville Human Nutrition Research Center. FoodData Central: SR Legacy (April 2018). Public domain. Cited 18 November 2026.",
+  url: "https://fdc.nal.usda.gov/",
+};
+
+// The raw weight behind household portions (a roti, a bowl of dal): PORTIONS in lib/domain/food-table.ts.
+export const KHANNA_2007: Source = {
+  id: "khanna-2007",
+  text: "Khanna K, Gupta S, Seth R, et al. The Art & Science of Cooking. 5th ed. New Delhi: Elite Publishing, 2007.",
+};
+
+export const RAINA_2011: Source = {
+  id: "raina-2011",
+  text: "Raina U, Kashyap S, Narula V, et al. Basic Food Preparation: A Complete Manual. 4th ed. New Delhi: Orient BlackSwan, 2011.",
 };
 
 export const MIFFLIN_1990: Source = {

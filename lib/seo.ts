@@ -24,7 +24,7 @@ export const GUIDES = [
     label: "Calorie tracker for Indian food",
     crumb: "Calorie tracker",
     blurb: "Snap, say or type a meal in 12 languages.",
-    updated: "2026-11-13",
+    updated: "2026-11-18",
   },
   {
     path: "/protein-tracker",
@@ -45,14 +45,14 @@ export const GUIDES = [
     label: "Supplements from your blood test",
     crumb: "Supplements from your blood test",
     blurb: "Only what a marker or a food gap points to.",
-    updated: "2026-11-13",
+    updated: "2026-11-17",
   },
   {
     path: "/sources-and-safety",
     label: "Sources and safety",
     crumb: "Sources and safety",
     blurb: "Where the numbers come from, and the rules the AI can't break.",
-    updated: "2026-11-13",
+    updated: "2026-11-18",
   },
 ] as const;
 

@@ -41,7 +41,7 @@ Browser ──► Route Handlers (app/api/*) ──► lib/platform/* (services)
 
   The work outlives the connection (`after()`); the screen falls back to polling.
 - **Events** (`lib/platform/events.ts`). Claude with web search finds upcoming events for an activity and region, plus the event the person named, only with a source page and only dates it found. They are stored in `events` and shared by everyone with the same activity and metro area (`lib/domain/region.ts`: Thane, Navi Mumbai and Bombay count as Mumbai; Gurgaon and Noida as Delhi NCR), refreshed every 14 days.
-- **Food** (`lib/platform/food.ts`). Claude reads a photo or words into items with Indian household portions (IFCT 2017 values where it knows them), macros and eight micronutrients. Targets (`lib/domain/nutrition.ts`):
+- **Food** (`lib/platform/food.ts`). Claude reads a photo or words into items, each broken into ingredients: a code from the food list and raw grams, using household portions from two Indian textbooks (20 g atta a roti, 30 g dry dal a bowl; `PORTIONS` in `lib/domain/food-table.ts`). For the 125 foods on that list, code works out iron, calcium, magnesium, zinc and B12 from USDA FoodData Central SR Legacy (public domain), lowering the grams when the table's energy runs far above Claude's kcal (`lib/domain/meal-minerals.ts`). Calories, macros, folate, vitamins C and D, and every nutrient of a food off the list stay Claude's estimates. IFCT 2017 isn't stored or used until ICMR-NIN gives written permission. Targets (`lib/domain/nutrition.ts`):
   - Energy: Mifflin–St Jeor × an activity factor.
   - Protein: 0.83 g/kg (ICMR-NIN 2020) for sedentary adults, up to 1.4–2.0 g/kg for training.
   - Micronutrients: ICMR-NIN 2020 allowances.

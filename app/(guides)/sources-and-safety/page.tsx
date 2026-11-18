@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Block, GuideCta, GuideHero, JsonLd, Points, Section, SourcesAndMore } from "@/components/site/Guide";
-import { ICMR_NIN_2020, IFCT_2017, ISSN_2017, MIFFLIN_1990, VITAMIN_D_RESEARCH } from "@/components/site/sources";
+import { ICMR_NIN_2020, ISSN_2017, KHANNA_2007, MIFFLIN_1990, RAINA_2011, USDA_FDC, VITAMIN_D_RESEARCH } from "@/components/site/sources";
+import { FOOD_CODES } from "@/lib/domain/food-table";
 import { guideLd, pageMetadata } from "@/lib/seo";
 
 // The trust page the other guides point to: which AI, the rules in code it can't
@@ -18,7 +19,11 @@ export const metadata: Metadata = pageMetadata({ path: PATH, title: TITLE, descr
 
 const NUMBERS: [string, string][] = [
   ["Your ranges", "The range printed on your lab report. Only when there's none, a typical adult range, labelled “typical range”."],
-  ["Meal estimates", "The Indian Food Composition Tables (IFCT 2017) for Indian foods where the AI knows the dish, and USDA values otherwise."],
+  // Mirrors lib/ai/food.ts and lib/domain/meal-minerals.ts: portions from PORTIONS in lib/domain/food-table.ts.
+  [
+    "Meal estimates",
+    `Calories, protein, carbs, fat, fibre, folate and vitamins C and D are the AI's estimates, in household portions from two Indian cookery textbooks (a roti is 20 g of atta). For ${FOOD_CODES.length} common foods, iron, calcium, magnesium, zinc and vitamin B12 are worked out in code from USDA FoodData Central; for any other food, they're AI estimates too.`,
+  ],
   ["Calorie targets", "The Mifflin–St Jeor equation for resting energy, times an activity factor for how you train."],
   ["Protein and micronutrients", "ICMR-NIN's 2020 requirements for Indians; more protein for people who train, up to the 2.0 g per kg the International Society of Sports Nutrition gives as the top of its range."],
   ["Ratios", "Worked out in code from your own results, such as triglyceride to HDL, after converting units."],
@@ -109,7 +114,10 @@ export default function SourcesAndSafetyPage() {
 
       <GuideCta title="Start with your next meal." body="Or upload a blood report you already have." />
 
-      <SourcesAndMore path={PATH} sources={[ICMR_NIN_2020, IFCT_2017, MIFFLIN_1990, ISSN_2017, VITAMIN_D_RESEARCH]} />
+      <SourcesAndMore
+        path={PATH}
+        sources={[ICMR_NIN_2020, USDA_FDC, KHANNA_2007, RAINA_2011, MIFFLIN_1990, ISSN_2017, VITAMIN_D_RESEARCH]}
+      />
     </>
   );
 }

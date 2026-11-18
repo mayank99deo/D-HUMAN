@@ -2,21 +2,39 @@ import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
-import { USUAL_DAY_RUNS, averageDays, settledRuns } from "@/lib/domain/food-sums";
+import { USUAL_DAY_RUNS, settledRuns } from "@/lib/domain/food-sums";
+import { foodListText, portionsText } from "@/lib/domain/food-table";
+import { averageUsualDay } from "@/lib/domain/meal-minerals";
 import type { MealWords } from "@/lib/domain/speech";
 import { DaySchema, MealSchema, type Day, type Meal, type SavedDay } from "./schemas";
 
-// Micronutrients come per item (per meal for the usual day) and the app adds them up
-// (lib/domain/food-sums.ts): the model's own meal totals ran about a third under its items.
-// IFCT 2017 reference values were tried in this prompt on 2026-11-17 and taken out again:
-// the model applied raw-food values to cooked rice and dal (rice minerals at about 3 times
-// IFCT). Minerals from raw grams and IFCT codes, worked out in code, are planned instead.
+// Minerals are worked out in code (lib/domain/meal-minerals.ts): the model names each ingredient's
+// code from the food list and its raw weight, and the app multiplies by USDA values. The model still
+// gives energy and macros, the vitamins, and the minerals of foods off the list.
+// Reference values per 100 g were tried in this prompt on 2026-11-17 and taken out again: the model
+// applied raw-food values to cooked rice and dal (rice minerals at about 3 times the reference). So the
+// prompt carries portions as raw grams to copy, never values to multiply.
+// The portions are the textbook ones (lib/domain/food-table.ts, PORTIONS); until 2026-11-18 this prompt
+// said 35 g atta a roti, against the textbooks' 20 g.
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
-- Use Indian household measures: 1 katori ≈ 150 mL, 1 medium roti ≈ 35 g atta, 1 cup rice (cooked) ≈ 150 g, 1 tbsp oil or ghee ≈ 14 g.
-- Base estimates on standard composition values (IFCT 2017 for Indian foods, USDA otherwise). Account for cooking oil and ghee, which people forget.
-- Estimate micronutrients for each item's whole portion (or each meal's, when asked for meals): iron (mg), calcium (mg), magnesium (mg), zinc (mg), B12 (µg), folate (µg), vitamin C (mg), vitamin D (IU). Use 0 when it has essentially none. The app adds them up.
+- One item per dish or food the person names: "2 rotis, dal and curd" is three items.
+- For each item, first list its ingredients:
+  - food: its code from the food list below. Break dishes into the listed foods they're made of (atta for roti, maida for bread, curd for raita, chana for chole, toor_dal for sambar). A food that isn't on the list is "other", never the nearest listed food: rohu is not tilapia, ragi is not rice.
+  - raw_g: its edible weight before cooking or soaking: dry dal, raw rice, atta, raw meat without bone. Never the cooked weight. Copy it from the portions below; when the person gives a raw amount, use it as given. Write each weight once; don't convert it again.
+  - kcal: the energy of that ingredient alone.
+  - minerals: null for foods on the list; the app looks up their iron, calcium, magnesium, zinc and B12. For "other" only, give those five for raw_g: iron (mg), calcium (mg), magnesium (mg), zinc (mg), B12 (µg).
+  - Cooking oil, ghee and butter are their own ingredients. Leave out water, salt and spices.
+- Then estimate the item's own totals for the whole portion as eaten (each meal's, when asked for meals): kcal, protein, carbs, fat and fibre, counting cooking oil and ghee, which people forget; and its vitamins: folate (µg), vitamin C (mg), vitamin D (IU). These are always yours to estimate: kcal and macros are never 0 for real food, and a vitamin is 0 only when the food has essentially none. Base them on standard composition values (IFCT 2017 for Indian foods, USDA otherwise).
 - Be honest about uncertainty with confidence: high when portions are clear, low when guessing.
-- If what you're given isn't food or drink, set is_food false and return no items.`;
+- If what you're given isn't food or drink, set is_food false and return no items.
+
+Portions, as raw weight (1 katori ≈ 150 mL):
+${portionsText()}
+
+Food list (code and what it covers):
+${foodListText()}`;
+
+const SYSTEM = `${VOICE}\n\n${FOOD_RULES}`;
 
 export type FoodContext = { language: string; diet: string | null; focus: string[] };
 
@@ -89,7 +107,7 @@ export async function estimateMeal(input: MealRequest): Promise<{ data: Meal; mo
       // A calorie estimate gains little from a long think; this keeps logging a meal quick.
       ...(MODELS.food.startsWith("claude-haiku") ? { thinking: { type: "disabled" as const } } : {}),
       output_config: { effort: "low", format: betaZodOutputFormat(MealSchema) },
-      system: `${VOICE}\n\n${FOOD_RULES}`,
+      system: SYSTEM,
       messages: [{ role: "user", content }],
     }, MEAL_DEADLINE)
     .finalMessage();
@@ -107,13 +125,13 @@ export async function estimateTypicalDay(description: string, context: FoodConte
       max_tokens: 16000,
       ...fallbackFor(MODELS.food),
       output_config: { effort: "low", format: betaZodOutputFormat(DaySchema) },
-      system: `${VOICE}\n\n${FOOD_RULES}`,
+      system: SYSTEM,
       messages: [
         {
           role: "user",
           content: `This is how I usually eat on a normal day: "${description}"
 
-Break it into meals, each with its estimates and micronutrients. ${contextLine(context)}
+Break it into meals, each with its estimates, ingredients and vitamins. ${contextLine(context)}
 Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protein comes at dinner"). ${languageRule(context.language)}`,
         },
       ],
@@ -126,11 +144,12 @@ Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protei
 }
 
 /**
- * A usual day, estimated USUAL_DAY_RUNS times at once and averaged (averageDays). Estimates
- * that fail are left out; only when all of them fail does the first error come back.
+ * A usual day, estimated USUAL_DAY_RUNS times at once and averaged, each estimate's minerals worked
+ * out in code first (averageUsualDay). Estimates that fail are left out; only when all of them fail
+ * does the first error come back.
  */
 export async function estimateUsualDay(description: string, context: FoodContext): Promise<{ data: SavedDay; model: string }> {
   const runs = await settledRuns(USUAL_DAY_RUNS, () => estimateTypicalDay(description, context));
   if (runs.length < USUAL_DAY_RUNS) console.warn(`[food] usual day from ${runs.length} of ${USUAL_DAY_RUNS} estimates`);
-  return { data: averageDays(runs.map((r) => r.data)), model: runs[0].model };
+  return { data: averageUsualDay(runs.map((r) => r.data)), model: runs[0].model };
 }

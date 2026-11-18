@@ -1,5 +1,7 @@
 import "server-only";
+import { FOODS, type FoodCode } from "@/lib/domain/food-table";
 import { markerDef } from "@/lib/domain/markers";
+import type { Minerals } from "@/lib/domain/meal-minerals";
 import { scriptLanguage, soundsLikeHindi, spokenById, type MealWords, type SpokenId } from "@/lib/domain/speech";
 import type { Day, Extracted, Meal, Read, StackPlan, WrapStory } from "./schemas";
 import type { ReadInput } from "./report";
@@ -109,16 +111,24 @@ export async function mockEvents(what: string, city: string | null): Promise<{ e
   };
 }
 
-const MEALS: [RegExp, string, number, number, number, number, number][] = [
-  [/rajma|chawal/i, "Rajma chawal", 520, 17, 88, 10, 12],
-  [/dal|roti|sabzi/i, "Dal, roti and sabzi", 480, 18, 70, 14, 11],
-  [/poha/i, "Poha", 320, 7, 55, 9, 3],
-  [/egg|anda|omelette/i, "Egg bhurji with toast", 380, 22, 28, 20, 2],
-  [/paneer/i, "Paneer with roti", 560, 26, 44, 30, 6],
-  [/chicken/i, "Chicken curry with rice", 640, 38, 70, 22, 4],
+// Demo ingredients go through the same code as live ones (lib/domain/meal-minerals.ts), so demo
+// minerals are the food table's. Their kcal is the table's for those grams, so the energy check
+// leaves them alone. Foods off the list carry illustrative minerals, as the model would.
+type AiIngredient = Meal["items"][number]["ingredients"][number];
+const ing = (food: FoodCode, raw_g: number): AiIngredient => ({ food, name: food.replace(/_/g, " "), raw_g, kcal: Math.round((FOODS[food].kcal * raw_g) / 100), minerals: null });
+const other = (name: string, raw_g: number, kcal: number, minerals: Minerals): AiIngredient => ({ food: "other", name, raw_g, kcal, minerals });
+const VITAMINS = { folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 };
+
+const MEALS: [RegExp, string, number, number, number, number, number, AiIngredient[]][] = [
+  [/rajma|chawal/i, "Rajma chawal", 520, 17, 88, 10, 12, [ing("rajma", 30), ing("rice_white", 100), ing("onion", 25), ing("tomato", 50), ing("oil", 7)]],
+  [/dal|roti|sabzi/i, "Dal, roti and sabzi", 480, 18, 70, 14, 11, [ing("atta", 40), ing("ghee", 2.5), ing("toor_dal", 30), ing("potato", 100), ing("oil", 10)]],
+  [/poha/i, "Poha", 320, 7, 55, 9, 3, [other("poha", 40, 140, { iron_mg: 1.8, calcium_mg: 8, magnesium_mg: 20, zinc_mg: 0.5, b12_ug: 0 }), ing("peanuts", 10), ing("potato", 30), ing("oil", 10)]],
+  [/egg|anda|omelette/i, "Egg bhurji with toast", 380, 22, 28, 20, 2, [ing("egg", 100), ing("butter", 5), ing("onion", 20), other("bread", 50, 130, { iron_mg: 1.2, calcium_mg: 40, magnesium_mg: 20, zinc_mg: 0.5, b12_ug: 0 })]],
+  [/paneer/i, "Paneer with roti", 560, 26, 44, 30, 6, [ing("paneer", 75), ing("atta", 40), ing("oil", 14), ing("tomato", 50), ing("onion", 50)]],
+  [/chicken/i, "Chicken curry with rice", 640, 38, 70, 22, 4, [ing("chicken", 125), ing("oil", 7), ing("onion", 50), ing("tomato", 50), ing("rice_white", 106)]],
 ];
 
-const NO_MATCH: (typeof MEALS)[number] = [/./, "", 450, 15, 60, 15, 5];
+const NO_MATCH: (typeof MEALS)[number] = [/./, "", 450, 15, 60, 15, 5, [other("meal", 300, 450, { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2 })]];
 
 // "Your meal" in each reply language, so demo meals show the language a live reply would use.
 const YOUR_MEAL: Record<SpokenId, string> = {
@@ -150,7 +160,7 @@ export async function mockMeal(words: Pick<MealWords, "said" | "english" | "repl
   await wait(1200);
   const heard = `${words.said} ${words.english ?? ""}`;
   const hit = MEALS.find(([re]) => re.test(heard));
-  const [, matched, kcal, protein_g, carbs_g, fat_g, fibre_g] = hit ?? NO_MATCH;
+  const [, matched, kcal, protein_g, carbs_g, fat_g, fibre_g, ingredients] = hit ?? NO_MATCH;
   const food = hit ? matched : words.said.slice(0, 40) || "Your meal";
   const reply = spokenById(mockReplyLanguage(words));
   const local = reply.id === "en" ? null : YOUR_MEAL[reply.id];
@@ -163,8 +173,7 @@ export async function mockMeal(words: Pick<MealWords, "said" | "english" | "repl
       meal_guess: null,
       items: [
         {
-          name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g,
-          micros: { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2, folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 },
+          name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g, ingredients, vitamins: VITAMINS,
         },
       ],
       confidence: "low",
@@ -179,16 +188,20 @@ export async function mockDay(): Promise<{ data: Day; model: string }> {
   return {
     data: {
       meals: [
-        // The same day totals as before (iron 11, calcium 520, magnesium 260, zinc 7, B12 0.8,
-        // folate 210, vitamin C 30, vitamin D 20), now per meal; the app adds them up.
+        // Minerals come from the food table (poha and biscuits are off the list, so they carry their
+        // own); the vitamins are the same as before the table.
         { meal: "breakfast", title: "Chai and poha", kcal: 380, protein_g: 8, carbs_g: 62, fat_g: 11, fibre_g: 3,
-          micros: { iron_mg: 3, calcium_mg: 120, magnesium_mg: 50, zinc_mg: 1.5, b12_ug: 0.2, folate_ug: 40, vitamin_c_mg: 8, vitamin_d_iu: 0 } },
+          ingredients: [other("poha", 40, 140, { iron_mg: 1.8, calcium_mg: 8, magnesium_mg: 20, zinc_mg: 0.5, b12_ug: 0 }), ing("peanuts", 10), ing("oil", 10), ing("milk", 50), ing("sugar", 8)],
+          vitamins: { folate_ug: 40, vitamin_c_mg: 8, vitamin_d_iu: 0 } },
         { meal: "lunch", title: "Dal, roti, sabzi", kcal: 520, protein_g: 18, carbs_g: 76, fat_g: 15, fibre_g: 11,
-          micros: { iron_mg: 3.5, calcium_mg: 110, magnesium_mg: 100, zinc_mg: 2.5, b12_ug: 0, folate_ug: 90, vitamin_c_mg: 15, vitamin_d_iu: 0 } },
+          ingredients: [ing("atta", 60), ing("toor_dal", 30), ing("potato", 100), ing("oil", 10)],
+          vitamins: { folate_ug: 90, vitamin_c_mg: 15, vitamin_d_iu: 0 } },
         { meal: "snack", title: "Biscuits with chai", kcal: 210, protein_g: 3, carbs_g: 32, fat_g: 8, fibre_g: 1,
-          micros: { iron_mg: 1, calcium_mg: 90, magnesium_mg: 20, zinc_mg: 0.5, b12_ug: 0.2, folate_ug: 10, vitamin_c_mg: 0, vitamin_d_iu: 5 } },
+          ingredients: [other("biscuits", 30, 140, { iron_mg: 0.6, calcium_mg: 20, magnesium_mg: 8, zinc_mg: 0.2, b12_ug: 0 }), ing("milk", 50), ing("sugar", 8)],
+          vitamins: { folate_ug: 10, vitamin_c_mg: 0, vitamin_d_iu: 5 } },
         { meal: "dinner", title: "Rice, dal and curd", kcal: 560, protein_g: 19, carbs_g: 90, fat_g: 12, fibre_g: 7,
-          micros: { iron_mg: 3.5, calcium_mg: 200, magnesium_mg: 90, zinc_mg: 2.5, b12_ug: 0.4, folate_ug: 70, vitamin_c_mg: 7, vitamin_d_iu: 15 } },
+          ingredients: [ing("rice_white", 100), ing("moong", 30), ing("curd", 155), ing("oil", 5)],
+          vitamins: { folate_ug: 70, vitamin_c_mg: 7, vitamin_d_iu: 15 } },
       ],
       patterns: ["Demo: most of your protein comes from dal.", "Demo: chai with meals may cut the iron you absorb."],
     },

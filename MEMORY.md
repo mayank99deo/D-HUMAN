@@ -63,7 +63,17 @@ The running record of this project: where things stand, why they are the way the
   - **What counts as data:**
     - A logged day counts only with two or more meals and at least 75% of the energy target. A "usual day" counts from 60% (`USUAL_DAY_SHARE`; it was 40% until 2026-11-18). Both are constants in `lib/platform/food.ts`.
     - The usual day is estimated 3 times in parallel and averaged, and saved with its run count. One estimate swung 10–34% between runs; two averaged saves agree within 0–6%. A vague "dal chawal, roti sabzi, chai" came out at 34–43% and no longer counts. A usual day under the floor says so: Stack's "Your usual day looks lighter than a full day's food…" with "Add to my usual day", and a line on Fuel's card.
-    - Meal and usual-day micronutrients are given per item and added up in code (`lib/domain/food-sums.ts`). This makes one meal's B12 swing more (about ±0.2 µg, from the portion the AI picks), but stacks only use averages. The IFCT raw-grams design will remove it.
+    - Meal and usual-day micronutrients are given per item and added up in code (`lib/domain/food-sums.ts`).
+    - **Computed minerals (2026-11-18, systems and data engineer):**
+      - **What's computed:** the AI returns each ingredient as a code from a fixed list with its raw grams. Iron, calcium, magnesium and zinc, plus B12 for animal foods, are worked out in code from USDA SR Legacy (`lib/domain/food-table.ts`, 125 foods, public domain, each row with its FDC id). The work is in `lib/domain/meal-minerals.ts`.
+      - **Portions:** textbook values, 20 g atta per roti and 30 g dry dal per bowl.
+      - **The energy check:** it can only lower grams, which catches raw/cooked mix-ups ("1 cup cooked rice" becomes 56 g raw).
+      - **What stays AI estimates:** foods off the list (saved as "ai"), and folate, vitamin C and vitamin D.
+      - **Mayank's calls:**
+        - Accept the cost: $0.00088 a meal (about ₹7 a month per active user), $0.0096 a usual-day save; prompt caching comes later.
+        - Accept whole-seed dal reading magnesium 1.2–1.5 times high (it errs towards fewer suggestions) until IFCT permission.
+        - Zinc stays paused for the doctor review.
+      - **Measured:** zinc within 5% of hand-built sums in 8 of 10 meals (0 of 10 before), and calcium's run-to-run spread down from 93% at worst to 27%.
     - Why: run-to-run noise in the AI's estimates flips at most about 6% of 3-day averages. Partly logged days were the real bias: magnesium came out short on 91% of days logged at 65% of energy, against 13% at full energy.
     - Two cups of chai a day had once earned five supplements.
   - **What your food is short of** (`foodGaps` in `lib/domain/supplements.ts`, saved in the plan as `gaps` and `gaps_basis`):
@@ -168,6 +178,10 @@ The running record of this project: where things stand, why they are the way the
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
+- [ ] IFCT 2017 permission from ICMR-NIN (Mayank to send; draft by the chief of staff in `docs/team/outreach/`). Until it's granted, no IFCT values in the repo or the product; the computed minerals use USDA. Also unblocks SEO food pages (`docs/team/seo/STRATEGY.md`).
+- [ ] The zinc target: even exact zinc against ICMR's 17 mg shows most vegetarian men short. That's a separate target decision, for the doctor or dietitian review (Mayank, 2026-11-18: zinc stays paused until then; `ZINC_FROM_FOOD`).
+- [ ] Prompt caching for meal estimates once traffic passes about one meal every 5 minutes (the computed-minerals schema made a meal $0.00088). Also later: folate and vitamin C from USDA with cooking losses; a recompute script if NIN grants IFCT.
+- [ ] Dal minerals: USDA has only whole toor, moong and urad, so dal magnesium reads 1.2–1.5 times and calcium 1.8–3 times high against split dal. Fix with IFCT (it has split dals) or another sourced value.
 - [ ] Accounts made before the 18+ rule can get stacks without a report (part of the 18+ decision below).
 - [ ] Daily caps reset when reports are deleted (QA, 2026-11-17): `readLimitReached` counts today's report rows and the stack cap counts stacks, so delete-and-retry gets around the 10 reads and 5 stacks a day (the plan's own read limits still hold; a junk file whose read fails costs an AI extraction each round, up to 6 an hour per server). Fix: count attempts where deletes don't reach (a ledger, needs a migration).
 - [ ] Home and wraps pick the "latest" report by upload order, not by when the blood was taken: uploading last year's report after this year's makes Home show last year's as current, and wraps compare in upload order.
@@ -223,6 +237,36 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-18
+- **Minerals worked out in code from USDA, honest guide copy, and the NIN request draft (Mayank: "USDA now, ask NIN too", textbook portions; decisions in Decisions):**
+  - **Systems and data engineer:**
+    - Built `lib/domain/food-table.ts` (125 foods, USDA SR Legacy, public domain, each with its FDC id) and `lib/domain/meal-minerals.ts` (ingredient codes and raw grams, minerals in code, and an energy check that only lowers grams), plus schema, prompt and mock changes and 29 tests.
+    - The live harness caught and fixed three bugs: 0-kcal meals, energy corrections that raised grams, and rohu coded as surmai. Spend was $0.23.
+    - Zinc is now within 5% of hand-built sums in 8 of 10 meals.
+  - **QA (production build, demo mode):**
+    - Meals by text, photo and voice add up, with no 0-kcal meals; listed foods trace to their FDC id; unlisted foods are marked "ai".
+    - The usual day saves and builds stacks (including a vegan's).
+    - Old data renders.
+    - The Stack's gap rows are right.
+    - No IFCT numeric table anywhere.
+    - No console errors at 390 or 320 px.
+  - **SEO lead:** rewrote the meal-source lines in `/sources-and-safety`, `/calorie-tracker` and `docs/platform/PHASE-1.md` to match: USDA for minerals in code, AI estimates for the rest, textbook portions. It swapped `IFCT_2017` in `components/site/sources.ts` for `USDA_FDC`, `KHANNA_2007` and `RAINA_2011`, and updated the guides' dates (the supplements guide's to 2026-11-17).
+  - **Chief of staff:** drafted the NIN permission request in `docs/team/outreach/2026-11-18-nin-ifct-permission.md` (To: `director.nin@icmr.gov.in`). It's not sent; Mayank fills in his contact details and sends it after adding DMARC.
+  - **Checked by the orchestrator:**
+    - Typecheck, lint, 319 tests, the production build.
+    - The three guides render the new lines and sources with the right dates, and nothing in app, components, lib or tests references `IFCT_2017`.
+  - **For Mayank:** FoodData Central asks products using its data to tell USDA where possible.
+- **Push `8d690c1`:** the entry below. Live about 54 s later. Signed out, `/stack`, `/fuel` and `/wraps` send visitors to `/signin`, `POST /api/food/typical` gives 401, and the landing gives 200.
+- **IFCT can't ship without NIN's permission (systems and data engineer):**
+  - **The licence:** IFCT 2017's copyright page forbids storing it electronically "for creating a product" without NIN's written permission. The GitHub copy (nodef/ifct2017) is AGPL-3.0, and INDB has no licence.
+  - **No values in the repo:** none were ever committed; the trial's 9-row table was deleted before the 2026-11-17 commit.
+  - **What else the engineer found:**
+    - IFCT 2017 is 528 raw foods, with no recipes, no B12, no curd and no bread.
+    - Its plant vitamin D2 values are unusable (atta 537 IU per 100 g).
+    - Two Indian textbooks behind INDB's recipes agree on 30 g dry dal per bowl and 20 g atta per roti; today's prompt says 35 g.
+  - **Mayank's calls:**
+    - Build the computed minerals on USDA FoodData Central (public domain) now, ask NIN for permission in parallel, and switch to IFCT if they agree.
+    - Use the textbook portions.
+  - **In progress:** the systems and data engineer is building it, and the chief of staff is drafting the NIN email.
 - **Steadier usual days, and meals added up in code (Mayank: average the usual day, a 60% floor, correct with IFCT; then "ship the safe part, build IFCT properly"):**
   - **The AI efficiency lead built it:**
     - Per-item micronutrients summed in code (`lib/domain/food-sums.ts`, `lib/ai/schemas.ts`).
