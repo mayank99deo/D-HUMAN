@@ -13,7 +13,7 @@ allowAppImports();
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { LEGACY_HOSTS, SITE_ORIGIN, absoluteUrl, siteUrl } = await import("../lib/site-url.ts");
 const { SESSION_COOKIE } = await import("../lib/auth/cookie.ts");
-const { APP_FEATURES, APP_PATHS, GUIDES, HOME_DESCRIPTION, appLd, guideLd, homeLd, ldJson, organizationLd } = await import("../lib/seo.ts");
+const { APP_FEATURES, APP_PATHS, GUIDES, HOME_DESCRIPTION, appLd, guideLd, homeLd, ldJson, organizationLd, siteMap } = await import("../lib/seo.ts");
 const { SPOKEN } = await import("../lib/domain/speech.ts");
 
 const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, vercel: process.env.VERCEL };
@@ -102,23 +102,29 @@ describe("redirects", async () => {
 
 describe("robots.txt and the sitemap", async () => {
   const robots = (await import("../app/robots.ts")).default;
-  const sitemap = (await import("../app/sitemap.ts")).default;
 
   it("keeps the app and the API out, and lets crawlers read /signin, pages and assets", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://d-human.vercel.app";
     const r = robots();
     const rule = Array.isArray(r.rules) ? r.rules[0] : r.rules;
     const disallow = [rule.disallow].flat();
+    const blocked = (p: string) => disallow.some((d) => p.startsWith(d!));
     for (const p of ["/api/", "/home", "/fuel", "/upload", "/reports", "/stack", "/wraps", "/settings", "/onboarding"]) {
       assert.ok(disallow.includes(p), p);
     }
-    for (const p of ["/", "/signin", "/_next/"]) assert.ok(!disallow.some((d) => p.startsWith(d!)), p);
+    // The blog's editor and the pages opened from emails are personal.
+    for (const p of ["/write", "/write/abc/preview", "/email/stop", "/feedback"]) assert.ok(blocked(p), p);
+    // The blog, its photos, author pages, and the images inside emails stay crawlable.
+    for (const p of ["/", "/signin", "/_next/", "/blog", "/blog/img/abc/w960-a1b2c3.webp", "/team/mayank-narayan", "/editorial-policy", "/email/wordmark.png"]) {
+      assert.ok(!blocked(p), p);
+    }
     assert.equal(r.sitemap, `${SITE_ORIGIN}/sitemap.xml`);
   });
 
   it("lists every public page once, on the canonical host, and nothing robots.txt blocks", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://d-human.vercel.app";
-    const urls = sitemap().map((e) => e.url);
+    // Before the first post: the landing page and the guides only.
+    const urls = siteMap({ posts: [], authors: [] }).map((e) => e.url);
     assert.deepEqual(urls, [`${SITE_ORIGIN}/`, ...GUIDES.map((g) => `${SITE_ORIGIN}${g.path}`)]);
     assert.equal(new Set(urls).size, urls.length);
     for (const g of GUIDES) {
@@ -216,5 +222,147 @@ describe("icons", () => {
     const { width, height } = pngSize(file);
     assert.deepEqual([width, height], [logo.width, logo.height]);
     assert.ok(width === height && width >= 112);
+  });
+});
+
+// The blog in search (SEO plan §4): every list, the sitemap, the feed and the markup take the
+// registry's posts as arguments, so these tests pass their own.
+describe("the blog in search", async () => {
+  const seo = await import("../lib/seo.ts");
+  const { TRY_IT_COPY } = await import("../lib/blog/blocks.ts");
+  const { BLOG_TOPICS } = await import("../lib/blog/types.ts");
+  const { AUTHOR, image, live, summary } = await import("./support/blog.ts");
+  type LivePost = import("../lib/blog/types.ts").LivePost;
+
+  const share = { imageId: "share-1", files: { og: "og-a1b2c3.jpg", "16x9": "16x9-a1b2c3.jpg", "4x3": "4x3-a1b2c3.jpg", "1x1": "1x1-a1b2c3.jpg" } };
+  const livePost = (over: Partial<LivePost> = {}): LivePost => {
+    const l = live();
+    const s = summary({
+      slug: "protein-per-katori",
+      title: l.title,
+      dek: l.dek,
+      seoDescription: l.seoDescription,
+      topic: "protein",
+      publishedAt: "2026-11-12T03:30:00.000Z",
+      updatedOn: "2026-11-14T03:30:00.000Z",
+      share,
+    });
+    return { ...l, ...s, cover: { ...l.images["img-cover"], ...l.cover! }, ...over };
+  };
+  const other = { ...AUTHOR, id: "author-2", slug: "no-posts-yet", name: "No Posts" };
+
+  it("keeps every blog address clear of what robots.txt blocks", () => {
+    const paths = [
+      seo.BLOG_PATH,
+      seo.blogPagePath(2),
+      seo.BLOG_FEED_PATH,
+      seo.postPath("roti-calories"),
+      seo.teamPath("mayank-narayan"),
+      seo.EDITORIAL_PATH,
+      ...BLOG_TOPICS.map(seo.topicPath),
+    ];
+    for (const p of paths) assert.ok(!APP_PATHS.some((a) => p.startsWith(a)), p);
+    assert.equal(seo.blogPagePath(1), "/blog");
+  });
+
+  it("puts the blog in the sitemap only once a post is live, with dates and images that match the posts", () => {
+    const posts = [
+      summary({ slug: "roti-calories", updatedOn: "2026-11-14T03:30:00.000Z", share }),
+      summary({ slug: "dal-calories", cover: { ...image("img-dal"), alt: "Dal" } }),
+      summary({ slug: "thali-calories" }),
+      summary({ slug: "protein-per-katori", topic: "protein" }),
+    ];
+    const entries = siteMap({ posts, authors: [AUTHOR, other] });
+    const urls = entries.map((e) => e.url);
+    assert.equal(new Set(urls).size, urls.length);
+    for (const u of urls) assert.ok(u.startsWith(`${SITE_ORIGIN}/`) && !APP_PATHS.some((a) => u.startsWith(`${SITE_ORIGIN}${a}`)), u);
+    const blogUrls = urls.slice(1 + GUIDES.length);
+    assert.deepEqual(blogUrls, [
+      `${SITE_ORIGIN}/blog`,
+      ...posts.map((p) => `${SITE_ORIGIN}/blog/${p.slug}`),
+      `${SITE_ORIGIN}/blog/topics/calories`, // 3 posts; protein has 1, so it stays out
+      `${SITE_ORIGIN}/team/mayank-narayan`, // no page for an author without posts
+      `${SITE_ORIGIN}/editorial-policy`,
+    ]);
+    const byUrl = new Map(entries.map((e) => [e.url, e]));
+    assert.equal(byUrl.get(`${SITE_ORIGIN}/blog/roti-calories`)?.lastModified, "2026-11-14T09:00:00+05:30");
+    assert.equal(byUrl.get(`${SITE_ORIGIN}/blog/thali-calories`)?.lastModified, "2026-11-10T09:00:00+05:30");
+    assert.deepEqual(byUrl.get(`${SITE_ORIGIN}/blog/roti-calories`)?.images, [`${SITE_ORIGIN}/blog/img/share-1/16x9-a1b2c3.jpg`]);
+    assert.deepEqual(byUrl.get(`${SITE_ORIGIN}/blog/dal-calories`)?.images, [`${SITE_ORIGIN}/blog/img/img-dal/w1600-a7b8c9.webp`]);
+    assert.equal(byUrl.get(`${SITE_ORIGIN}/blog/thali-calories`)?.images, undefined, "a drawn cover isn't an image file");
+  });
+
+  it("marks up a post as a BlogPosting with its author, dates in India's time zone, and no review it didn't have", () => {
+    const post = livePost();
+    const text = ldJson(seo.postLd(post));
+    assert.doesNotMatch(text, /reviewedBy|lastReviewed|MedicalWebPage|FAQPage/);
+    const graph = JSON.parse(text)["@graph"];
+    assert.deepEqual(
+      graph.map((n: { "@type": string }) => n["@type"]),
+      ["WebPage", "ImageObject", "BlogPosting", "BreadcrumbList"],
+    );
+    const posting = graph[2];
+    assert.equal(posting.datePublished, "2026-11-12T09:00:00+05:30");
+    assert.equal(posting.dateModified, "2026-11-14T09:00:00+05:30");
+    assert.equal(posting.headline, post.title);
+    assert.equal(posting.image.length, 3);
+    assert.equal(posting.articleSection, "Protein");
+    const person = JSON.parse(ldJson(seo.profileLd(AUTHOR)))["@graph"].find((n: { "@type": string }) => n["@type"] === "Person");
+    assert.equal(posting.author[0]["@id"], person["@id"]);
+    assert.deepEqual(person.sameAs, ["https://www.linkedin.com/in/example"]);
+    const blog = JSON.parse(ldJson(seo.blogIndexLd([post])))["@graph"][0];
+    assert.equal(blog["@type"], "Blog");
+    assert.equal(posting.isPartOf["@id"], blog["@id"]);
+    const crumbs = graph[3].itemListElement.map((i: { name: string }) => i.name);
+    assert.deepEqual(crumbs, ["D-Human", "Blog", "Protein", post.title]);
+  });
+
+  it("can't be closed early by a post's own words", () => {
+    const text = ldJson(seo.postLd(livePost({ title: "</script><script>alert(1)</script>" })));
+    assert.ok(!text.includes("<"));
+  });
+
+  it("gives a post article share tags with its own image, and falls back to the site's", () => {
+    const meta = seo.postMetadata(livePost());
+    assert.equal(meta.alternates?.canonical, "/blog/protein-per-katori");
+    assert.match(String((meta.title as { absolute: string }).absolute), / \| D-Human$/);
+    const og = meta.openGraph as { type: string; images: { url: string }[]; publishedTime: string };
+    assert.equal(og.type, "article");
+    assert.equal(og.publishedTime, "2026-11-12T03:30:00.000Z");
+    assert.equal(og.images[0].url, "/blog/img/share-1/og-a1b2c3.jpg");
+    assert.deepEqual(meta.robots, { index: true, follow: true, "max-image-preview": "large" });
+    const plain = seo.postMetadata(livePost({ share: null })).openGraph as { images: { url: string }[] };
+    assert.equal(plain.images[0].url, "/opengraph-image.png");
+    assert.deepEqual(seo.blogPageMetadata({ path: "/blog", title: "t", description: "d", index: false }).robots, { index: false, follow: true });
+  });
+
+  it("writes an RSS 2.0 feed of the latest 20 posts, escaped", () => {
+    const amp = summary({ title: `Dal & rice <compared>${String.fromCharCode(1)}`, slug: "dal-and-rice" });
+    const posts = [amp, ...Array.from({ length: 24 }, () => summary())];
+    const xml = seo.blogRss(posts);
+    assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"'));
+    assert.equal(xml.match(/<item>/g)?.length, 20);
+    assert.match(xml, /<title>Dal &amp; rice &lt;compared&gt;<\/title>/);
+    assert.match(xml, new RegExp(`<link>${SITE_ORIGIN}/blog/dal-and-rice</link>`));
+    assert.match(xml, new RegExp(`<atom:link href="${SITE_ORIGIN}/blog/rss.xml" rel="self"`));
+    assert.match(xml, /<pubDate>Tue, 10 Nov 2026 03:30:00 GMT<\/pubDate>/);
+    assert.match(xml, /<dc:creator>Mayank Narayan<\/dc:creator>/);
+    assert.ok(!/[\x00-\x08]/.test(xml));
+    const empty = seo.blogRss([]);
+    assert.doesNotMatch(empty, /<item>|lastBuildDate/);
+  });
+
+  it("follows the house copy rules in the blog's own words", () => {
+    const texts = [
+      seo.BLOG_DESCRIPTION,
+      ...Object.values(seo.BLOG_TOPIC_INFO).flatMap((t) => [t.label, t.intro]),
+      ...Object.values(TRY_IT_COPY).map((c) => c.line),
+    ];
+    for (const text of texts) {
+      assert.doesNotMatch(text, /doctor[- ]review|reviewed by a doctor|medically reviewed/i, text);
+      assert.doesNotMatch(text, /accura|cure|guarantee/i, text);
+      assert.doesNotMatch(text, /₹|\bINR\b|rupee/i, text);
+      assert.doesNotMatch(text.replace(/Free to start/g, ""), /\bfree\b/i, text);
+    }
   });
 });

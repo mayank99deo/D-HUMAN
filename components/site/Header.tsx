@@ -16,7 +16,8 @@ function subscribe(onChange: () => void) {
 // Transparent over the hero; a solid black band once content scrolls beneath it.
 // `subpage`: on the guides, the wordmark goes home and the waitlist button to the
 // form on the landing page. The landing page renders exactly as before.
-export function Header({ subpage = false }: { subpage?: boolean }) {
+// `blog`: blog pages add "Blog" beside the wordmark, one quiet word, no new nav.
+export function Header({ subpage = false, blog = false }: { subpage?: boolean; blog?: boolean }) {
   const scrolled = useSyncExternalStore(
     subscribe,
     () => window.scrollY > 24,
@@ -30,7 +31,16 @@ export function Header({ subpage = false }: { subpage?: boolean }) {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:h-20 sm:px-8">
-        {subpage ? (
+        {blog ? (
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link href="/" className="-mx-2 flex h-11 items-center px-2">
+              <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
+            </Link>
+            <Link href="/blog" className="inline-flex min-h-11 items-center border-l border-paper/30 pl-3 text-sm font-semibold sm:pl-4">
+              Blog
+            </Link>
+          </div>
+        ) : subpage ? (
           <Link href="/" className="-mx-2 flex h-11 items-center px-2">
             <Wordmark className="h-3.5 w-auto sm:h-4" title="D-Human home" />
           </Link>
@@ -40,7 +50,7 @@ export function Header({ subpage = false }: { subpage?: boolean }) {
           </a>
         )}
         {isWaitlist ? (
-          <a href={subpage ? "/#join" : "#join"} className={BUTTON}>
+          <a href={subpage || blog ? "/#join" : "#join"} className={BUTTON}>
             Join the waitlist
           </a>
         ) : (

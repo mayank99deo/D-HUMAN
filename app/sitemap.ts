@@ -1,12 +1,11 @@
 import type { MetadataRoute } from "next";
-import { GUIDES, HOME_UPDATED } from "@/lib/seo";
-import { absoluteUrl } from "@/lib/site-url";
+import { authors, livePosts } from "@/lib/blog/registry";
+import { siteMap } from "@/lib/seo";
 
-// Every public page, on the canonical host. Dates are each page's last real change
-// (lib/seo.ts), not the build time, so crawlers can trust them.
-export default function sitemap(): MetadataRoute.Sitemap {
-  return [
-    { url: absoluteUrl("/"), lastModified: HOME_UPDATED },
-    ...GUIDES.map((g) => ({ url: absoluteUrl(g.path), lastModified: g.updated })),
-  ];
+// Every public page, on the canonical host (lib/seo.ts builds the list). The blog's entries
+// come from the registry, so they list exactly the live posts, and its cache tag refreshes
+// this file whenever /write publishes.
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [posts, team] = await Promise.all([livePosts(), authors()]);
+  return siteMap({ posts, authors: team });
 }

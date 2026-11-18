@@ -111,6 +111,20 @@ export type LiveImage = {
 
 export const imagePath = (imageId: string, fileName: string) => `/blog/img/${imageId}/${fileName}`;
 
+/**
+ * Share images: drawn by the author's browser at Publish (next/og garbles Devanagari) and
+ * uploaded as one blog image whose files are JPEGs at these sizes, e.g. "og-3fa9c1.jpg".
+ * "og" is the link preview; the other three feed Article markup, which wants 16:9, 4:3 and 1:1.
+ */
+export const SHARE_IMAGE_SIZES = {
+  og: { width: 1200, height: 630 },
+  "16x9": { width: 1200, height: 675 },
+  "4x3": { width: 1200, height: 900 },
+  "1x1": { width: 1200, height: 1200 },
+} as const;
+export type ShareImageKind = keyof typeof SHARE_IMAGE_SIZES;
+export type ShareImages = { imageId: string; files: { og: string } & Partial<Record<Exclude<ShareImageKind, "og">, string>> };
+
 // ── What readers see ────────────────────────────────────────────────────────
 
 export type AuthorLink = { label: "LinkedIn" | "X" | "GitHub" | "Website"; url: string };
@@ -132,6 +146,7 @@ export type PostLive = PostDraft & {
   readingMinutes: number;
   author: PublicAuthor;
   images: Record<string, LiveImage>; // every imageId used by the cover and blocks
+  share?: ShareImages | null; // missing: pages fall back to the site's share image
 };
 
 /** One row in a list (index, topic hub, author page, related posts, sitemap, RSS). */
@@ -149,6 +164,7 @@ export type PostSummary = {
   updatedOn: string | null; // the last meaningful update, ISO
   readingMinutes: number;
   featured: boolean;
+  share: ShareImages | null;
 };
 
 export type LivePost = PostSummary & PostLive;
