@@ -30,7 +30,7 @@ allowAppImports({
   "@/lib/ai/client": `export class AiRefusalError extends Error {}; export class AiUnavailableError extends Error {}; export const aiMode = () => "mock";`,
   "@/lib/ai/report": `export const extractReport = () => { throw new Error("AI in a test"); }; export const interpretReport = extractReport;`,
   "@/lib/ai/events": `export const searchEvents = () => { throw new Error("AI in a test"); };`,
-  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal;`,
+  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal; export const estimateUsualDay = estimateMeal;`,
   "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
   "@/lib/billing/razorpay": `
     export const paymentsOn = () => true;

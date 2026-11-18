@@ -183,7 +183,8 @@ export function FuelLogger({
   /** A share of daily need, or IU for vitamin D, which mostly comes from sun. */
   micros: ({ label: string; pct: number } | { label: string; iu: number })[];
   logs: Log[];
-  typical: { description: string; patterns: string[] } | null;
+  /** `short`: too light to count as a day's food, so the stack doesn't use it yet. */
+  typical: { description: string; patterns: string[]; short: boolean } | null;
   gaps: { label: string; pct: number }[];
   gapSource: "logs" | "typical_day" | "none";
   language: string;
@@ -232,7 +233,8 @@ export function FuelLogger({
   const inFlight = useRef(false);
   const drain = useRef<HTMLSpanElement>(null);
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
-  const [editingTypical, setEditingTypical] = useState(!typical);
+  // Opened from the Stack screen (?usual=1) with a usual day too light to count: straight to the editor, with what they wrote.
+  const [editingTypical, setEditingTypical] = useState(!typical || (focusUsual && typical.short));
   const [typicalBusy, setTypicalBusy] = useState(false);
   const [run, setRun] = useState<MealRun | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -852,6 +854,7 @@ export function FuelLogger({
           <h2 id="typical" className="text-2xl font-bold semiwide">
             How you usually eat
           </h2>
+          {typical?.short && <p className="mt-2 text-sm text-graphite">This looks lighter than a full day, so your stack doesn&apos;t use it yet.</p>}
           {editingTypical ? (
             <>
               <p className="mt-2 text-graphite">Describe a normal day, morning to night. We use it until you&apos;ve logged a few days.</p>

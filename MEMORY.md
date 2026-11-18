@@ -61,7 +61,9 @@ The running record of this project: where things stand, why they are the way the
     - Zinc is paused (`ZINC_FROM_FOOD = false`): the AI reads atta meals a third to a half low on zinc, and the 17 mg target made 96% of vegetarian men's days "short". Its gap shows as "Food first." until the AI efficiency lead's IFCT check.
     - Never vitamin D, iron, folate or omega-3 ("Test first.").
   - **What counts as data:**
-    - A logged day counts only with two or more meals and at least 75% of the energy target. A "usual day" counts from 40%. Both are constants in `lib/platform/food.ts`.
+    - A logged day counts only with two or more meals and at least 75% of the energy target. A "usual day" counts from 60% (`USUAL_DAY_SHARE`; it was 40% until 2026-11-18). Both are constants in `lib/platform/food.ts`.
+    - The usual day is estimated 3 times in parallel and averaged, and saved with its run count. One estimate swung 10–34% between runs; two averaged saves agree within 0–6%. A vague "dal chawal, roti sabzi, chai" came out at 34–43% and no longer counts. A usual day under the floor says so: Stack's "Your usual day looks lighter than a full day's food…" with "Add to my usual day", and a line on Fuel's card.
+    - Meal and usual-day micronutrients are given per item and added up in code (`lib/domain/food-sums.ts`). This makes one meal's B12 swing more (about ±0.2 µg, from the portion the AI picks), but stacks only use averages. The IFCT raw-grams design will remove it.
     - Why: run-to-run noise in the AI's estimates flips at most about 6% of 3-day averages. Partly logged days were the real bias: magnesium came out short on 91% of days logged at 65% of energy, against 13% at full energy.
     - Two cups of chai a day had once earned five supplements.
   - **What your food is short of** (`foodGaps` in `lib/domain/supplements.ts`, saved in the plan as `gaps` and `gaps_basis`):
@@ -136,6 +138,7 @@ The running record of this project: where things stand, why they are the way the
 - **Headless screenshots on phones:** Chrome's `--window-size` can't go under about 500 px wide. Use DevTools device emulation; the session's `cdp.mjs` script in the scratchpad did that, plus clicks, typing and file uploads.
 - **Full-page screenshots lie about screen-sized slides:** stretching the emulated window to the page's height (how `cdp.mjs` takes a full page) makes every `svh`/`dvh` slide that tall too, so the landing looked 19,000 px long in landscape. Judge those pages from screen-sized shots taken while scrolling.
 - **Migrations and Supabase:** `drizzle/0000_init.sql` was hand-edited to be safe to run twice (`IF NOT EXISTS`, foreign keys in `DO … duplicate_object` blocks), so pasting it in Supabase's SQL editor and the deploy's own migration can both happen in either order. Keep new migrations the same way. Supabase serves `public` over its Data API, so every table has RLS on with no policies (`.enableRLS()` in the schema); a non-owner role saw 0 rows in a test, the owner all of them.
+- **IFCT values in the prompt backfire:** giving the meal AI raw-food values per 100 g made it apply them to cooked rice and dal (rice zinc about 3 times IFCT, a veg thali 6.4 mg zinc against about 4.6), so they came out on 2026-11-18. The fix being designed: the AI returns raw-equivalent grams and an IFCT code, and code computes the minerals.
 - **Never clear client state before the refreshed props arrive:** after background work (a build, a read), keep showing the in-progress view until the page's own data shows the result. `router.refresh()` on a phone can be slow, lost or come back stale, and the screen then shows whatever data it was opened with (the stack bug of 2026-11-17, `components/platform/stack-state.ts`).
 - **jsonb reorders keys:** an object saved in a `jsonb` column comes back with its keys in Postgres's order (shorter keys first), so never compare saved JSON as text with `JSON.stringify`; compare fields (`inputsChanged` in `lib/platform/stack.ts`).
 - **Migrations need Postgres 15+** from `0002` on (`NULLS NOT DISTINCT`); Supabase and PGlite both qualify. A dev server started before a new migration keeps the old schema until it's restarted (uploads 500 on the new `started_at` column).
@@ -219,7 +222,30 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-18
+- **Steadier usual days, and meals added up in code (Mayank: average the usual day, a 60% floor, correct with IFCT; then "ship the safe part, build IFCT properly"):**
+  - **The AI efficiency lead built it:**
+    - Per-item micronutrients summed in code (`lib/domain/food-sums.ts`, `lib/ai/schemas.ts`).
+    - The usual day estimated 3 times in parallel and averaged, saved with its run count (`lib/platform/food.ts`, `lib/ai/food.ts`, `lib/ai/mock.ts`).
+    - `USUAL_DAY_SHARE = 0.6`.
+    - IFCT reference values went into the prompt first; the harness showed them over-reading cooked rice and dal, so they came out (see Gotchas).
+    - Live checks: about $0.14 over all rounds.
+  - **The staff engineer added:**
+    - The short-usual-day explanation (`usualDayShort` on Stack and Fuel, `?usual=1` opens the editor prefilled).
+    - Vitamin D left out of wraps' `lowestMicros`, so a wrap can't say "Vitamin D just 16%".
+  - **Cost:** about $0.0005 a meal (+14%), and $0.0062 per usual-day save with thinking on (up to 20 s).
+  - **QA proved it on a production build:**
+    - Meals log and add up.
+    - The usual day saves with its run count, and builds a stack.
+    - A 55% usual day shows the explanation; 61% builds.
+    - Old-shape meals and usual days render everywhere (the film account's 132 meals, a wrap).
+    - A wrap with no vitamin D.
+    - 390 and 320 px with no console errors.
+    - Typecheck, lint, 290 tests.
+  - **In progress:** the systems and data engineer is designing the IFCT version (raw grams and IFCT code, minerals from IFCT, the data's licence).
+
 ### 2026-11-17
+- **Push `4a5fc2c`:** the entry below. Live about 18 s later. Signed out, `/stack` sends visitors to `/signin`. The guide `/supplements-from-blood-test` gives 200, with the new B12 line and no zinc line. The landing gives 200.
 - **"What your food is short of" on the Stack screen, and the stack rules after the crew's research (Mayank: Fuel showed deficits his stack didn't act on):** design and rules in Decisions ("A stack before any report").
   - **Why it happened:** his stack came from his usual day's averages, not the one lunch on Fuel. The rules (vitamin D never without a test; zinc and B12 only for plant diets then; magnesium 60%, calcium 50%, protein 70%) found nothing, and nothing on the screen said why.
   - **The crew, in parallel:**

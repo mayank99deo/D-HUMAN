@@ -30,15 +30,21 @@ function bodyLine(profile: Profile, persona: Persona) {
     .join(", ");
 }
 
-// No report and nothing to go on in their food yet: the two ways to start.
-function StartWithFood({ fullDays }: { fullDays: number }) {
+// No report and nothing to go on in their food yet: the two ways to start. A usual day too
+// light to count says so, and asks for the rest of the day.
+function StartWithFood({ fullDays, usualDayShort }: { fullDays: number; usualDayShort: boolean }) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
       <h1 className="verdict-type text-[clamp(2.25rem,6.5vw,3.5rem)]">Your stack starts with your food.</h1>
       <p className="mt-4 max-w-prose text-lg text-graphite">
-        Log what you eat on three days, or describe a normal day once. We&apos;ll suggest only what your food runs short of, measured against your body and
-        training. A blood report adds what food can&apos;t show.
+        {usualDayShort ? "We build it from three logged days, or from a usual day that covers everything you eat." : "Log what you eat on three days, or describe a normal day once."}{" "}
+        We&apos;ll suggest only what your food runs short of, measured against your body and training. A blood report adds what food can&apos;t show.
       </p>
+      {usualDayShort && (
+        <p className="mt-4 font-semibold">
+          Your usual day looks lighter than a full day&apos;s food. Add everything you eat and drink across the day, snacks and chai included, or log meals on three days.
+        </p>
+      )}
       {fullDays > 0 && (
         <p className="mt-4 font-semibold">
           {fullDays} of 3 days logged. A day counts once most of what you ate is in.
@@ -53,7 +59,7 @@ function StartWithFood({ fullDays }: { fullDays: number }) {
         </Link>
       </div>
       <Link href="/fuel?usual=1" className="link-quiet mt-6 inline-flex min-h-11 items-center">
-        Short on time? Describe a normal day instead
+        {usualDayShort ? "Add to my usual day" : "Short on time? Describe a normal day instead"}
       </Link>
     </main>
   );
@@ -65,7 +71,7 @@ async function Stack() {
   // Before any report, the stack comes from meals alone (lib/platform/stack.ts).
   if (!report) {
     const picture = await dietPicture(user.id, profile);
-    if (!stack && picture.source === "none") return <StartWithFood fullDays={picture.fullDays} />;
+    if (!stack && picture.source === "none") return <StartWithFood fullDays={picture.fullDays} usualDayShort={picture.usualDayShort} />;
   }
   // A stack built from meals has no report; once a report is read, it's out of date.
   const basis = stack ? (stack.reportId ? "report" : "meals") : report ? "report" : "meals";

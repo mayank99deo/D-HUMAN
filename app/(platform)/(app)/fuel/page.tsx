@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { Suspense } from "react";
 import { FuelLogger } from "@/components/platform/FuelLogger";
 import { aiMode } from "@/lib/ai/client";
-import type { Day } from "@/lib/ai/schemas";
+import type { SavedDay } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import { foodFactsFor } from "@/lib/domain/food-facts";
 import { MICROS, inIuOnly, targetsFor } from "@/lib/domain/nutrition";
@@ -50,7 +50,7 @@ async function Fuel({ searchParams }: { searchParams: Promise<Record<string, str
         inIuOnly(m.key) ? { label: m.label, iu: Math.round(totals.micros[m.key]) } : { label: m.label, pct: Math.round((totals.micros[m.key] / targets.micros[m.key]) * 100) },
       )}
       logs={logs.map(mealView)}
-      typical={base ? { description: base.description, patterns: (base.estimate as Day).patterns } : null}
+      typical={base ? { description: base.description, patterns: (base.estimate as SavedDay).patterns, short: picture.usualDayShort } : null}
       gaps={picture.source === "none" ? [] : picture.gaps.filter((g) => !inIuOnly(g.key)).slice(0, 4).map((g) => ({ label: g.label, pct: g.pct }))}
       gapSource={picture.source}
       language={profile.language}

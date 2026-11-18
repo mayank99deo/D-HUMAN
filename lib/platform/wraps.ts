@@ -8,7 +8,7 @@ import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { Profile } from "@/lib/db/schema";
 import { markerDef } from "@/lib/domain/markers";
-import { MICROS, targetsFor } from "@/lib/domain/nutrition";
+import { MICROS, inIuOnly, targetsFor } from "@/lib/domain/nutrition";
 import { GOALS, labelOf } from "@/lib/domain/options";
 import { logsBetween, totalsOf } from "./food";
 import { localDate, personaFor } from "./profile";
@@ -44,7 +44,8 @@ export async function wrapStats(userId: string, profile: Profile, start: string,
   for (const l of logs) titles.set(l.title, (titles.get(l.title) ?? 0) + 1);
   const topFoods = [...titles.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([title, times]) => ({ title, times }));
   const bestProtein = [...dayTotals].sort((a, b) => b.proteinG - a.proteinG)[0];
-  const microAvg = MICROS.map(({ key, label }) => ({
+  // Vitamin D from food is never a share of need (most comes from sun; inIuOnly), so a wrap can't call it a gap.
+  const microAvg = MICROS.filter(({ key }) => !inIuOnly(key)).map(({ key, label }) => ({
     label,
     pctOfTarget: Math.round((dayTotals.reduce((t, x) => t + x.micros[key], 0) / n / targets.micros[key]) * 100),
   })).sort((a, b) => a.pctOfTarget - b.pctOfTarget);

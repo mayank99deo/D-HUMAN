@@ -1,14 +1,15 @@
 import "server-only";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { aiMode, AiUnavailableError } from "@/lib/ai/client";
-import { estimateMeal, estimateTypicalDay } from "@/lib/ai/food";
+import { estimateMeal, estimateUsualDay } from "@/lib/ai/food";
 import { mockDay, mockMeal } from "@/lib/ai/mock";
-import type { Day, Meal } from "@/lib/ai/schemas";
+import type { Meal, SavedDay } from "@/lib/ai/schemas";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
 import type { FoodLog, Profile } from "@/lib/db/schema";
 import { HISTORY_DAYS, type MealView } from "@/lib/domain/meals";
 import { MICROS, SHORT_OF_NEED, emptyMicros, inIuOnly, targetsFor, type Micros } from "@/lib/domain/nutrition";
+import { averageDays, sumMicros } from "@/lib/domain/food-sums";
 import { addDays } from "@/lib/domain/periods";
 import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
 import type { Gap } from "@/lib/domain/supplements";
@@ -87,7 +88,8 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     fatG: sum("fat_g"),
     fibreG: sum("fibre_g"),
     // lang: the reply language, kept with the tip (no column needed).
-    micros: { ...data.micros, tip: data.tip, lang: reply.id },
+    // Added up from the items, not taken from the model (lib/domain/food-sums.ts).
+    micros: { ...sumMicros(data.items), tip: data.tip, lang: reply.id },
     confidence: data.confidence,
     model,
   };
@@ -96,11 +98,12 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
   return { log };
 }
 
-export async function saveTypicalDay(userId: string, profile: Profile, description: string): Promise<Day> {
+export async function saveTypicalDay(userId: string, profile: Profile, description: string): Promise<SavedDay> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailableError();
   const context = { language: profile.language, diet: profile.diet, focus: await focusMarkers(userId) };
-  const { data, model } = mode === "mock" ? await mockDay() : await estimateTypicalDay(description, context);
+  const { data, model } =
+    mode === "mock" ? await mockDay().then((r) => ({ data: averageDays([r.data]), model: r.model })) : await estimateUsualDay(description, context);
   const d = await db();
   await d
     .insert(schema.dietBaselines)
@@ -188,6 +191,8 @@ export type DietPicture = {
   /** Lowest first. Vitamin D also carries its IU from food, which the screens show instead of the share (inIuOnly). */
   gaps: Gap[];
   patterns: string[];
+  /** A usual day is saved but describes less than USUAL_DAY_SHARE of the energy target, so it isn't used (only checked when logs aren't enough). */
+  usualDayShort: boolean;
 };
 
 // What the person eats on an average day: from logs when there are at least
@@ -199,9 +204,10 @@ export type DietPicture = {
 // magnesium short on 91% of days, against 13% when judged at full energy. Two cups of chai
 // a day (QA, 2026-11-17) are the extreme case.
 export const LOGGED_DAY_SHARE = 0.75;
-// A usual day describes a whole day by design, so it only has to look like a day's food:
-// one that describes almost no food doesn't count.
-export const USUAL_DAY_SHARE = 0.4;
+// A usual day describes a whole day by design, but a short one ("dal chawal, roti sabzi,
+// chai") came to 34–41% of energy and sat on the old 40% line, earning a stack in 1 of 5
+// estimates. It counts from 60% (Mayank, 2026-11-17).
+export const USUAL_DAY_SHARE = 0.6;
 
 export async function dietPicture(userId: string, profile: Profile, days = 14): Promise<DietPicture> {
   const today = localDate(profile.timezone);
@@ -220,6 +226,7 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
   let perDay: Totals | null = null;
   let source: DietPicture["source"] = "none";
   let patterns: string[] = [];
+  let usualDayShort = false;
   if (fullDays.length >= 3) {
     const total = totalsOf(fullDays.flat());
     const n = fullDays.length;
@@ -232,13 +239,15 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     const d = await db();
     const [base] = await d.select().from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, userId)).limit(1);
     if (base) {
-      const est = base.estimate as Day;
+      const est = base.estimate as SavedDay;
       const t = totalsOf(est.meals.map((m) => ({ kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g, fibreG: m.fibre_g, micros: {} })));
       // Patterns still show on Fuel; the numbers only count when they describe a day's food.
       patterns = est.patterns;
       if (reaches(t.kcal, USUAL_DAY_SHARE)) {
         perDay = { ...t, micros: est.micros };
         source = "typical_day";
+      } else {
+        usualDayShort = true;
       }
     }
   }
@@ -254,7 +263,7 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     }
     gaps.sort((a, b) => a.pct - b.pct);
   }
-  return { source, days: source === "logs" ? fullDays.length : 0, fullDays: fullDays.length, perDay, gaps, patterns };
+  return { source, days: source === "logs" ? fullDays.length : 0, fullDays: fullDays.length, perDay, gaps, patterns, usualDayShort };
 }
 
 export function dietText(p: DietPicture): string | null {

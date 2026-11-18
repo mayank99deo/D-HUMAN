@@ -23,7 +23,7 @@ allowAppImports({
       const reply_language = globalThis.__claim ?? input.words.reply.id;
       return { data: { is_food: true, reply_language, title: "reply:" + input.words.reply.id, meal_guess: null, items: [item], micros, confidence: "high", tip: null }, model: "test" };
     };
-    export const estimateTypicalDay = () => { throw new Error("AI in a test"); };`,
+    export const estimateTypicalDay = () => { throw new Error("AI in a test"); }; export const estimateUsualDay = estimateTypicalDay;`,
   "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
   "@/lib/billing/razorpay": `export const paymentsOn = () => false; export const keyMode = () => "test";`,
 });

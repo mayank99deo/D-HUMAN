@@ -11,9 +11,10 @@ const g = globalThis as unknown as { __testUser?: { id: string; email: string } 
 allowAppImports({
   "@/lib/ai/client": `export class AiRefusalError extends Error {}; export class AiUnavailableError extends Error {}; export const aiMode = () => "mock";`,
   "@/lib/ai/stack": `export const translatePlan = () => { throw new Error("AI in a test"); }; export const findBrands = translatePlan;`,
-  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal;`,
+  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal; export const estimateUsualDay = estimateMeal;`,
   "@/lib/ai/report": `export const extractReport = () => { throw new Error("AI in a test"); }; export const interpretReport = extractReport;`,
   "@/lib/ai/events": `export const searchEvents = () => { throw new Error("AI in a test"); };`,
+  "@/lib/ai/wrap": `export const writeWrap = () => { throw new Error("AI in a test"); };`,
   "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
   "next/server": "export const after = () => {}; export const connection = async () => {};",
 });
@@ -23,6 +24,8 @@ const { db, schema } = await import("../lib/db/index.ts");
 const { inputsChanged, latestStack, startStack, STACK_MESSAGES } = await import("../lib/platform/stack.ts");
 const { deleteReports } = await import("../lib/platform/reports.ts");
 const { POST: stackRoute } = await import("../app/api/stack/route.ts");
+const { dietPicture } = await import("../lib/platform/food.ts");
+const { wrapStats } = await import("../lib/platform/wraps.ts");
 
 after(async () => {
   const d = await db();
@@ -177,5 +180,55 @@ describe("a stack before any report", () => {
     assert.ok(fromReport.reportId, "with a report, the stack is built from it");
     await deleteReports(me.id, "all");
     assert.equal((await latestStack(me.id))?.id, fromMeals.id, "the meals stack is still there");
+  });
+});
+
+const profileOf = async (userId: string) => {
+  const d = await db();
+  return (await d.select().from(schema.profiles).where(eq(schema.profiles.userId, userId)))[0];
+};
+
+describe("a usual day too light to count", () => {
+  it("is marked short, so the screens can say why, and builds nothing", async () => {
+    const me = await person("veg");
+    const d = await db();
+    // 800 kcal: about 39% of Asha's 2,060 kcal target, under the 60% a usual day needs.
+    await d.insert(schema.dietBaselines).values({
+      userId: me.id,
+      description: "Dal chawal, roti sabzi, chai.",
+      estimate: {
+        meals: [
+          { meal: "lunch", title: "Dal chawal", kcal: 450, protein_g: 12, carbs_g: 80, fat_g: 8, fibre_g: 5 },
+          { meal: "dinner", title: "Roti sabzi", kcal: 350, protein_g: 9, carbs_g: 55, fat_g: 10, fibre_g: 6 },
+        ],
+        micros: { iron_mg: 5, calcium_mg: 150, magnesium_mg: 120, zinc_mg: 4, b12_ug: 0.2, folate_ug: 90, vitamin_c_mg: 15, vitamin_d_iu: 10 },
+        patterns: [],
+      },
+    });
+    const picture = await dietPicture(me.id, await profileOf(me.id));
+    assert.equal(picture.source, "none");
+    assert.equal(picture.usualDayShort, true);
+    assert.equal((await startStack(me.id)).kind, "no_data");
+  });
+
+  it("isn't flagged when the usual day counts, or when there's none", async () => {
+    const full = await person("veg");
+    await usualDay(full.id); // 1,400 kcal: about 68%
+    const counted = await dietPicture(full.id, await profileOf(full.id));
+    assert.equal(counted.source, "typical_day");
+    assert.equal(counted.usualDayShort, false);
+
+    const none = await person("veg");
+    assert.equal((await dietPicture(none.id, await profileOf(none.id))).usualDayShort, false);
+  });
+});
+
+describe("wraps and vitamin D", () => {
+  it("never lists vitamin D among the lowest micronutrients, even when food gives the least of it", async () => {
+    const me = await person("veg");
+    await loggedDays(me.id, 800); // vitamin D 60 IU a day, about 10% of 600 IU, the lowest by far
+    const stats = await wrapStats(me.id, await profileOf(me.id), ymd(7), ymd(0));
+    assert.deepEqual(stats.lowestMicros.map((m) => m.label), ["Vitamin B12", "Iron", "Calcium"]);
+    assert.ok(!JSON.stringify(stats).includes("Vitamin D"), "nothing in the stats the wrap is written from");
   });
 });

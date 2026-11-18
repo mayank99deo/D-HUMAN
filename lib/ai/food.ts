@@ -2,13 +2,19 @@ import "server-only";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
+import { USUAL_DAY_RUNS, averageDays, settledRuns } from "@/lib/domain/food-sums";
 import type { MealWords } from "@/lib/domain/speech";
-import { DaySchema, MealSchema, type Day, type Meal } from "./schemas";
+import { DaySchema, MealSchema, type Day, type Meal, type SavedDay } from "./schemas";
 
+// Micronutrients come per item (per meal for the usual day) and the app adds them up
+// (lib/domain/food-sums.ts): the model's own meal totals ran about a third under its items.
+// IFCT 2017 reference values were tried in this prompt on 2026-11-17 and taken out again:
+// the model applied raw-food values to cooked rice and dal (rice minerals at about 3 times
+// IFCT). Minerals from raw grams and IFCT codes, worked out in code, are planned instead.
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
 - Use Indian household measures: 1 katori ≈ 150 mL, 1 medium roti ≈ 35 g atta, 1 cup rice (cooked) ≈ 150 g, 1 tbsp oil or ghee ≈ 14 g.
 - Base estimates on standard composition values (IFCT 2017 for Indian foods, USDA otherwise). Account for cooking oil and ghee, which people forget.
-- Estimate micronutrients for the whole meal: iron (mg), calcium (mg), magnesium (mg), zinc (mg), B12 (µg), folate (µg), vitamin C (mg), vitamin D (IU). Use 0 when the meal has essentially none.
+- Estimate micronutrients for each item's whole portion (or each meal's, when asked for meals): iron (mg), calcium (mg), magnesium (mg), zinc (mg), B12 (µg), folate (µg), vitamin C (mg), vitamin D (IU). Use 0 when it has essentially none. The app adds them up.
 - Be honest about uncertainty with confidence: high when portions are clear, low when guessing.
 - If what you're given isn't food or drink, set is_food false and return no items.`;
 
@@ -20,6 +26,8 @@ const contextLine = (c: FoodContext) =>
 // The food route stops at 120 s. Two tries of at most 50 s each end well before that,
 // so a slow call fails cleanly and the meal's use is handed back.
 const MEAL_DEADLINE = { timeout: 50_000, maxRetries: 1 };
+// The usual-day route also stops at 120 s, and its estimates run side by side.
+const DAY_DEADLINE = { timeout: 50_000, maxRetries: 1 };
 
 // The person's words for the prompt. When the browser translated them, Claude gets
 // both: the English to work from and their own words to check odd food names against.
@@ -105,14 +113,24 @@ export async function estimateTypicalDay(description: string, context: FoodConte
           role: "user",
           content: `This is how I usually eat on a normal day: "${description}"
 
-Break it into meals with estimates, then the day's micronutrients. ${contextLine(context)}
+Break it into meals, each with its estimates and micronutrients. ${contextLine(context)}
 Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protein comes at dinner"). ${languageRule(context.language)}`,
         },
       ],
-    })
+    }, DAY_DEADLINE)
     .finalMessage();
   logUsage("typical_day", message, t0);
   assertComplete(message);
   if (!message.parsed_output) throw new Error("Could not read the description");
   return { data: message.parsed_output, model: message.model };
+}
+
+/**
+ * A usual day, estimated USUAL_DAY_RUNS times at once and averaged (averageDays). Estimates
+ * that fail are left out; only when all of them fail does the first error come back.
+ */
+export async function estimateUsualDay(description: string, context: FoodContext): Promise<{ data: SavedDay; model: string }> {
+  const runs = await settledRuns(USUAL_DAY_RUNS, () => estimateTypicalDay(description, context));
+  if (runs.length < USUAL_DAY_RUNS) console.warn(`[food] usual day from ${runs.length} of ${USUAL_DAY_RUNS} estimates`);
+  return { data: averageDays(runs.map((r) => r.data)), model: runs[0].model };
 }

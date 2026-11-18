@@ -161,8 +161,12 @@ export async function mockMeal(words: Pick<MealWords, "said" | "english" | "repl
       reply_language: reply.id,
       title,
       meal_guess: null,
-      items: [{ name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g }],
-      micros: { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2, folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 },
+      items: [
+        {
+          name: food, portion: "1 plate", grams: null, kcal, protein_g, carbs_g, fat_g, fibre_g,
+          micros: { iron_mg: 3.2, calcium_mg: 120, magnesium_mg: 90, zinc_mg: 2.1, b12_ug: 0.2, folate_ug: 80, vitamin_c_mg: 12, vitamin_d_iu: 0 },
+        },
+      ],
       confidence: "low",
       tip: `Demo estimate. The live version reads your photo or words properly${local ? ` and answers in ${reply.name}` : ""}.`,
     },
@@ -175,12 +179,17 @@ export async function mockDay(): Promise<{ data: Day; model: string }> {
   return {
     data: {
       meals: [
-        { meal: "breakfast", title: "Chai and poha", kcal: 380, protein_g: 8, carbs_g: 62, fat_g: 11, fibre_g: 3 },
-        { meal: "lunch", title: "Dal, roti, sabzi", kcal: 520, protein_g: 18, carbs_g: 76, fat_g: 15, fibre_g: 11 },
-        { meal: "snack", title: "Biscuits with chai", kcal: 210, protein_g: 3, carbs_g: 32, fat_g: 8, fibre_g: 1 },
-        { meal: "dinner", title: "Rice, dal and curd", kcal: 560, protein_g: 19, carbs_g: 90, fat_g: 12, fibre_g: 7 },
+        // The same day totals as before (iron 11, calcium 520, magnesium 260, zinc 7, B12 0.8,
+        // folate 210, vitamin C 30, vitamin D 20), now per meal; the app adds them up.
+        { meal: "breakfast", title: "Chai and poha", kcal: 380, protein_g: 8, carbs_g: 62, fat_g: 11, fibre_g: 3,
+          micros: { iron_mg: 3, calcium_mg: 120, magnesium_mg: 50, zinc_mg: 1.5, b12_ug: 0.2, folate_ug: 40, vitamin_c_mg: 8, vitamin_d_iu: 0 } },
+        { meal: "lunch", title: "Dal, roti, sabzi", kcal: 520, protein_g: 18, carbs_g: 76, fat_g: 15, fibre_g: 11,
+          micros: { iron_mg: 3.5, calcium_mg: 110, magnesium_mg: 100, zinc_mg: 2.5, b12_ug: 0, folate_ug: 90, vitamin_c_mg: 15, vitamin_d_iu: 0 } },
+        { meal: "snack", title: "Biscuits with chai", kcal: 210, protein_g: 3, carbs_g: 32, fat_g: 8, fibre_g: 1,
+          micros: { iron_mg: 1, calcium_mg: 90, magnesium_mg: 20, zinc_mg: 0.5, b12_ug: 0.2, folate_ug: 10, vitamin_c_mg: 0, vitamin_d_iu: 5 } },
+        { meal: "dinner", title: "Rice, dal and curd", kcal: 560, protein_g: 19, carbs_g: 90, fat_g: 12, fibre_g: 7,
+          micros: { iron_mg: 3.5, calcium_mg: 200, magnesium_mg: 90, zinc_mg: 2.5, b12_ug: 0.4, folate_ug: 70, vitamin_c_mg: 7, vitamin_d_iu: 15 } },
       ],
-      micros: { iron_mg: 11, calcium_mg: 520, magnesium_mg: 260, zinc_mg: 7, b12_ug: 0.8, folate_ug: 210, vitamin_c_mg: 30, vitamin_d_iu: 20 },
       patterns: ["Demo: most of your protein comes from dal.", "Demo: chai with meals may cut the iron you absorb."],
     },
     model: MOCK_MODEL,

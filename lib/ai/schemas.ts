@@ -80,6 +80,8 @@ const ItemSchema = z.object({
   carbs_g: z.number(),
   fat_g: z.number(),
   fibre_g: z.number(),
+  // Per item since 2026-11-18; the app adds them up (sumMicros), so meals carry no model total.
+  micros: MicrosSchema,
 });
 
 export const MealSchema = z.object({
@@ -89,7 +91,6 @@ export const MealSchema = z.object({
   title: z.string(),
   meal_guess: z.enum(["breakfast", "lunch", "dinner", "snack"]).nullable(),
   items: z.array(ItemSchema),
-  micros: MicrosSchema,
   confidence: z.enum(["high", "medium", "low"]),
   tip: z.string().nullable().describe("One short, specific tip linked to their markers or goal, or null"),
 });
@@ -105,12 +106,24 @@ export const DaySchema = z.object({
       carbs_g: z.number(),
       fat_g: z.number(),
       fibre_g: z.number(),
+      micros: MicrosSchema,
     }),
   ),
-  micros: MicrosSchema,
   patterns: z.array(z.string()).describe("2–4 plain observations about how they eat"),
 });
 export type Day = z.infer<typeof DaySchema>;
+
+/**
+ * A usual day as saved: the average of up to USUAL_DAY_RUNS estimates (averageDays), with the
+ * day's micronutrients added up in code. Days saved before 2026-11-18 have the model's own
+ * day total and no micronutrients per meal.
+ */
+export type SavedDay = {
+  meals: (Omit<Day["meals"][number], "micros"> & { micros?: Day["meals"][number]["micros"] })[];
+  micros: Day["meals"][number]["micros"];
+  patterns: string[];
+  runs?: number;
+};
 
 export const WrapStorySchema = z.object({
   title: z.string(),

@@ -9,7 +9,7 @@ import { allowAppImports, tempDatabase } from "./support/app.ts";
 allowAppImports({
   "@/lib/ai/client": `export class AiRefusalError extends Error {}; export class AiUnavailableError extends Error {}; export const aiMode = () => "mock";`,
   "@/lib/ai/stack": `export const translatePlan = () => { throw new Error("AI in a test"); }; export const findBrands = translatePlan;`,
-  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal;`,
+  "@/lib/ai/food": `export const estimateMeal = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateMeal; export const estimateUsualDay = estimateMeal;`,
   "@/lib/ai/report": `export const extractReport = () => { throw new Error("AI in a test"); }; export const interpretReport = extractReport;`,
   "@/lib/ai/events": `export const searchEvents = () => { throw new Error("AI in a test"); };`,
   "@/lib/auth/session": "export const apiUser = async () => null;",
