@@ -287,6 +287,8 @@ export const wraps = pgTable(
     story: jsonb("story").notNull(),
     model: text("model"),
     createdAt: created(),
+    // When the person first reached the story's last card ("One thing"); measures the weekly email.
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("wraps_unique_idx").on(t.userId, t.period, t.startsOn)],
 ).enableRLS();
@@ -365,9 +367,244 @@ export const usage = pgTable(
   (t) => [uniqueIndex("usage_kind_ref_idx").on(t.kind, t.refId), index("usage_user_idx").on(t.userId, t.kind, t.createdAt)],
 ).enableRLS();
 
+// ── Blog ────────────────────────────────────────────────────────────────────
+// Public content, kept apart from health data: nothing here joins to users, so
+// deleting an app account never touches the blog. Readers only ever see `live`.
+// Shapes of the JSON columns: lib/blog/types.ts.
+
+// Who may write at /write. Owners (who manage this list) come from BLOG_OWNER_EMAILS.
+export const blogAuthors = pgTable("blog_authors", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(), // lowercase; server only, never rendered
+  slug: text("slug").notNull().unique(), // /team/<slug>
+  name: text("name").notNull(),
+  role: text("role").notNull().default(""),
+  bio: text("bio").notNull().default(""),
+  photoImageId: text("photo_image_id"),
+  links: jsonb("links").notNull().default(sql`'[]'::jsonb`),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+// A post keeps a working draft and the published copy apart, so an unpublished edit
+// can never go live (not even on a redeploy, which empties the page cache).
+export const blogPosts = pgTable(
+  "blog_posts",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    status: text("status").notNull().default("draft"), // draft | live | taken_down
+    topic: text("topic"), // BLOG_TOPICS in lib/blog/types.ts
+    language: text("language").notNull().default("en"),
+    // restrict: an author with posts can't be deleted.
+    authorId: text("author_id")
+      .notNull()
+      .references(() => blogAuthors.id, { onDelete: "restrict" }),
+    featured: boolean("featured").notNull().default(false),
+    draft: jsonb("draft").notNull().default(sql`'{}'::jsonb`),
+    draftVersion: integer("draft_version").notNull().default(1),
+    draftUpdatedBy: text("draft_updated_by"), // author id
+    draftUpdatedAt: timestamp("draft_updated_at", { withTimezone: true }).notNull().defaultNow(),
+    live: jsonb("live"),
+    liveVersion: integer("live_version"), // the draft_version that was published
+    publishedAt: timestamp("published_at", { withTimezone: true }), // first publish; the date readers see
+    updatedOn: timestamp("updated_on", { withTimezone: true }), // last "meaningful update"
+    liveChangedAt: timestamp("live_changed_at", { withTimezone: true }),
+    // Soft lock: the editor's heartbeat.
+    editingBy: text("editing_by"),
+    editingAt: timestamp("editing_at", { withTimezone: true }),
+    createdAt: created(),
+  },
+  (t) => [
+    index("blog_posts_live_idx").on(t.publishedAt.desc()).where(sql`${t.status} = 'live'`),
+    // At most one featured post.
+    uniqueIndex("blog_posts_one_featured_idx").on(t.featured).where(sql`${t.featured}`),
+  ],
+).enableRLS();
+
+// Every slug a post was ever published under. A retired slug redirects to the post's
+// current one; once the post is deleted (post_id null) the address stays retired.
+export const blogSlugs = pgTable("blog_slugs", {
+  slug: text("slug").primaryKey(),
+  postId: text("post_id").references(() => blogPosts.id, { onDelete: "set null" }),
+  createdAt: created(),
+}).enableRLS();
+
+// A photo, resized in the author's browser. Crops (focal point) and black and white
+// are CSS, so one set of files serves every crop and both looks.
+export const blogImages = pgTable("blog_images", {
+  id: text("id").primaryKey(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  focalX: real("focal_x").notNull().default(0.5),
+  focalY: real("focal_y").notNull().default(0.5),
+  keepColour: boolean("keep_colour").notNull().default(false),
+  ownRights: boolean("own_rights").notNull().default(true),
+  credit: text("credit"),
+  uploadedBy: text("uploaded_by").notNull(), // author id
+  createdAt: created(),
+}).enableRLS();
+
+// The files of a photo (e.g. "w960-3fa9c1.webp"). The name carries a content hash, so
+// the bytes at a URL never change and can be cached for a year.
+export const blogImageFiles = pgTable(
+  "blog_image_files",
+  {
+    imageId: text("image_id")
+      .notNull()
+      .references(() => blogImages.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mime: text("mime").notNull(),
+    width: integer("width").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    bytes: bytea("bytes").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.imageId, t.name] })],
+).enableRLS();
+
+// Every publish, update, take-down and restore: who, which draft, the checklist ticks,
+// the automatic checks, and a copy of what went live.
+export const blogPublishes = pgTable(
+  "blog_publishes",
+  {
+    id: text("id").primaryKey(),
+    postId: text("post_id")
+      .notNull()
+      .references(() => blogPosts.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // publish | update | take_down | restore
+    draftVersion: integer("draft_version").notNull(),
+    byAuthor: text("by_author").notNull(),
+    checklist: jsonb("checklist"),
+    checks: jsonb("checks"),
+    meaningful: boolean("meaningful").notNull().default(false),
+    snapshot: jsonb("snapshot"),
+    createdAt: created(),
+  },
+  (t) => [index("blog_publishes_post_idx").on(t.postId, t.createdAt)],
+).enableRLS();
+
+// "Ready for a read": one author asks the other to look at a draft version.
+export const blogReviews = pgTable(
+  "blog_reviews",
+  {
+    id: text("id").primaryKey(),
+    postId: text("post_id")
+      .notNull()
+      .references(() => blogPosts.id, { onDelete: "cascade" }),
+    draftVersion: integer("draft_version").notNull(),
+    requestedBy: text("requested_by").notNull(),
+    reviewerId: text("reviewer_id").notNull(),
+    status: text("status").notNull().default("requested"), // requested | looks_good | needs_changes
+    note: text("note"),
+    createdAt: created(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("blog_reviews_post_idx").on(t.postId, t.createdAt)],
+).enableRLS();
+
+// ── Lifecycle email ─────────────────────────────────────────────────────────
+// Shapes and rules: lib/email/types.ts. Sign-in codes are not lifecycle email and
+// are never recorded or capped here.
+
+// What a person gets. No row means the defaults (both on, Mayank's call of 2026-11-18).
+export const emailPrefs = pgTable("email_prefs", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  weekly: boolean("weekly").notNull().default(true),
+  questions: boolean("questions").notNull().default(true),
+  // Set after several weekly emails in a row went untapped; turning weekly on clears it.
+  weeklyPausedAt: timestamp("weekly_paused_at", { withTimezone: true }),
+  updatedVia: text("updated_via"), // settings | stop_link | one_click | complaint
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+// One row per lifecycle email. The unique (person, kind, dedupe key) is claimed before
+// Resend is called, so nothing sends twice however often the job runs.
+export const emailSends = pgTable(
+  "email_sends",
+  {
+    id: text("id").primaryKey(), // also the `e` parameter on the email's links
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // EmailKind
+    dedupeKey: text("dedupe_key").notNull(),
+    variant: text("variant"),
+    localDate: date("local_date").notNull(), // the person's calendar day, for the one-a-day cap
+    status: text("status").notNull().default("sending"), // SendStatus
+    batchId: text("batch_id"),
+    providerId: text("provider_id"), // Resend's email id
+    attempts: integer("attempts").notNull().default(0),
+    error: text("error"),
+    firstTapAt: timestamp("first_tap_at", { withTimezone: true }),
+    createdAt: created(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("email_sends_dedupe_idx").on(t.userId, t.kind, t.dedupeKey),
+    uniqueIndex("email_sends_provider_idx").on(t.providerId),
+    // The day's budget: sends since midnight UTC.
+    index("email_sends_sent_idx").on(t.sentAt),
+    // The retry sweep.
+    index("email_sends_open_idx").on(t.createdAt).where(sql`${t.status} in ('sending', 'failed')`),
+  ],
+).enableRLS();
+
+// Addresses that hard-bounced or reported spam, as SHA-256 of the lowercase address.
+// Kept after an account is deleted, to keep honouring "don't email me"; not reversible.
+export const emailSuppressions = pgTable("email_suppressions", {
+  emailHash: text("email_hash").primaryKey(),
+  reason: text("reason").notNull(), // bounce | complaint | resend
+  createdAt: created(),
+}).enableRLS();
+
+// Answers to the feedback questions, one row per question. The Google Sheet is a copy;
+// this is the record. sheet_synced_at is cleared on every change and set once copied.
+export const feedbackAnswers = pgTable(
+  "feedback_answers",
+  {
+    id: text("id").primaryKey(), // also the Sheet's Answer ID
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    survey: text("survey").notNull(), // fb-1, fb-2, … or "open" (from Settings)
+    question: text("question").notNull(), // FeedbackQuestion
+    answer: text("answer"), // null while two different taps arrived too close together
+    path: text("path"), // used | barely
+    source: text("source").notNull(), // email_tap | page | settings
+    contactOk: boolean("contact_ok").notNull().default(false),
+    conflictUntil: timestamp("conflict_until", { withTimezone: true }),
+    createdAt: created(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    sheetSyncedAt: timestamp("sheet_synced_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("feedback_answers_question_idx").on(t.userId, t.survey, t.question),
+    index("feedback_answers_unsynced_idx").on(t.updatedAt).where(sql`${t.sheetSyncedAt} is null`),
+  ],
+).enableRLS();
+
+// A lease per scheduled job, so a cron that fires twice runs once; also its last result
+// (counts only, never addresses). Also holds once-a-week markers such as "alert:weekly-cap".
+export const jobRuns = pgTable("job_runs", {
+  job: text("job").primaryKey(),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
+  lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+  lastResult: jsonb("last_result"),
+}).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type Report = typeof reports.$inferSelect;
 export type Marker = typeof markers.$inferSelect;
 export type FoodLog = typeof foodLogs.$inferSelect;
 export type EventRow = typeof events.$inferSelect;
+export type BlogAuthorRow = typeof blogAuthors.$inferSelect;
+export type BlogPostRow = typeof blogPosts.$inferSelect;
+export type BlogImageRow = typeof blogImages.$inferSelect;
+export type EmailPrefsRow = typeof emailPrefs.$inferSelect;
+export type EmailSendRow = typeof emailSends.$inferSelect;
+export type FeedbackAnswerRow = typeof feedbackAnswers.$inferSelect;

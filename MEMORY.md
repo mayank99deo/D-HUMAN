@@ -96,6 +96,23 @@ The running record of this project: where things stand, why they are the way the
     - The 40% floor, later replaced: logged days need 75%, after the AI efficiency lead's measurements.
     - An old meals stack may come back, dated, after all reports are deleted.
     - A stack goes out of date when diet, medicines or conditions change since it was built. It saves them (`inputs` in the plan, `stackInputs`/`inputsChanged` in `lib/platform/stack.ts`), shows no doses, and offers "Rebuild my stack". Stacks built before this never count as changed.
+- **Blog and lifecycle emails (2026-11-18, Mayank and his co-founder; specs in `docs/team/specs/2026-11-18-*.md` and `docs/team/seo/2026-11-18-blog-and-search.md`):**
+  - **Mayank's calls:**
+    - Blog authoring in the app at `/write` (posts in Postgres as blocks, photos in Postgres for now).
+    - The weekly wrap and feedback emails are on by default, with a clear line at the consent step and a one-tap stop in each email.
+    - Weekly wraps go Sunday evening (about 19:30 IST), covering Monday to Sunday so far.
+    - Stay on Vercel Hobby and Resend free until revenue starts, then move to Pro (noted: Vercel's terms limit Hobby to non-commercial use).
+  - **What the free tiers mean:**
+    - Resend's 100 a day is shared with sign-in codes, so lifecycle sends are capped (`EMAIL_DAILY_CAP`), about 30 a day are kept for codes, and overflow rolls to the next day, with an alert as the weekly list nears the cap.
+    - Hobby crons run once a day.
+    - No Next image optimisation for blog photos.
+  - **Defaults taken (Mayank can override):**
+    - The SEO lead's URLs (`/blog/<slug>`, `/blog/topics/…`, `/team/…`); 404 for removed posts.
+    - Black-and-white photos, with app screenshots in colour; the other founder's "Looks good" before health posts go live.
+    - No blood markers or verdicts in any email; Apple Mail dark mode as a dark card.
+    - A respondent code in the Sheet unless the person ticks contact.
+    - English only at launch; wraps made ahead of the weekly send.
+    - Hindi share images drawn in the browser at Publish, because `next/og`'s Satori garbles Devanagari.
 - **Past meals (2026-11-17, from user feedback):** `/fuel/past` lists the 28 days before today (`HISTORY_DAYS` in `lib/domain/meals.ts`), only days with meals, newest first, yesterday open, each meal with its time and Delete. Older logs are kept and still count in wraps. Reached from "Past meals" beside the Fuel title and from Home ("Yesterday: X kcal and Y g protein."). Meal delete stays one tap, as on Today.
 - **Deleting reports (2026-11-17, from user feedback: people tried the app with a friend's report and had none of their own):**
   - **Where:** `/reports` lists every upload with Open and Delete. "Start fresh" deletes them all, and shows only from 2 reports.
@@ -237,6 +254,12 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-18
+- **Blog and email lane 0 (systems and data engineer):**
+  - **Files:** migration `0009_blog_and_email` (12 tables, RLS on, plus `wraps.finished_at`; safe to run twice; tested in three orders, including pasted onto production's schema), `lib/db/schema.ts`, `lib/blog/types.ts`, `lib/email/types.ts`, `tests/blog-email-contracts.test.ts`.
+  - **Crons:** `0 5 * * *` (10:30 IST: welcomes, feedback, overflow) and `0 14 * * *` (19:30 IST: the Sunday weekly).
+  - **Daily budget:** `min(70, 100 − max(codes today, 30)) − lifecycle sent today`. An alert goes to the founders when the Sunday list reaches 56.
+  - **Checked:** typecheck, lint, 336 tests. No features use the tables yet; the lanes come next.
+- **Push `f806ba0`:** the entry below. Live about 48 s later: the new description and the 192 px icon link are on www.d-human.fit, and `/icon0.png` gives 200.
 - **Search fixes, the missing logo explained, and plans for a blog and lifecycle emails (Mayank and his co-founder):**
   - **The logo:** nothing in our code blocked it. Google keeps one favicon per hostname and had only fetched it for the dhuman.fit hosts (its favicon service gave a globe for d-human.fit and our D for dhuman.fit); a new one takes days to weeks.
   - **The SEO lead's fixes:**

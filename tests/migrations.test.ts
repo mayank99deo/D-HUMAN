@@ -63,7 +63,30 @@ async function assertCurrentShape(pg: PGlite) {
 
   const noRls = await pg.query(`select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity`);
   assert.deepEqual(noRls.rows, [], "every table keeps row-level security");
+
+  // 0009: the blog, lifecycle email, feedback answers, the job lease.
+  const tables = (await pg.query<{ t: string }>(`select relname as t from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r'`)).rows.map((r) => r.t);
+  for (const t of BLOG_AND_EMAIL_TABLES) assert.ok(tables.includes(t), `${t} exists`);
+  for (const name of BLOG_AND_EMAIL_INDEXES) {
+    assert.notEqual((await one<{ r: string | null }>(pg, `select to_regclass('public.${name}')::text as r`)).r, null, `${name} exists`);
+  }
+  const partial = await pg.query<{ name: string; def: string }>(`select indexname as name, indexdef as def from pg_indexes
+    where indexname in ('blog_posts_one_featured_idx', 'blog_posts_live_idx', 'email_sends_open_idx', 'feedback_answers_unsynced_idx')`);
+  assert.equal(partial.rows.length, 4);
+  for (const r of partial.rows) assert.match(r.def, / WHERE /, `${r.name} is partial`);
+  const finished = await pg.query(`select 1 from information_schema.columns where table_name = 'wraps' and column_name = 'finished_at'`);
+  assert.equal(finished.rows.length, 1, "wraps.finished_at exists");
 }
+
+const BLOG_AND_EMAIL_TABLES = [
+  "blog_authors", "blog_posts", "blog_slugs", "blog_images", "blog_image_files", "blog_publishes", "blog_reviews",
+  "email_prefs", "email_sends", "email_suppressions", "feedback_answers", "job_runs",
+];
+const BLOG_AND_EMAIL_INDEXES = [
+  "blog_posts_live_idx", "blog_posts_one_featured_idx", "blog_publishes_post_idx", "blog_reviews_post_idx",
+  "email_sends_dedupe_idx", "email_sends_provider_idx", "email_sends_sent_idx", "email_sends_open_idx",
+  "feedback_answers_question_idx", "feedback_answers_unsynced_idx",
+];
 
 describe("migrations", () => {
   // Drizzle runs the migrations newer than the last one applied, by these times; one out of
@@ -122,6 +145,54 @@ describe("migrations", () => {
       await pg.close();
     });
   }
+
+  // Production before the blog, then only 0009 pasted into Supabase, then the deploy.
+  it("0009 pasted onto production, then the deploy", async () => {
+    const at = journal.entries.findIndex((e) => e.tag.startsWith("0009_"));
+    assert.ok(at > 0, "0009 is in the journal");
+    const pg = new PGlite();
+    await deploy(pg, at);
+    await pg.exec(`insert into users (id, email) values ('u1', 'a@x'); insert into wraps (id, user_id, period, starts_on, ends_on, stats, story) values ('w1', 'u1', 'week', '2026-11-16', '2026-11-22', '{}', '{}');`);
+    await pg.exec(files[at]);
+    await pg.exec(files[at]);
+    await deploy(pg);
+    await assertCurrentShape(pg);
+    assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from wraps where finished_at is null`)).n, 1, "existing wraps kept");
+    await pg.close();
+  });
+
+  it("0009's keys: one featured post, authors kept while they have posts, slugs retired, account data cascades, one send per key", async () => {
+    const pg = new PGlite();
+    await deploy(pg);
+    await pg.exec(`
+      insert into blog_authors (id, email, slug, name) values ('a1', 'm@x', 'mayank', 'Mayank');
+      insert into blog_posts (id, slug, author_id, featured, status, published_at) values ('p1', 'roti-calories', 'a1', true, 'live', now());
+      insert into blog_slugs (slug, post_id) values ('roti-calories', 'p1'), ('old-roti', 'p1');
+    `);
+    await assert.rejects(pg.exec(`insert into blog_posts (id, slug, author_id, featured) values ('p2', 'second', 'a1', true)`), /blog_posts_one_featured_idx/);
+    await pg.exec(`insert into blog_posts (id, slug, author_id) values ('p2', 'second', 'a1')`);
+    await assert.rejects(pg.exec(`delete from blog_authors where id = 'a1'`), /foreign key/);
+    await pg.exec(`delete from blog_posts where id = 'p1'`);
+    const slugs = await pg.query(`select slug, post_id from blog_slugs order by slug`);
+    assert.deepEqual(slugs.rows, [{ slug: "old-roti", post_id: null }, { slug: "roti-calories", post_id: null }], "a deleted post's slugs stay retired");
+
+    await pg.exec(`insert into users (id, email) values ('u1', 'a@x')`);
+    const claim = `insert into email_sends (id, user_id, kind, dedupe_key, local_date) values ($1, 'u1', 'weekly', '2026-11-16', '2026-11-22')
+      on conflict (user_id, kind, dedupe_key) do nothing returning id`;
+    assert.equal((await pg.query(claim, ["s1"])).rows.length, 1);
+    assert.equal((await pg.query(claim, ["s2"])).rows.length, 0, "a second claim for the same week sends nothing");
+    await pg.exec(`
+      insert into email_prefs (user_id, weekly) values ('u1', false);
+      insert into feedback_answers (id, user_id, survey, question, answer, source) values ('f1', 'u1', 'fb-1', 'feel', 'very', 'page');
+      insert into email_suppressions (email_hash, reason) values (encode(sha256(convert_to('a@x', 'UTF8')), 'hex'), 'bounce');
+      delete from users where id = 'u1';
+    `);
+    const left = await one<{ p: number; s: number; f: number; x: number }>(pg, `select
+      (select count(*)::int from email_prefs) as p, (select count(*)::int from email_sends) as s,
+      (select count(*)::int from feedback_answers) as f, (select count(*)::int from email_suppressions) as x`);
+    assert.deepEqual(left, { p: 0, s: 0, f: 0, x: 1 }, "account data goes; the hashed suppression stays");
+    await pg.close();
+  });
 
   for (const order of ["deploy then paste", "paste then deploy"] as const) {
     it(`0002 on live data (${order}): merges duplicate events and keeps picks`, async () => {
