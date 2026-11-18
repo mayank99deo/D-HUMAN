@@ -48,3 +48,6 @@ next-env.d.ts
 
 # embedded dev database
 /.data/
+
+# Agent worktrees (Claude Code), never committed
+.claude/worktrees/
