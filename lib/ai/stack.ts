@@ -1,9 +1,9 @@
 import "server-only";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { monthlyInr } from "@/lib/domain/budget";
 import { GAP_OUTCOMES, type StackBrand } from "@/lib/domain/supplements";
 import { MODELS, VOICE, anthropic, assertComplete, extractJson, fallbackFor, languageRule, logUsage, runWithWebSearch } from "./client";
+import { strictOutputFormat } from "./output-format";
 import type { StackPlan } from "./schemas";
 
 // Since 2026-11-11 the stack itself is worked out in code (lib/domain/supplements.ts).
@@ -101,7 +101,7 @@ export async function translatePlan(plan: StackPlan, language: string): Promise<
       max_tokens: 8000,
       ...fallbackFor(MODELS.wrap),
       ...(MODELS.wrap.startsWith("claude-haiku") ? { thinking: { type: "disabled" as const } } : {}),
-      output_config: { effort: "low", format: betaZodOutputFormat(TranslatedSchema) },
+      output_config: { effort: "low", format: strictOutputFormat(TranslatedSchema) },
       system: `You translate a supplement plan for an Indian health app. Keep the meaning exactly, including every caution and every "see a doctor" line. Keep nutrient names, doses, numbers, units and brand names in English. Keep the same number of entries in the same order, and copy every "key" and "outcome" unchanged. ${languageRule(language)}`,
       messages: [{ role: "user", content: JSON.stringify(words) }],
     })
