@@ -7,6 +7,11 @@ The running record of this project: where things stand, why they are the way the
 - **Platform (Phase 1, pushed 2026-11-09 in `99168f2`):** sign-in by emailed code, onboarding, blood report upload read by Claude, a persona dashboard (bib, verdict aimed at an event, metrics that matter, contour fingerprint), food logging by photo, voice or text, wraps and a supplement stack. Since 2026-11-17: Past meals (`/fuel/past`, the 28 days before today), Your reports (`/reports`, delete one or all), and a stack built from meals before any report. Pages in `app/(platform)/`, design and architecture in `docs/platform/PHASE-1.md`. Needs `DATABASE_URL`, `ANTHROPIC_API_KEY` and `AUTH_SECRET` in Vercel before it works live; the landing page doesn't link to it yet.
 - **Open to everyone, with a paywall (2026-11-11):** the landing page shows "Start free" and "Sign in" instead of the waitlist (`NEXT_PUBLIC_SITE_MODE=waitlist` brings the old page back after a redeploy; nothing was deleted). Someone signed in on that browser who opens the landing page goes straight to `/home` (2026-11-14). Free: 2 report reads and 20 meal logs. Then ₹49 for 30 days through Razorpay (one payment, no renewal): 3 reads in the pass, and 5 meal logs a day for everyone. **Payments are live since 2026-11-14:** live Razorpay keys and the live webhook, with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` set in Vercel (Production only), and Mayank paid the first real ₹49. Test keys live only in `.env.local`. Setup steps are in `docs/platform/PHASE-1.md`. Without all three variables the paywall says "Payments open soon".
 - **Reports are AI-analysed only (2026-11-11):** no doctor review for now; never say a doctor reviews reports. "See a doctor" flags for the person's own doctor stay.
+- **Blog and lifecycle emails (shipped 2026-11-19, inert until Mayank's setup):**
+  - **The blog:** `/blog`, `/blog/<slug>`, topics, `/team/<person>`, `/editorial-policy` and RSS, written at `/write` by `BLOG_OWNER_EMAILS` only. Every post needs the other writer's "Looks good" before its words go live. The landing and guides footer link shows only once a post is live.
+  - **The emails:** a welcome when onboarding finishes, a "finish setting up" reminder, the Sunday-evening weekly wrap, and a day-10 feedback quiz whose answers go to the Sheet's Feedback tab.
+  - **How they run:** two daily crons, dry until `EMAIL_WEEKLY_LIVE` / `EMAIL_LIFECYCLE_LIVE` are set. A daily budget keeps room for sign-in codes on Resend's free plan. One-click unsubscribe and Settings → Emails.
+  - **Sign-in:** returns people to the page they came from (`/signin?next=`, via `proxy.ts`, signed-out app screens only).
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
 - **Live:** https://www.d-human.fit, the main address since 2026-11-13 (Mayank's pick). https://www.dhuman.fit, dhuman.fit, d-human.fit and https://d-human.vercel.app serve the same deployment and send page visits there. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
@@ -195,6 +200,20 @@ The running record of this project: where things stand, why they are the way the
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
+- [ ] **Blog and email setup (Mayank):**
+  - **Vercel Production, then Redeploy:**
+    - Required: `BLOG_OWNER_EMAILS` (both founders, comma-separated), `CRON_SECRET`, `EMAIL_LINK_SECRET` (each `openssl rand -hex 32`), `RESEND_WEBHOOK_SECRET` (from Resend).
+    - Optional: `ALERT_EMAILS`, `FEEDBACK_REPLY_TO`, `EMAIL_DAILY_CAP`, `EMAIL_POSTAL_ADDRESS`.
+    - After a dry week: `EMAIL_LIFECYCLE_LIVE=1`, `EMAIL_WEEKLY_LIVE=1`.
+  - **Resend:** a webhook to `https://www.d-human.fit/api/email/webhook` with `email.bounced`, `email.complained`, `email.suppressed`, `email.failed`, `suppression.added` and `suppression.removed`; open and click tracking off.
+  - **Apps Script:** paste the new `google-apps-script/Code.gs`, run `setupFeedback`, then Deploy → Manage deployments → Edit → New version.
+  - **DNS for dhuman.fit at Namecheap:** DMARC `_dmarc` TXT `v=DMARC1; p=none;`, root SPF `v=spf1 include:_spf.google.com ~all` (merge if one exists), and Workspace DKIM.
+  - **Content:** the co-founder's name, role, photo and bio, and Mayank's; the five topic-hub intros (100–200 words); the first 2–3 posts.
+  - **Decisions:**
+    - Name Resend (US) in the consent line?
+    - Is `hello@dhuman.fit` read for corrections?
+    - AI-assisted drafts allowed? The editorial policy says yes, edited by a person.
+    - The postal address in the email footer.
 - [ ] IFCT 2017 permission from ICMR-NIN (Mayank to send; draft by the chief of staff in `docs/team/outreach/`). Until it's granted, no IFCT values in the repo or the product; the computed minerals use USDA. Also unblocks SEO food pages (`docs/team/seo/STRATEGY.md`).
 - [ ] The zinc target: even exact zinc against ICMR's 17 mg shows most vegetarian men short. That's a separate target decision, for the doctor or dietitian review (Mayank, 2026-11-18: zinc stays paused until then; `ZINC_FROM_FOOD`).
 - [ ] Prompt caching for meal estimates once traffic passes about one meal every 5 minutes (the computed-minerals schema made a meal $0.00088). Also later: folate and vitamin C from USDA with cooking losses; a recompute script if NIN grants IFCT.
@@ -253,7 +272,39 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
-### 2026-11-18
+### 2026-11-19
+- **Search Console set up by Mayank:**
+  - **Properties:** URL-prefix https://www.d-human.fit/ (verified by file) and the dhuman.fit Domain property (verified by DNS TXT).
+  - **Sitemap:** submitted. Indexing of `/` requested.
+  - **Stale snippet:** Removals → Clear snippet for https://www.dhuman.fit/, so the "doctor review" description goes.
+  - **Change of Address:** dhuman.fit → www.d-human.fit validated (the 308s passed as a 301-redirect from the homepage) and confirmed.
+  - **To keep:** the dhuman.fit redirects for at least 180 days (ideally forever), the domain renewed (it carries email), and both properties verified.
+- **Blog and lifecycle emails shipped (built by 7 parallel lanes in git worktrees, integrated, attacked and proved by two QA engineers):**
+  - **Main is ahead of origin by these commits:** `11594de` (D templates), `788de66` (C email core), `4e8c10d` (worktrees ignored), `354e160` (C follow-ups and migration `0010`), `77e780b` (B public blog), `d71ee73` (E daily jobs and the snack fix), `7268c28` (G sign-in `next`, Settings → Emails, consent line, `/wraps?week=`), `dedaf56` (A `/write` editor), `4918c12` (F feedback and the Sheet), `cc0fe94` (integration). 826 tests passed at `cc0fe94`.
+  - **Security QA** (worktree branch `worktree-agent-a461f433182fb78c3`, tests `tests/qa-blog-email-security.test.ts`):
+    - Two mediums: self-approval of "Looks good" and the byline without a fresh session.
+    - Three lows: photo metadata, review depending on the topic picked, `/email/stop` prerender.
+    - Info items: `X-Forwarded-Host`, Origin checks, the review email outside the budget.
+    - The staff engineer was fixing them in the main checkout, uncommitted, when paused.
+  - **Policy default set by the orchestrator:** every post needs another writer's "Looks good", not only health topics (Mayank may relax it).
+  - **Fixes after QA:**
+    - `41eebf1`: self-approval closed, byline needs a fresh sign-in, JPEG and WebP metadata refused anywhere, `/blog/img` serves only live posts' photos with a one-day CDN cache, Origin checks without `X-Forwarded-Host`, review emails production-only and budgeted, the editor fits at 320 and 390 px, writers skip the setup nudge, copy fixes.
+    - `7b79e63`: WebP bytes past the RIFF length refused; same-origin checks on tap, wraps-finished and account delete.
+  - **Rechecks:** security QA closed every finding, and flow QA passed all of it, 60 of 60 page checks clean.
+  - **Checked by the orchestrator:** typecheck, lint, 841 tests and the production build before the push.
+  - **Flow QA** was proving the flows on port 3019 in its own worktree.
+  - **To resume:**
+    1. Read both reports.
+    2. Commit the fixes, and have security QA recheck.
+    3. Push. The blog ships with its footer link hidden until a post is live; the emails ship dry (`EMAIL_*_LIVE` unset).
+    4. Give Mayank the setup checklist: Vercel env vars (from the staff engineer's list), the Apps Script paste, the Resend webhook with six events and tracking off, DNS (Search Console TXT, DMARC, SPF, DKIM), and the co-founder's and his bios.
+  - **Flow QA results** (production build at `cc0fe94`, port 3019; evidence in the session scratchpad `qa/shots`):
+    - All six areas pass: empty blog; two-writer publish with "Looks good", RSS, sitemap, JSON-LD, the footer link and take-down; Hindi share image; email dry runs and templates; Settings, `/wraps?week=`, `e=` taps and sign-in return; feedback with Sheet retry; no regressions at 320 and 390 px.
+    - **Bugs found:** the editor overflows at 390 px with photos (`PhotoField.tsx:135`) and at 320 px (`WriteShell.tsx:24`); never-onboarded writers get the "didn't finish" email; "Updated" shows on a first publish; the review email's wording; singular and plural copy; taken-down photos still served with a one-year cache.
+    - The staff engineer is fixing these with the security list.
+  - **Gotcha:** Turbopack won't build through a symlinked `node_modules` in a worktree; copy it instead.
+  - **Open questions for Mayank:** name Resend in the consent line, the corrections inbox, AI-assisted drafts, the postal address, the Next.js upgrade.
+- **Push `409629d`:** lane 0. Vercel's GitHub status reads "Deployment has completed", so Supabase took migration `0009`. Deploy status can be read without the Vercel CLI: `curl https://api.github.com/repos/mayank99deo/D-HUMAN/commits/<sha>/status` (public repo, 60 requests an hour).
 - **Blog and email lane 0 (systems and data engineer):**
   - **Files:** migration `0009_blog_and_email` (12 tables, RLS on, plus `wraps.finished_at`; safe to run twice; tested in three orders, including pasted onto production's schema), `lib/db/schema.ts`, `lib/blog/types.ts`, `lib/email/types.ts`, `tests/blog-email-contracts.test.ts`.
   - **Crons:** `0 5 * * *` (10:30 IST: welcomes, feedback, overflow) and `0 14 * * *` (19:30 IST: the Sunday weekly).
