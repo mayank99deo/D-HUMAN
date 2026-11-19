@@ -70,6 +70,13 @@ async function newPost(me: Author, d: WriteDraft) {
   return { id: created.id, version: post!.draftVersion };
 }
 
+/** The cofounder's "Looks good" to this version, which every post needs before its words go live. */
+async function approved(id: string, version: number) {
+  const asked = await store.requestReview(mayank, id, cofounder.id);
+  assert.ok(asked.ok);
+  assert.ok((await store.decideReview(cofounder, asked.review.id, { status: "looks_good", note: null, draftVersion: version })).ok);
+}
+
 const publishInput = (draftVersion: number, over: Partial<Parameters<typeof store.publishPost>[2]> = {}) => ({
   draftVersion,
   checklist: ticks(),
@@ -194,6 +201,7 @@ describe("publishing", () => {
 
   it("copies draft to live with what the page needs, keeps the address, and expires the pages", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "first-10k" }));
+    await approved(id, version);
     const r = await store.publishPost(mayank, id, publishInput(version));
     assert.deepEqual(r.ok && [r.action, r.slug], ["publish", "first-10k"]);
     const saved = await row(id);
@@ -219,7 +227,8 @@ describe("publishing", () => {
 
   it("never lets a draft edit reach live until Update, and asks for ticks only when the body changed", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "edits-wait" }));
-    await store.publishPost(mayank, id, publishInput(version));
+    await approved(id, version);
+    assert.ok((await store.publishPost(mayank, id, publishInput(version))).ok);
     const saved = await store.saveDraft(mayank, id, version, draft({ slug: "edits-wait", title: "A new title" }));
     assert.ok(saved.ok);
     assert.equal(((await row(id)).live as StoredLive).title, "Training for a first 10K");
@@ -228,6 +237,8 @@ describe("publishing", () => {
 
     const noTicks = await store.publishPost(mayank, id, publishInput(saved.version, { checklist: {} }));
     assert.equal(noTicks.ok === false && noTicks.error, "checklist", "the body changed");
+    assert.equal((await store.publishPost(mayank, id, publishInput(saved.version))).ok === false, true, "new words need a new read");
+    await approved(id, saved.version);
     const updated = await store.publishPost(mayank, id, publishInput(saved.version, { meaningful: true }));
     assert.equal(updated.ok && updated.action, "update");
     const after = await row(id);
@@ -240,11 +251,12 @@ describe("publishing", () => {
 
   it("renames a live post only at Update, and keeps the old address for a redirect", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "old-address" }));
-    await store.publishPost(mayank, id, publishInput(version));
+    await approved(id, version);
+    assert.ok((await store.publishPost(mayank, id, publishInput(version))).ok);
     const saved = await store.saveDraft(mayank, id, version, draft({ slug: "new-address" }));
     assert.ok(saved.ok);
     assert.equal((await row(id)).slug, "old-address", "still live at the old address");
-    await store.publishPost(mayank, id, publishInput(saved.version, { checklist: {} }));
+    assert.ok((await store.publishPost(mayank, id, publishInput(saved.version, { checklist: {} }))).ok, "a new address alone needs no read");
     assert.equal((await row(id)).slug, "new-address");
     const d = await db();
     const slugs = await d.select().from(schema.blogSlugs).where(eq(schema.blogSlugs.postId, id));
@@ -257,6 +269,8 @@ describe("publishing", () => {
   it("keeps one featured post", async () => {
     const a = await newPost(mayank, draft({ slug: "featured-a" }));
     const b = await newPost(mayank, draft({ slug: "featured-b" }));
+    await approved(a.id, a.version);
+    await approved(b.id, b.version);
     await store.publishPost(mayank, a.id, publishInput(a.version, { featured: true }));
     await store.publishPost(mayank, b.id, publishInput(b.version, { featured: true }));
     assert.equal((await row(a.id)).featured, false);
@@ -264,7 +278,7 @@ describe("publishing", () => {
   });
 });
 
-describe("the other founder's read", () => {
+describe("a second writer's read", () => {
   const health = (slug: string) => draft({ slug, topic: "calories", title: "Calories in a roti" });
 
   it("holds a health post until a different writer says Looks good to this version", async () => {
@@ -293,15 +307,44 @@ describe("the other founder's read", () => {
     assert.deepEqual(await store.publishPost(mayank, id, publishInput(edited.version)), { ok: false, error: "review_needed" });
   });
 
-  it("doesn't ask for a read on a training post", async () => {
+  it("asks for a read on every post, training too (Mayank's default)", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "training-solo" }));
+    assert.deepEqual(await store.publishPost(mayank, id, publishInput(version)), { ok: false, error: "review_needed" });
+    await approved(id, version);
     assert.ok((await store.publishPost(mayank, id, publishInput(version))).ok);
+  });
+
+  it("takes answers only to pending requests, for the version asked about, from a second reader", async () => {
+    const { id, version } = await newPost(mayank, draft({ slug: "answers-once" }));
+    const asked = await store.requestReview(mayank, id, cofounder.id);
+    assert.ok(asked.ok);
+    assert.ok((await store.decideReview(cofounder, asked.review.id, { status: "needs_changes", note: "Add a source.", draftVersion: version })).ok);
+    assert.deepEqual(await store.decideReview(cofounder, asked.review.id, { status: "looks_good", note: null, draftVersion: version }), { ok: false, error: "answered" });
+    assert.deepEqual(await store.publishPost(mayank, id, publishInput(version)), { ok: false, error: "review_needed" });
+
+    // A reader who saved the version asked about can't answer for it.
+    const again = await store.requestReview(mayank, id, cofounder.id);
+    assert.ok(again.ok);
+    const theirs = await store.saveDraft(cofounder, id, version, draft({ slug: "answers-once", dek: "With a source now." }));
+    assert.ok(theirs.ok);
+    const later = await store.requestReview(mayank, id, cofounder.id);
+    assert.ok(later.ok);
+    assert.deepEqual(await store.decideReview(cofounder, later.review.id, { status: "looks_good", note: null, draftVersion: theirs.version }), { ok: false, error: "own_words" });
+    assert.deepEqual(await store.decideReview(cofounder, again.review.id, { status: "looks_good", note: null, draftVersion: theirs.version }), { ok: false, error: "changed" });
+    assert.deepEqual(await store.publishPost(mayank, id, publishInput(theirs.version)), { ok: false, error: "review_needed" });
+
+    // Once the writer's save is the last one, the cofounder's read counts.
+    const mine = await store.saveDraft(mayank, id, theirs.version, draft({ slug: "answers-once", dek: "With a source now, checked." }));
+    assert.ok(mine.ok);
+    await approved(id, mine.version);
+    assert.ok((await store.publishPost(mayank, id, publishInput(mine.version))).ok);
   });
 });
 
 describe("take down, restore, discard, delete", () => {
   it("takes a post down and back, unfeaturing it", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "down-and-up" }));
+    await approved(id, version);
     await store.publishPost(mayank, id, publishInput(version, { featured: true }));
     assert.ok((await store.changeStatus(mayank, id, "take_down")).ok);
     assert.deepEqual([(await row(id)).status, (await row(id)).featured], ["taken_down", false]);
@@ -312,6 +355,7 @@ describe("take down, restore, discard, delete", () => {
 
   it("discards draft changes back to the live copy", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "discard-me" }));
+    await approved(id, version);
     await store.publishPost(mayank, id, publishInput(version));
     await store.saveDraft(mayank, id, version, draft({ slug: "discard-me", title: "Half-written change" }));
     const r = await store.changeStatus(mayank, id, "discard");
@@ -324,6 +368,7 @@ describe("take down, restore, discard, delete", () => {
 
   it("deletes drafts and taken-down posts only, and retires a published address for good", async () => {
     const { id, version } = await newPost(mayank, draft({ slug: "gone-for-good" }));
+    await approved(id, version);
     await store.publishPost(mayank, id, publishInput(version));
     assert.deepEqual(await store.deletePost(mayank, id), { ok: false, error: "wrong_state" });
     await store.changeStatus(mayank, id, "take_down");
@@ -348,7 +393,9 @@ function jpeg(width: number, height: number, { exif = false, pad = 0 } = {}) {
   const app0 = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
   const app1 = exif ? [0xff, 0xe1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00] : [];
   const sof = [0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01];
-  return Buffer.from([0xff, 0xd8, ...app0, ...app1, ...sof, ...new Array(pad + 16).fill(0), 0xff, 0xd9]);
+  // A scan header, then its compressed data (zeros here), then the end of the image.
+  const sos = [0xff, 0xda, 0x00, 0x0c, 0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00];
+  return Buffer.from([0xff, 0xd8, ...app0, ...app1, ...sof, ...sos, ...new Array(pad + 16).fill(0), 0xff, 0xd9]);
 }
 /** A lossy WebP header of this size. */
 function webp(width: number, height: number, seed = 0) {
@@ -400,6 +447,39 @@ describe("photos", () => {
     assert.equal(err([jpeg(960, 640, { pad: 1_500_001 })]), "too_large");
   });
 
+  it("refuses camera and location details anywhere in a file, and files that don't read cleanly", () => {
+    const seg = (marker: number, data: number[]) => [0xff, marker, ((data.length + 2) >> 8) & 0xff, (data.length + 2) & 0xff, ...data];
+    const sof = seg(0xc0, [8, 640 >> 8, 640 & 0xff, 960 >> 8, 960 & 0xff, 1, 1, 0x11, 0]);
+    const sos = seg(0xda, [1, 1, 0, 0, 0x3f, 0]);
+    const text = (t: string) => [...Buffer.from(t)];
+    const file = (...parts: number[][]) => Buffer.from([0xff, 0xd8, ...parts.flat(), 0xff, 0xd9]);
+    const err = (b: Buffer) => {
+      const r = images.checkPhotoFiles([b]);
+      return r.ok ? "ok" : r.error;
+    };
+    assert.equal(err(file(sof, sos, [0x12, 0xff, 0x00, 0x34])), "ok", "an escaped 0xFF in the image data is fine");
+    assert.equal(err(file(sof, seg(0xfe, text("taken at 28.61N 77.20E")), sos, [0x12])), "metadata", "a comment");
+    assert.equal(err(file(sof, seg(0xed, text("Photoshop 3.0 IPTC")), sos, [0x12])), "metadata", "IPTC");
+    assert.equal(err(file(sof, seg(0xe1, text("http://ns.adobe.com/xap/1.0/")), sos, [0x12])), "metadata", "XMP");
+    assert.equal(err(file(sof, sos, [0x12], seg(0xe1, text("Exif")), sos, [0x34])), "metadata", "between scans");
+    assert.equal(err(Buffer.concat([file(sof, sos, [0x12]), Buffer.from("GPS 28.61N")])), "unreadable", "bytes after the end");
+    assert.equal(err(Buffer.from([0xff, 0xd8, ...sof, ...sos, 0x12])), "unreadable", "no end");
+
+    const riff = (...chunks: [string, Buffer][]) => {
+      const body = Buffer.concat([Buffer.from("WEBP"), ...chunks.map(([name, data]) => Buffer.concat([Buffer.from(name), Buffer.from(Uint32Array.of(data.length).buffer), data, Buffer.alloc(data.length % 2)]))]);
+      return Buffer.concat([Buffer.from("RIFF"), Buffer.from(Uint32Array.of(body.length).buffer), body]);
+    };
+    const frame = Buffer.alloc(30);
+    frame.set([0x9d, 0x01, 0x2a], 3);
+    frame.writeUInt16LE(960, 6);
+    frame.writeUInt16LE(640, 8);
+    assert.equal(err(riff(["VP8 ", frame])), "ok");
+    assert.equal(err(riff(["VP8 ", frame], ["XMP ", Buffer.from("<x:xmpmeta/>")])), "metadata");
+    const cut = riff(["VP8 ", frame]);
+    cut.writeUInt32LE(cut.length, 4);
+    assert.equal(err(cut), "unreadable", "a RIFF size longer than the file");
+  });
+
   it("takes share images only as JPEGs at the share sizes, the link preview required", () => {
     const all = images.checkShareFiles([jpeg(1200, 630), jpeg(1200, 675), jpeg(1200, 900), jpeg(1200, 1200)]);
     assert.ok(all.ok);
@@ -432,6 +512,7 @@ describe("photos", () => {
     const share = images.checkShareFiles([jpeg(1200, 630), jpeg(1200, 1200)]);
     assert.ok(share.ok);
     const shareImg = await images.saveImage(mayank.id, share, { keepColour: true });
+    await approved(id, version);
     const r = await store.publishPost(mayank, id, publishInput(version, { shareImageId: shareImg.id }));
     assert.ok(r.ok);
     assert.ok(r.checks.some((c) => c.code === "small_photo") === false, "1600 px is big enough");

@@ -8,6 +8,7 @@ import { Header } from "@/components/site/Header";
 import { ReviewDecision } from "@/components/write/ReviewDecision";
 import { Gate, WriteLoading } from "@/components/write/WriteShell";
 import { writerAccess } from "@/lib/auth/author";
+import { canSayLooksGood } from "@/lib/blog/checks";
 import { getEditorPost, previewPost } from "@/lib/blog/store";
 
 // The latest saved draft, rendered by the reader's own PostArticle, so the preview is the
@@ -24,6 +25,8 @@ async function Preview({ params }: { params: Promise<{ id: string }> }) {
   if (!post) notFound();
   const page = await previewPost(post);
   const askedMe = post.review && post.review.reviewer.id === access.author.id ? post.review : null;
+  // The post's writer, or whoever saved this version, can't give the second read.
+  const ownWords = !canSayLooksGood(access.author.id, { authorId: post.author.id, savedById: post.savedById });
 
   return (
     <div className="pb-16">
@@ -33,7 +36,7 @@ async function Preview({ params }: { params: Promise<{ id: string }> }) {
       </main>
       {askedMe && (
         <section aria-label="Your read" className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-          <ReviewDecision review={askedMe} draftVersion={post.draftVersion} />
+          <ReviewDecision review={askedMe} draftVersion={post.draftVersion} ownWords={ownWords} />
         </section>
       )}
       <Footer guides />

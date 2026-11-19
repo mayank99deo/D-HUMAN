@@ -1,6 +1,7 @@
 import "server-only";
 import { and, count, eq, exists, gt, gte, inArray, isNotNull, isNull, like, lt, lte, notExists, or, sql } from "drizzle-orm";
 import { aiMode } from "@/lib/ai/client";
+import { isOwnerEmail } from "@/lib/auth/owners";
 import { keyMode } from "@/lib/billing/razorpay";
 import { db, schema, type Db } from "@/lib/db";
 import type { Profile } from "@/lib/db/schema";
@@ -707,7 +708,7 @@ async function unfinished(ctx: Ctx) {
   const t = result.welcome_unfinished;
   // users.created_at has no index: a scan of users, fine until about 100x (then index it).
   const rows = await d
-    .select({ userId: users.id, accountAt: users.createdAt, timezone: profiles.timezone })
+    .select({ userId: users.id, email: users.email, accountAt: users.createdAt, timezone: profiles.timezone })
     .from(users)
     .leftJoin(profiles, eq(profiles.userId, users.id))
     .where(
@@ -721,6 +722,8 @@ async function unfinished(ctx: Ctx) {
     )
     .orderBy(users.createdAt);
   const due = rows
+    // The blog's writers sign in for /write, which needs no onboarding: never nudge them.
+    .filter((r) => !isOwnerEmail(r.email))
     .map((r) => ({ ...r, clock: localClock(r.timezone, now) }))
     .filter((r) => unfinishedState(r.clock, r.accountAt, false, now) === "due")
     .filter((r) => kindLive(ctx, "welcome_unfinished") || !ctx.dry.has({ kind: "welcome_unfinished", userId: r.userId, dedupeKey: ONCE }));

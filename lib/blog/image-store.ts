@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { eq, inArray, and } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema, type Db } from "@/lib/db";
 import { FILE_NAME_PATTERN } from "./blocks";
 import { IMAGE_FILE_MAX_BYTES, IMAGE_MIMES, IMAGE_WIDTHS, SHARE_IMAGE_SIZES, type ImageFile, type LiveImage, type ShareImageKind, type ShareImages } from "./types";
@@ -38,50 +38,91 @@ export type ImageFacts = { width: number; height: number; metadata: boolean };
 const u16be = (b: Uint8Array, i: number) => (b[i] << 8) | b[i + 1];
 const u24le = (b: Uint8Array, i: number) => b[i] | (b[i + 1] << 8) | (b[i + 2] << 16);
 
-/** A JPEG's size from its frame header, and whether it carries EXIF (camera and location data). */
+// Segments that can carry camera, location or author details: APP1 (EXIF and XMP),
+// APP13 (Photoshop and IPTC) and comments. The editor re-encodes every photo through a
+// canvas, which writes none of them, so finding one means the file didn't come from it.
+const JPEG_METADATA = new Set([0xe1, 0xed, 0xfe]);
+const isRestart = (marker: number) => marker >= 0xd0 && marker <= 0xd7;
+const isFrameHeader = (marker: number) => marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+
+/**
+ * A JPEG's size from its frame header, and whether any segment anywhere in the file
+ * carries metadata. Walks every segment from start to end-of-image, stepping over the
+ * compressed data after each scan, so nothing hides after the frame header or between
+ * scans. A file that doesn't walk cleanly, or has bytes after its end, isn't read.
+ */
 function jpegFacts(b: Uint8Array): ImageFacts | null {
   let i = 2;
+  let size: { width: number; height: number } | null = null;
   let metadata = false;
-  while (i + 9 < b.length) {
+  while (i + 1 < b.length) {
     if (b[i] !== 0xff) return null;
     const marker = b[i + 1];
     if (marker === 0xff) {
-      i++;
+      i++; // fill byte
       continue;
     }
-    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+    if (marker === 0xd9) return size && i + 2 === b.length ? { ...size, metadata } : null;
+    if (marker === 0xd8 || marker === 0x01 || isRestart(marker)) {
       i += 2;
       continue;
     }
+    if (i + 4 > b.length) return null;
     const length = u16be(b, i + 2);
-    if (length < 2) return null;
-    // APP1 "Exif" or XMP: photos must arrive re-encoded by the editor, without them.
-    if (marker === 0xe1) metadata = true;
-    const sof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
-    if (sof) return { height: u16be(b, i + 5), width: u16be(b, i + 7), metadata };
+    if (length < 2 || i + 2 + length > b.length) return null;
+    if (JPEG_METADATA.has(marker)) metadata = true;
+    if (isFrameHeader(marker) && !size) {
+      if (length < 7) return null;
+      size = { height: u16be(b, i + 5), width: u16be(b, i + 7) };
+    }
     i += 2 + length;
+    if (marker === 0xda) {
+      // Compressed data runs to the next marker; 0xFF 0x00 is an escaped byte, restarts belong to it.
+      while (i + 1 < b.length && !(b[i] === 0xff && b[i + 1] !== 0x00 && !isRestart(b[i + 1]))) i++;
+    }
   }
   return null;
 }
 
-/** A WebP's size from its first chunk (lossy, lossless or extended), and whether it carries EXIF or XMP. */
+/** RIFF chunks that hold camera, location or author details. */
+const WEBP_METADATA = new Set(["EXIF", "XMP "]);
+
+/**
+ * A WebP's size from its first chunk (lossy, lossless or extended), and whether any chunk
+ * carries EXIF or XMP (or the extended header says it does). Walks every chunk the RIFF
+ * header covers; a chunk that runs past the file means it isn't read.
+ */
 function webpFacts(b: Uint8Array): ImageFacts | null {
   if (b.length < 30) return null;
-  const chunk = String.fromCharCode(...b.subarray(12, 16));
+  const fourcc = (at: number) => String.fromCharCode(...b.subarray(at, at + 4));
+  const u32le = (at: number) => (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
+  let size: { width: number; height: number } | null = null;
+  let metadata = false;
+  const chunk = fourcc(12);
   if (chunk === "VP8 ") {
     if (b[23] !== 0x9d || b[24] !== 0x01 || b[25] !== 0x2a) return null;
-    return { width: (b[26] | (b[27] << 8)) & 0x3fff, height: (b[28] | (b[29] << 8)) & 0x3fff, metadata: false };
-  }
-  if (chunk === "VP8L") {
+    size = { width: (b[26] | (b[27] << 8)) & 0x3fff, height: (b[28] | (b[29] << 8)) & 0x3fff };
+  } else if (chunk === "VP8L") {
     if (b[20] !== 0x2f) return null;
     const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
-    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1, metadata: false };
+    size = { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+  } else if (chunk === "VP8X") {
+    metadata = (b[20] & 0x0c) !== 0;
+    size = { width: u24le(b, 24) + 1, height: u24le(b, 27) + 1 };
+  } else {
+    return null;
   }
-  if (chunk === "VP8X") {
-    const flags = b[20];
-    return { width: u24le(b, 24) + 1, height: u24le(b, 27) + 1, metadata: (flags & 0x0c) !== 0 };
+  const end = 8 + u32le(4);
+  if (end > b.length) return null;
+  for (let at = 12; at < end; ) {
+    if (at + 8 > end) return null;
+    const length = u32le(at + 4);
+    const next = at + 8 + length + (length % 2);
+    if (next > end + (length % 2)) return null;
+    if (WEBP_METADATA.has(fourcc(at))) metadata = true;
+    at = next;
   }
-  return null;
+  return { ...size, metadata };
 }
 
 export function imageFacts(bytes: Uint8Array, mime: Mime): ImageFacts | null {
@@ -221,6 +262,33 @@ export async function readImageFile(imageId: string, name: string): Promise<{ mi
     .limit(1);
   if (!row || !(IMAGE_MIMES as readonly string[]).includes(row.mime)) return null;
   return { mime: row.mime as (typeof IMAGE_MIMES)[number], bytes: row.bytes };
+}
+
+/**
+ * Whether readers may load this image: it's in the live copy of a post that is live now
+ * (a cover, a photo, the share image or the byline photo taken at publish), or it's a
+ * writer's current byline photo (shown on /team). Drafts' photos and those of taken-down
+ * posts aren't. Two lookups by key and a scan of the live posts' JSON, on a CDN miss only.
+ */
+export async function isPublicImage(imageId: string): Promise<boolean> {
+  if (!READ_ID.test(imageId)) return false;
+  const d = await db();
+  const posts = schema.blogPosts;
+  const live = posts.live;
+  const [[post], [author]] = await Promise.all([
+    d
+      .select({ id: posts.id })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.status, "live"),
+          sql`(jsonb_exists(${live}->'images', ${imageId}) or ${live}->'share'->>'imageId' = ${imageId} or ${live}->'author'->'photo'->>'id' = ${imageId})`,
+        ),
+      )
+      .limit(1),
+    d.select({ id: schema.blogAuthors.id }).from(schema.blogAuthors).where(eq(schema.blogAuthors.photoImageId, imageId)).limit(1),
+  ]);
+  return Boolean(post || author);
 }
 
 /** An image as the editor shows it: what readers get, plus the rights and credit fields. */

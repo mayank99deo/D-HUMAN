@@ -129,7 +129,7 @@ All tables have row-level security on with no policies. Exact SQL in Appendix A.
 **Serving (`GET /blog/img/[id]/[file]`):**
 
 - Under `/blog/`, not `/api/`, because robots.txt blocks `/api/` and image search needs to crawl photos.
-- `Cache-Control: public, max-age=31536000, immutable`. The CDN keeps it; the function runs only on a cache miss, reading one row by primary key.
+- Served only while a live post uses the image (or it's a writer's byline photo); signed-in writers also get drafts' photos, privately. `Cache-Control: public, max-age=3600` and `CDN-Cache-Control: public, max-age=86400`, so a take-down reaches every cached copy within a day (QA, 2026-11-19; it was a year, immutable). The function runs on a CDN miss.
 - 404 for an unknown id or file. Never reads any other table.
 
 **On the page:** a plain `<img srcset sizes width height loading decoding>` in a `BlogImage` component, not `next/image` (whose optimiser has the Hobby cap). Crops are `object-fit: cover` with `object-position` at the focal point; black and white is `filter: grayscale(1)` unless keep-colour is set. One stored photo serves every crop and both looks, and the original stays in colour if the rule changes later.
@@ -154,7 +154,7 @@ All tables have row-level security on with no policies. Exact SQL in Appendix A.
 - **Soft lock:** the editor sends a heartbeat every 60 s that sets `editing_by` and `editing_at`. Opening a post edited by someone else in the last 3 minutes shows "{Name} is editing this post".
 - **Publish** (`POST …/publish` with `draft_version`, checklist ticks, acknowledged warnings), in one transaction:
   1. Re-validate the draft; run the automatic checks (designer §4.2) in code. Any blocker → 422 with the list.
-  2. For health topics, require a `looks_good` review of this draft version if the review rule is on (designer decision 3).
+  2. Whenever the words change, require a `looks_good` answer to a pending request for this exact draft version, from a writer who is neither the post's author nor the one who saved that version (every post: Mayank's default from 2026-11-19; before, health topics only). A change of address, topic or featured alone needs no read.
   3. Check the slug is free in `blog_posts` and `blog_slugs`; insert it into `blog_slugs`.
   4. Copy draft → `live`, adding what the page needs so it renders with one read: reading time, image sizes and focal points, author snapshot.
   5. Set `status = 'live'`, `published_at` on first publish, `updated_on` when "meaningful update" is on, `live_changed_at = now()`.
@@ -163,7 +163,7 @@ All tables have row-level security on with no policies. Exact SQL in Appendix A.
 - **Update** is the same with the slug unchanged. **Changing a live post's slug** adds the new slug to `blog_slugs`; the old one now redirects.
 - **Take down:** `status = 'taken_down'`, keep `live`, revalidate. **Restore:** back to `live`. **Delete:** drafts never published, or taken-down posts; the post row goes and its `blog_slugs` rows keep the slug with a null post id, so the address answers "gone" and is never reused.
 - **Featured:** setting it clears the old one in the same transaction; the unique partial index is the backstop.
-- **Review request** emails the other founder through Resend (a plain transactional send, not a lifecycle email), with a link to the preview.
+- **Review request** emails the reader a link to the preview through lane C's send path, so it goes only from production and counts toward the day's email budget (kind `review_request`, no stop link).
 
 ### 2.7 Rendering with Cache Components
 

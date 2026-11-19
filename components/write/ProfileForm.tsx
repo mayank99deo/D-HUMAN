@@ -6,6 +6,7 @@ import type { EditorImage } from "@/lib/blog/image-store";
 import type { AuthorProfile } from "@/lib/blog/store";
 import { BLOG_LIMITS, type AuthorLink } from "@/lib/blog/types";
 import { PhotoField } from "./PhotoField";
+import { SignInAgain } from "./PublishSheet";
 
 // "Your profile" (designer §3.11): the byline readers see on posts and on /team/<you>.
 
@@ -19,6 +20,7 @@ export function ProfileForm({ initial }: { initial: AuthorProfile }) {
   const [photo, setPhoto] = useState<EditorImage | null>(initial.photo);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   const setLink = (i: number, l: AuthorLink) => setLinks((all) => all.map((x, j) => (j === i ? l : x)));
 
@@ -26,12 +28,18 @@ export function ProfileForm({ initial }: { initial: AuthorProfile }) {
     e.preventDefault();
     setState("saving");
     setError(null);
-    const r = await send("/api/write/profile", {
+    setStale(false);
+    const r = await send<{ error: string }>("/api/write/profile", {
       method: "PUT",
       body: { name, role, bio, links: links.filter((l) => l.url.trim()), photoImageId: photo?.id ?? null },
     });
     if (r.ok) return setState("saved");
     setState("error");
+    // The byline shows on every post, so changing it needs a recent sign-in, like publishing.
+    if (r.data?.error === "sign_in_again") {
+      setStale(true);
+      return setError("Sign in again to change your byline. Sessions older than 7 days can't change the public site.");
+    }
     setError(r.offline ? OFFLINE : r.status === 422 ? "Check the name (required) and that links start with https://." : "Couldn't save. Try again.");
   }
 
@@ -100,6 +108,7 @@ export function ProfileForm({ initial }: { initial: AuthorProfile }) {
             {state === "saved" ? "Saved. Bylines on live posts change when each post is next updated." : (error ?? "")}
           </span>
         </div>
+        {stale && <SignInAgain />}
       </form>
     </main>
   );

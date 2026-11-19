@@ -597,13 +597,13 @@ export const jobRuns = pgTable("job_runs", {
 }).enableRLS();
 
 // Emails sent outside the lifecycle ledger and sign-in codes (the waitlist welcome, the
-// founders' alert), counted per UTC day, so the daily budget sees everything that uses
+// founders' alert, /write's review requests), counted per UTC day, so the daily budget sees everything that uses
 // Resend's free 100 a day. Counts only, never addresses. Rows are tiny: one per stream a day.
 export const emailDailyCounts = pgTable(
   "email_daily_counts",
   {
     day: date("day").notNull(), // UTC
-    stream: text("stream").notNull(), // waitlist_welcome | founder_alert
+    stream: text("stream").notNull(), // waitlist_welcome | founder_alert | review_request
     sent: integer("sent").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.day, t.stream] })],

@@ -96,7 +96,7 @@ export const IMAGE_FILE_MAX_BYTES = 1_500_000;
 /** Below this width the editor warns the photo may look soft on laptops. */
 export const IMAGE_SOFT_BELOW = 1200;
 
-/** A file name carries a content hash ("w960-3fa9c1.webp"), so its URL can be cached for a year. */
+/** A file name carries a content hash ("w960-3fa9c1.webp"), so a URL never changes what it serves (only whether it's served). */
 export type ImageFile = { name: string; width: number; mime: (typeof IMAGE_MIMES)[number] };
 
 export type LiveImage = {
@@ -213,9 +213,6 @@ export type CheckResult = { code: string; level: "block" | "warn"; message: stri
 
 export const REVIEW_STATUSES = ["requested", "looks_good", "needs_changes"] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
-
-/** Topics whose posts need the other founder's "Looks good" (product designer decision 3, if Mayank keeps it on). */
-export const REVIEWED_TOPICS: readonly BlogTopic[] = ["calories", "protein", "blood-tests", "supplements"];
 
 /** Publish, take-down and author changes need a sign-in this recent (a stolen old cookie can't deface the site). */
 export const FRESH_SESSION_DAYS = 7;

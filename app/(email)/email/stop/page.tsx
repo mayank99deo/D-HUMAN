@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { Wordmark } from "@/components/brand/Logo";
 import { stopLinkState } from "@/lib/email/prefs";
@@ -18,6 +19,8 @@ export const metadata: Metadata = {
 };
 
 async function Stop({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // The link and the settings are read against the clock, so wait for the request (as /feedback does).
+  await connection();
   const { t } = await searchParams;
   const token = typeof t === "string" ? t : "";
   const state = await stopLinkState(token);

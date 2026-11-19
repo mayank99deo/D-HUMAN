@@ -18,6 +18,7 @@ const STATUS: Record<string, number> = {
   taken_down: 409,
   wrong_state: 409,
   changed: 409,
+  answered: 409,
   invalid: 422,
   checks: 422,
   checklist: 422,
@@ -25,6 +26,7 @@ const STATUS: Record<string, number> = {
   no_reviewer: 422,
   sign_in_again: 403,
   not_reviewer: 403,
+  own_words: 403,
   rate_limited: 429,
 };
 

@@ -17,6 +17,32 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   table: "Table",
 };
 
+/** "1 photo", "2 photos": a count with the right form of the word. */
+export const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** Blocks as counted in sentences ("2 pull quotes", "1 Try it block"). */
+const BLOCK_NOUNS: Record<BlockType, string> = {
+  paragraph: "paragraph",
+  heading: "heading",
+  list: "list",
+  photo: "photo",
+  quote: "pull quote",
+  note: "note",
+  doctor: "doctor note",
+  keyNumber: "key number",
+  tryIt: "Try it block",
+  table: "table",
+};
+export const blockCount = (type: BlockType, n: number) => count(n, BLOCK_NOUNS[type]);
+
+/** What a paste or import left out, in words. */
+export function droppedWords(dropped: { images: number; links: number }): { images: string | null; links: string | null } {
+  return {
+    images: dropped.images ? `${count(dropped.images, "image")} (add ${dropped.images === 1 ? "it" : "them"} as ${dropped.images === 1 ? "a Photo block" : "Photo blocks"})` : null,
+    links: dropped.links ? `${count(dropped.links, "link")} that ${dropped.links === 1 ? "wasn't" : "weren't"} https` : null,
+  };
+}
+
 /** The order of the "Add" menu: the everyday blocks first. */
 export const BLOCK_MENU: BlockType[] = ["paragraph", "heading", "list", "photo", "quote", "note", "doctor", "keyNumber", "tryIt", "table"];
 

@@ -6,7 +6,7 @@ import { db, schema, type Db } from "@/lib/db";
 import { absoluteUrl } from "@/lib/site-url";
 import { lifecycleLeft, utcDayStart } from "./budget";
 import { emailMode, fromAddress, replyToFor, resend, sendingAllowed, whereRunning } from "./client";
-import { countOtherSend, otherSentToday } from "./counts";
+import { countOtherSend, otherSentToday, type OtherStream } from "./counts";
 import { kindAllowed, type EmailPrefs } from "./prefs";
 import { emailLinksReady, oneClickUrl, stopPageUrl } from "./tokens";
 import { DEFAULT_EMAIL_PREFS, KIND_CATEGORY, batchIdempotencyKey, sendIdempotencyKey, type EmailFrame, type EmailKind, type RenderedEmail } from "./types";
@@ -559,31 +559,48 @@ export function alertRecipients(): string[] {
 
 export type AlertOutcome = { status: "sent" } | { status: "failed"; error: string } | { status: "not_configured"; reason: "not_production" | "no_api_key" | "no_recipients" };
 
+type PlainNote = { stream: Exclude<OtherStream, "waitlist_welcome">; to: string[]; subject: string; text: string; html?: string; idempotencyKey: string };
+
+/**
+ * A short note outside the lifecycle ledger: only from production, like lifecycle email,
+ * and counted in today's budget under its stream before it goes (a failed send over-counts
+ * by one, the safe side). The idempotency key makes it once-only at Resend for 24 hours.
+ */
+async function sendPlainNote(note: PlainNote, now: Date): Promise<AlertOutcome> {
+  if (!sendingAllowed()) {
+    console.info(`[email] ${note.stream} not sent: goes only from production (${whereRunning()})`);
+    return { status: "not_configured", reason: "not_production" };
+  }
+  if (!note.to.length) return { status: "not_configured", reason: "no_recipients" };
+  const mode = emailMode();
+  if (mode === "off") return { status: "not_configured", reason: "no_api_key" };
+  await countOtherSend(note.stream, note.to.length, now).catch((error) => console.error(`[email] counting ${note.stream} failed:`, error instanceof Error ? error.message : error));
+  if (mode === "log") {
+    console.info(`[email] ${note.stream}: logged, not sent (no RESEND_API_KEY)`);
+    return { status: "sent" };
+  }
+  const { error } = await resend()!.emails.send(
+    { from: fromAddress(), to: note.to, subject: note.subject, text: note.text, ...(note.html ? { html: note.html } : {}), tags: [{ name: "kind", value: note.stream }] },
+    { idempotencyKey: note.idempotencyKey.slice(0, 256), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  );
+  return error ? { status: "failed", error: `${error.name}${error.statusCode ? ` ${error.statusCode}` : ""}` } : { status: "sent" };
+}
+
 /**
  * A plain-text note to the founders (the jobs lane's "weekly list nearing the cap" alert).
- * Only from production, like lifecycle email; counted in today's budget as "founder_alert".
  * `key` makes it once-only at Resend for 24 hours (e.g. "weekly-cap:2026-11-16"); the jobs
  * lane keeps its own once-a-week marker in job_runs. Counts in the text, never addresses
  * or anything about anyone's health.
  */
 export async function sendFounderAlert(alert: { key: string; subject: string; text: string }, now = new Date()): Promise<AlertOutcome> {
-  if (!sendingAllowed()) {
-    console.info(`[email] founders' alert ${alert.key} not sent: goes only from production (${whereRunning()})`);
-    return { status: "not_configured", reason: "not_production" };
-  }
-  const to = alertRecipients();
-  if (!to.length) return { status: "not_configured", reason: "no_recipients" };
-  const mode = emailMode();
-  if (mode === "off") return { status: "not_configured", reason: "no_api_key" };
-  // Counted first: a failed send over-counts by one, the safe side.
-  await countOtherSend("founder_alert", to.length, now).catch((error) => console.error("[email] counting the founders' alert failed:", error instanceof Error ? error.message : error));
-  if (mode === "log") {
-    console.info(`[email] founders' alert ${alert.key}: logged, not sent (no RESEND_API_KEY)`);
-    return { status: "sent" };
-  }
-  const { error } = await resend()!.emails.send(
-    { from: fromAddress(), to, subject: alert.subject, text: alert.text, tags: [{ name: "kind", value: "founder_alert" }] },
-    { idempotencyKey: `alert:${alert.key}`.slice(0, 256), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-  );
-  return error ? { status: "failed", error: `${error.name}${error.statusCode ? ` ${error.statusCode}` : ""}` } : { status: "sent" };
+  return sendPlainNote({ stream: "founder_alert", to: alertRecipients(), subject: alert.subject, text: alert.text, idempotencyKey: `alert:${alert.key}` }, now);
+}
+
+/**
+ * /write's "Ask {name} for a read": one email to one writer with the preview link. Same
+ * rules as the founders' alert (production only, counted in the day's budget); `key` is
+ * the review request's id, so a repeat can't send twice.
+ */
+export async function sendReviewRequest(email: { key: string; to: string; subject: string; text: string; html: string }, now = new Date()): Promise<AlertOutcome> {
+  return sendPlainNote({ stream: "review_request", to: [email.to], subject: email.subject, text: email.text, html: email.html, idempotencyKey: `review:${email.key}` }, now);
 }

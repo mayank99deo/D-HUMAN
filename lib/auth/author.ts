@@ -6,9 +6,10 @@ import { cache } from "react";
 import { slugify } from "@/lib/blog/checks";
 import { FRESH_SESSION_DAYS } from "@/lib/blog/types";
 import { db, schema } from "@/lib/db";
-import { SITE_HOST } from "@/lib/site-url";
 import { SESSION_COOKIE } from "./cookie";
 import { newId, sha256 } from "./crypto";
+import { sameOrigin } from "./origin";
+import { isOwnerEmail } from "./owners";
 
 // Who may write the blog at /write. Mayank's rule (2026-11-18): the existing email-code
 // sign-in, and only the addresses in BLOG_OWNER_EMAILS (comma-separated). Each owner
@@ -22,17 +23,7 @@ import { newId, sha256 } from "./crypto";
 export type Author = { id: string; email: string; name: string; slug: string; freshSession: boolean };
 export type WriterAccess = { kind: "signed_out" } | { kind: "not_author" } | { kind: "author"; author: Author };
 
-/** The owner list, lowercased; an unset or empty variable means nobody may write. */
-export function ownerEmails(raw = process.env.BLOG_OWNER_EMAILS): Set<string> {
-  return new Set(
-    (raw ?? "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => e.includes("@")),
-  );
-}
-
-export const isOwnerEmail = (email: string, raw?: string) => ownerEmails(raw).has(email.trim().toLowerCase());
+export { isOwnerEmail, ownerEmails } from "./owners";
 
 const DAY = 24 * 60 * 60 * 1000;
 export const isFresh = (sessionCreatedAt: Date | null, now = new Date()) =>
@@ -102,20 +93,6 @@ export const writerAccess = cache(async (): Promise<WriterAccess> => {
 // ── API routes ──────────────────────────────────────────────────────────────
 
 const reply = (body: unknown, status: number) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
-
-/** Mutations come from our own pages: the Origin must be this host (or the canonical one). */
-export function sameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  let from: string;
-  try {
-    from = new URL(origin).host;
-  } catch {
-    return false;
-  }
-  const hosts = new Set([new URL(request.url).host, request.headers.get("host"), request.headers.get("x-forwarded-host"), SITE_HOST]);
-  return hosts.has(from);
-}
 
 /**
  * The gate for every /api/write route. Signed out: 401, like every other API route.

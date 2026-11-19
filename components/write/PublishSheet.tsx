@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { send, OFFLINE } from "@/components/platform/net";
-import { automaticChecks, blockers, CHECKLIST_COPY, needsReview, type WriteDraft } from "@/lib/blog/checks";
+import { automaticChecks, blockers, canSayLooksGood, CHECKLIST_COPY, type WriteDraft } from "@/lib/blog/checks";
 import type { EditorImage } from "@/lib/blog/image-store";
 import type { ReviewView } from "@/lib/blog/store";
 import { CHECKLIST_ITEMS, type ChecklistItem, type CheckResult, type PostStatus } from "@/lib/blog/types";
 import { SITE_HOST } from "@/lib/site-url";
 import { drawShareImages } from "./share-image";
+import { count } from "./labels";
 import { uploadImage } from "./resize";
 
-// "Before this goes live": the automatic checks, the other founder's read for health
-// topics, and the eight boxes (designer §4.1), then Publish now or Update post. The
-// server runs every check again in one transaction; this sheet explains what's missing.
+// "Before this goes live": the automatic checks, a second writer's read (every post, by
+// Mayank's default; never from the post's writer or whoever saved the version), and the
+// eight boxes (designer §4.1), then Publish now or Update post. The server runs every
+// check again in one transaction; this sheet explains what's missing.
 
 /** "d-human.fit", as people say it. */
 const SITE_HOST_LABEL = SITE_HOST.replace(/^www\./, "");
@@ -26,6 +28,11 @@ type Props = {
   featured: boolean;
   review: ReviewView | null;
   version: number;
+  /** The post's writer and who saved this version: neither can give the second read. */
+  author: { id: string; name: string };
+  savedById: string | null;
+  meId: string;
+  /** Other writers (never the person signed in). */
   reviewers: { id: string; name: string }[];
   freshSession: boolean;
   onClose: () => void;
@@ -38,7 +45,7 @@ type Props = {
 
 const PUBLISH_ERRORS: Record<string, string> = {
   checklist: "Tick every box first.",
-  review_needed: "This post needs the other founder's Looks good on this version first.",
+  review_needed: "This post needs another writer's Looks good on this version first.",
   conflict: "Someone saved a newer version. Close this, check the post, then publish.",
   sign_in_again: "Sign in again to publish. Sessions older than 7 days can't change the public site.",
   taken_down: "Restore this post before updating it.",
@@ -52,11 +59,14 @@ export function PublishSheet(p: Props) {
   const [ticks, setTicks] = useState<Partial<Record<ChecklistItem, string>>>({});
   const [featured, setFeatured] = useState(p.featured);
   const [meaningful, setMeaningful] = useState(false);
-  const [reviewer, setReviewer] = useState(p.reviewers[0]?.id ?? "");
+  const versionOf = { authorId: p.author.id, savedById: p.savedById };
+  const readers = p.reviewers.filter((r) => canSayLooksGood(r.id, versionOf));
+  const [reviewer, setReviewer] = useState(readers[0]?.id ?? "");
   const [busy, setBusy] = useState<null | "saving" | "drawing" | "publishing" | "asking">(null);
   const [error, setError] = useState<string | null>(null);
   const [serverChecks, setServerChecks] = useState<CheckResult[] | null>(null);
-  const [done, setDone] = useState<{ slug: string } | null>(null);
+  // What happened, kept from the moment it happened: the post's status changes to live right after.
+  const [done, setDone] = useState<{ slug: string; action: "publish" | "update" } | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -72,9 +82,10 @@ export function PublishSheet(p: Props) {
   const blocking = blockers(checks);
   const warnings = checks.filter((c) => c.level === "warn");
   const missing = CHECKLIST_ITEMS.filter((i) => !ticks[i]);
-  const reviewNeeded = needsReview(p.draft.topic);
   const review = p.review;
-  const reviewOk = !reviewNeeded || (review?.status === "looks_good" && review.draftVersion === p.version);
+  const readOfThisVersion = review && review.draftVersion === p.version && canSayLooksGood(review.reviewer.id, versionOf) ? review : null;
+  const reviewOk = readOfThisVersion?.status === "looks_good";
+  const pendingRead = readOfThisVersion?.status === "requested";
   const isUpdate = p.status === "live";
   const ready = !blocking.length && !missing.length && reviewOk && p.freshSession && p.status !== "taken_down";
   const link = `${SITE_HOST_LABEL}/blog/${p.draft.slug}`;
@@ -85,7 +96,7 @@ export function PublishSheet(p: Props) {
   }
 
   async function ask() {
-    if (!reviewer) return;
+    if (!reviewer || !readers.some((r) => r.id === reviewer)) return;
     setBusy("saving");
     setError(null);
     const v = await p.flush();
@@ -97,6 +108,7 @@ export function PublishSheet(p: Props) {
     const r = await send<{ review: ReviewView; error: string }>(`/api/write/posts/${p.postId}/review`, { body: { reviewerId: reviewer } });
     setBusy(null);
     if (r.ok && r.data.review) p.onReview(r.data.review);
+    else if (r.data?.error === "no_reviewer") setError("They can't be asked any more. Reload the page.");
     else setError(r.offline ? OFFLINE : "Couldn't send the request. Try again.");
   }
 
@@ -124,13 +136,13 @@ export function PublishSheet(p: Props) {
     }
     setBusy("publishing");
     const checklist = Object.fromEntries(Object.entries(ticks).filter(([, at]) => at)) as Partial<Record<ChecklistItem, string>>;
-    const r = await send<{ slug: string; error: string; checks: CheckResult[]; suggestion: string | null }>(`/api/write/posts/${p.postId}/publish`, {
+    const r = await send<{ slug: string; action: "publish" | "update"; error: string; checks: CheckResult[]; suggestion: string | null }>(`/api/write/posts/${p.postId}/publish`, {
       body: { draftVersion: version, checklist, meaningful: isUpdate && meaningful, featured, shareImageId },
       timeoutMs: 30_000,
     });
     setBusy(null);
     if (r.ok && r.data.slug) {
-      setDone({ slug: r.data.slug });
+      setDone({ slug: r.data.slug, action: r.data.action === "update" ? "update" : "publish" });
       p.onPublished({ slug: r.data.slug, version, featured });
       return;
     }
@@ -138,7 +150,7 @@ export function PublishSheet(p: Props) {
     const code = r.data.error ?? "";
     if (code === "checks" && r.data.checks) {
       setServerChecks(r.data.checks);
-      return setError(`Fix ${blockers(r.data.checks).length} things before publishing.`);
+      return setError(`Fix ${count(blockers(r.data.checks).length, "thing")} before publishing.`);
     }
     if (code === "slug_taken") return setError(`Another post uses this address.${r.data.suggestion ? ` Try ${r.data.suggestion}, or reword it.` : ""}`);
     setError(PUBLISH_ERRORS[code] ?? "Couldn't publish. Your post is saved. Try again.");
@@ -154,14 +166,25 @@ export function PublishSheet(p: Props) {
   }
 
   const reviewLine = (() => {
-    if (!reviewNeeded) return null;
-    if (review && review.draftVersion === p.version) {
+    if (readOfThisVersion) {
+      const review = readOfThisVersion;
       if (review.status === "looks_good") return `${review.reviewer.name} said Looks good to this version.`;
       if (review.status === "requested") return `Waiting for ${review.reviewer.name}'s read. They have an email with the preview.`;
       return `${review.reviewer.name}: Needs changes.${review.note ? ` "${review.note}"` : ""}`;
     }
-    if (review) return `The post changed since ${review.reviewer.name}'s read. Ask again.`;
-    return "Posts on food, blood tests and supplements need the other founder's Looks good before they go live.";
+    if (review && review.draftVersion !== p.version) return `The post changed since ${review.reviewer.name}'s read. Ask again.`;
+    return "Every post needs another writer's Looks good before it goes live. It can't come from whoever wrote the post or saved this version.";
+  })();
+
+  // Nobody here can give the second read: say who can, and how.
+  const noReader = (() => {
+    if (!p.reviewers.length) return "Another writer needs to open /write once before they can be asked.";
+    if (readers.length) return null;
+    if (p.meId === p.author.id) {
+      const saver = p.reviewers.find((r) => r.id === p.savedById)?.name ?? "Another writer";
+      return `${saver} saved this version, so their read wouldn't be a second one. Make the last change yourself, then ask them.`;
+    }
+    return `${p.author.name || "The writer"} wrote this post, so the read has to come from someone else. ${p.author.name || "They"} can ask you once theirs is the last save.`;
   })();
 
   return (
@@ -173,7 +196,7 @@ export function PublishSheet(p: Props) {
     >
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-ink px-5 py-3">
         <h2 id="publish-title" className="text-lg font-bold semiwide">
-          {done ? (isUpdate ? "Updated" : "Published") : "Before this goes live"}
+          {done ? (done.action === "update" ? "Updated" : "Published") : "Before this goes live"}
         </h2>
         <button type="button" onClick={close} className="link-quiet min-h-11 text-sm">
           Close
@@ -219,34 +242,32 @@ export function PublishSheet(p: Props) {
             )}
           </section>
 
-          {reviewNeeded && (
-            <section aria-labelledby="review-title">
+          <section aria-labelledby="review-title">
               <h3 id="review-title" className="font-semibold">
-                The other founder&apos;s read
+                A second read
               </h3>
               <p className={`mt-2 text-sm ${reviewOk ? "" : "text-graphite"}`}>{reviewLine}</p>
-              {!reviewOk && (review?.status !== "requested" || review.draftVersion !== p.version) && (
+              {!reviewOk && !pendingRead && (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
-                  {p.reviewers.length > 1 && (
+                  {readers.length > 1 && (
                     <select className="field h-12 w-auto" value={reviewer} onChange={(e) => setReviewer(e.target.value)} aria-label="Who reads it">
-                      {p.reviewers.map((r) => (
+                      {readers.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.name}
                         </option>
                       ))}
                     </select>
                   )}
-                  {p.reviewers.length ? (
-                    <button type="button" onClick={ask} disabled={!!busy} className="button-ghost h-12">
-                      {busy === "asking" ? "Asking…" : `Ask ${p.reviewers.find((r) => r.id === reviewer)?.name ?? "them"} for a read`}
-                    </button>
+                  {noReader ? (
+                    <p className="text-sm text-graphite">{noReader}</p>
                   ) : (
-                    <p className="text-sm text-graphite">The other founder needs to open /write once before they can be asked.</p>
+                    <button type="button" onClick={ask} disabled={!!busy} className="button-ghost h-12">
+                      {busy === "asking" ? "Asking…" : `Ask ${readers.find((r) => r.id === reviewer)?.name ?? "them"} for a read`}
+                    </button>
                   )}
                 </div>
               )}
             </section>
-          )}
 
           <section aria-labelledby="checklist-title">
             <h3 id="checklist-title" className="font-semibold">
@@ -306,7 +327,7 @@ export function PublishSheet(p: Props) {
             </button>
             {!ready && !busy && (
               <p className="mt-2 text-sm text-graphite">
-                {blocking.length ? "Fix the things above first." : missing.length ? `Tick ${missing.length} more ${missing.length === 1 ? "box" : "boxes"}.` : !reviewOk ? "Waiting for the other founder's read." : ""}
+                {blocking.length ? "Fix the things above first." : missing.length ? `Tick ${missing.length} more ${missing.length === 1 ? "box" : "boxes"}.` : !reviewOk ? "Waiting for a second writer's read." : ""}
               </p>
             )}
           </div>

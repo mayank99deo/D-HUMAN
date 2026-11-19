@@ -33,7 +33,7 @@ const SECTIONS: { title: string; points: string[] }[] = [
   {
     title: "Who checks a post",
     points: [
-      "Before a post about food, protein, blood tests or supplements goes live, a second person at D-Human reads it.",
+      "Before any post goes live, and whenever its words change, a second person at D-Human reads it. That reader is never the post's writer or the last person to edit it.",
       "No doctor reviews our posts yet. When one does, the post will name them, say when they reviewed it, and the page's data will say the same.",
       "D-Human's blood report reads are AI-analysed. No doctor reviews them.",
     ],

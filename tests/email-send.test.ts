@@ -539,6 +539,30 @@ describe("the founders' alert", () => {
   });
 });
 
+describe("/write's review request", () => {
+  const request = { key: "rev-1", to: "cofounder@example.com", subject: "Asha asked you to read \"Roti\"", text: "Open the preview.", html: "<p>Open the preview.</p>" };
+
+  it("goes only from production, once per request, and counts in today's budget", async () => {
+    const info = console.info;
+    console.info = () => {};
+    try {
+      await withEnv({ VERCEL: "1", VERCEL_ENV: "preview" }, async () => {
+        assert.deepEqual(await send.sendReviewRequest(request), { status: "not_configured", reason: "not_production" });
+      });
+    } finally {
+      console.info = info;
+    }
+    assert.equal(g.__fake.calls.length, 0);
+    const before = (await send.budgetToday()).otherToday;
+    await withEnv({ VERCEL: "1", VERCEL_ENV: "production" }, async () => {
+      assert.deepEqual(await send.sendReviewRequest(request), { status: "sent" });
+    });
+    assert.equal(g.__fake.calls[0].key, "review:rev-1");
+    assert.deepEqual(g.__fake.calls[0].payloads[0].to, ["cofounder@example.com"]);
+    assert.equal((await send.budgetToday()).otherToday, before + 1);
+  });
+});
+
 describe("the waitlist welcome", () => {
   it("counts in today's budget, alongside the send", async () => {
     const before = (await send.budgetToday()).otherToday;

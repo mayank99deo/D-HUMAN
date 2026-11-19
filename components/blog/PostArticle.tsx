@@ -21,7 +21,7 @@ const SHARE_LINK = "inline-flex min-h-11 items-center text-sm font-semibold unde
 function Facts({ post }: { post: LivePost }) {
   const facts = [
     { label: "Published", value: <time dateTime={dayInIndia(post.publishedAt)}>{formatDate(post.publishedAt)}</time> },
-    { label: "Reading time", value: `${post.readingMinutes} minutes` },
+    { label: "Reading time", value: `${post.readingMinutes} ${post.readingMinutes === 1 ? "minute" : "minutes"}` },
     ...(post.updatedOn ? [{ label: "Updated", value: <time dateTime={dayInIndia(post.updatedOn)}>{formatDate(post.updatedOn)}</time> }] : []),
   ];
   return (

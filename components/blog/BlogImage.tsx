@@ -3,8 +3,8 @@ import { imagePath, type ImageFile, type LiveImage } from "@/lib/blog/types";
 
 // A blog photo. Plain <img srcset>, not next/image: Next's optimiser counts transformations
 // against Vercel Hobby's monthly cap, and past it new images show only their alt text. The
-// author's browser already made 480, 960 and 1600 px files, served from /blog/img/… with a
-// year-long cache. Crops are CSS around the author's focal point; photos are black and white
+// author's browser already made 480, 960 and 1600 px files, served from /blog/img/… (cached a day
+// by the CDN, so a taken-down post's photos stop loading within a day). Crops are CSS around the author's focal point; photos are black and white
 // unless the author marked them a screenshot or chart (keep colour). The box holds its space
 // (CLS 0) with a flat grey until the photo arrives; a broken photo shows its alt text there.
 

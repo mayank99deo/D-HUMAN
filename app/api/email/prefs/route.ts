@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { getPrefs, setPrefs, type EmailPrefs, type PrefChanges } from "@/lib/email/prefs";
 import { readStopToken } from "@/lib/email/tokens";
@@ -14,7 +15,9 @@ import { json, unauthorized } from "@/lib/platform/http";
 //
 // Form posts (the stop page's no-JavaScript "Confirm" button) must carry a stop link and
 // get a 303 back to the page. They never act on the session alone, so another site can't
-// change settings with a hidden form.
+// change settings with a hidden form. JSON posts that act on the session must come from
+// our own pages (lib/auth/origin.ts); those with a stop link don't, as mail apps and the
+// stop page (no-referrer) may send no usable Origin.
 
 const view = (p: EmailPrefs) => ({ weekly: p.weekly, questions: p.questions, weeklyPaused: Boolean(p.weeklyPausedAt) });
 
@@ -66,6 +69,8 @@ export async function POST(request: Request) {
 
   const parsed = jsonBody.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ error: "invalid" }, 400);
+  // Acting on the session (Settings): only from our own pages. A stop link speaks for itself.
+  if (!parsed.data.t && !sameOrigin(request)) return json({ error: "bad_origin" }, 403);
   const person = await who(parsed.data.t);
   if (person === "bad_link") return json({ error: "bad_link" }, 400);
   if (!person) return unauthorized();

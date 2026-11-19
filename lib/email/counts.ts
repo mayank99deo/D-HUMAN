@@ -6,7 +6,7 @@ import { utcDay } from "./budget";
 // Emails that use Resend's daily 100 but sit outside the lifecycle ledger and sign-in
 // codes: counted per UTC day so the budget (lib/email/budget.ts) sees them. Counts only.
 
-export const OTHER_STREAMS = ["waitlist_welcome", "founder_alert"] as const;
+export const OTHER_STREAMS = ["waitlist_welcome", "founder_alert", "review_request"] as const;
 export type OtherStream = (typeof OTHER_STREAMS)[number];
 
 const counts = schema.emailDailyCounts;

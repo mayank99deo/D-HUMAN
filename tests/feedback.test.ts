@@ -106,8 +106,9 @@ async function rows(userId: string) {
   return d.select().from(schema.feedbackAnswers).where(eq(schema.feedbackAnswers.userId, userId));
 }
 
-const post = (body: unknown) =>
-  route.POST(new Request(`${SITE}/api/feedback`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+// What the page's fetch() sends: JSON from our own origin. `origin: null` leaves the header out.
+const post = (body: unknown, origin: string | null = SITE) =>
+  route.POST(new Request(`${SITE}/api/feedback`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) }));
 const postForm = (fields: Record<string, string>) =>
   route.POST(new Request(`${SITE}/api/feedback`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() }));
 
@@ -419,6 +420,17 @@ describe("saving answers", () => {
     assert.equal(row.survey, "open");
     assert.equal(row.source, "settings");
     assert.equal(row.path, null);
+  });
+
+  it("from Settings, only our own pages can save on the session; a link works from anywhere", async () => {
+    const p = await person();
+    g.__testUser = p;
+    assert.equal((await post({ question: "build", answer: "tests" }, null)).status, 403, "no Origin");
+    assert.equal((await post({ question: "build", answer: "tests" }, "https://evil.example")).status, 403, "another site");
+    assert.equal((await rows(p.id)).length, 0);
+    g.__testUser = null;
+    const t = feedbackToken(p.id, "fb-1");
+    assert.equal((await post({ t, question: "feel", answer: "very", path: "used" }, null)).status, 200, "the link is the authority");
   });
 
   it("consent to be emailed is kept only on the note", async () => {

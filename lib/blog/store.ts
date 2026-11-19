@@ -1,18 +1,18 @@
 import "server-only";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { Resend } from "resend";
 import { z } from "zod";
 import type { Author } from "@/lib/auth/author";
 import { isOwnerEmail } from "@/lib/auth/author";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema, type Db } from "@/lib/db";
+import { sendReviewRequest } from "@/lib/email/send";
 import { absoluteUrl } from "@/lib/site-url";
 import {
   automaticChecks,
   blockers,
+  canSayLooksGood,
   emptyDraft,
   missingTicks,
-  needsReview,
   parseDraft,
   placeholderSlug,
   postPart,
@@ -48,8 +48,11 @@ import {
 // - A save names the version it started from; if someone saved in between, it's a
 //   conflict (409), never a silent overwrite.
 // - Publishing runs in one transaction: re-check the draft, the automatic checks, the
-//   checklist, the other founder's "Looks good" for health topics, a free address;
-//   then copy draft → live with everything the page needs. Nothing half-publishes.
+//   checklist, another writer's "Looks good" to this exact version whenever the words
+//   change, a free address; then copy draft → live with everything the page needs.
+//   Nothing half-publishes.
+// - A "Looks good" never comes from the post's writer or from whoever saved that version
+//   (canSayLooksGood), and only answers a pending request for the version it names.
 // - A published address is kept forever in blog_slugs: renaming redirects, deleting
 //   retires it, and it is never reused.
 
@@ -94,6 +97,8 @@ export type EditorPost = {
   editedBy: string | null;
   /** Whose byline the post carries. */
   author: { id: string; name: string };
+  /** Who saved the current version: they can't be the one who says it looks good. */
+  savedById: string | null;
   /** Someone else's editor is open on this post. */
   lock: { name: string; at: string } | null;
   review: ReviewView | null;
@@ -254,6 +259,7 @@ export async function getEditorPost(me: Author, postId: string, now = new Date()
     editedAt: row.draftUpdatedAt.toISOString(),
     editedBy: row.draftUpdatedBy ? (names.get(row.draftUpdatedBy) ?? null) : null,
     author: { id: row.authorId, name: names.get(row.authorId) ?? "" },
+    savedById: row.draftUpdatedBy,
     lock: row.editingBy && row.editingBy !== me.id && lockFresh ? { name: names.get(row.editingBy) ?? "Another writer", at: row.editingAt!.toISOString() } : null,
     review,
     images,
@@ -400,13 +406,19 @@ async function publicAuthor(tx: Db, authorId: string): Promise<PublicAuthor> {
   };
 }
 
-/** Did a different writer say "Looks good" to exactly this version? */
-async function hasLooksGood(tx: Db, postId: string, draftVersion: number): Promise<boolean> {
+type ReviewedPost = { id: string; draftVersion: number; authorId: string; draftUpdatedBy: string | null };
+
+/**
+ * Did someone say "Looks good" to exactly this version who isn't the post's writer, didn't
+ * save this version and didn't ask? decideReview already refuses those; this checks again
+ * at the moment of publishing, so no older row can count.
+ */
+async function hasLooksGood(tx: Db, post: ReviewedPost): Promise<boolean> {
   const rows = await tx
     .select({ requestedBy: schema.blogReviews.requestedBy, reviewerId: schema.blogReviews.reviewerId })
     .from(schema.blogReviews)
-    .where(and(eq(schema.blogReviews.postId, postId), eq(schema.blogReviews.draftVersion, draftVersion), eq(schema.blogReviews.status, "looks_good")));
-  return rows.some((r) => r.reviewerId !== r.requestedBy);
+    .where(and(eq(schema.blogReviews.postId, post.id), eq(schema.blogReviews.draftVersion, post.draftVersion), eq(schema.blogReviews.status, "looks_good")));
+  return rows.some((r) => r.reviewerId !== r.requestedBy && canSayLooksGood(r.reviewerId, { authorId: post.authorId, savedById: post.draftUpdatedBy }));
 }
 
 /** Publish a draft for the first time, or update a live post with its draft. */
@@ -436,10 +448,9 @@ export async function publishPost(me: Author, postId: string, input: PublishInpu
       const missing = missingTicks(input.checklist);
       if (missing.length) return { ok: false, error: "checklist", missing };
     }
-    const reviewed = needsReview(draft.topic);
-    if (reviewed && (bodyChanged || !needsReview(live?.topic ?? null)) && !(await hasLooksGood(tx, postId, row.draftVersion))) {
-      return { ok: false, error: "review_needed" };
-    }
+    // Every post's words are read by a second writer before readers see them (Mayank's
+    // default, 2026-11-19). A change of address, topic or featured alone needs no read.
+    if (bodyChanged && !(await hasLooksGood(tx, row))) return { ok: false, error: "review_needed" };
     if (!(await slugFree(tx, draft.slug, postId))) return { ok: false, error: "slug_taken", suggestion: await suggestSlug(tx, draft.slug, postId) };
 
     // The share image drawn for this version, or none (the reader pages fall back to the
@@ -574,43 +585,52 @@ export async function requestReview(me: Author, postId: string, reviewerId: stri
   return { ok: true, review: review!, reviewerEmail: reviewer.email, title };
 }
 
-export type DecideResult = { ok: true; review: ReviewView } | { ok: false; error: "not_found" | "not_reviewer" | "changed" };
+export type DecideResult = { ok: true; review: ReviewView } | { ok: false; error: "not_found" | "not_reviewer" | "own_words" | "answered" | "changed" };
 
-/** The reviewer's answer, for the version they read. If the post changed since, they read it again. */
+/**
+ * The reviewer's answer to a pending request, for exactly the version they were asked
+ * about, which must still be the post's current one; if it changed, they're asked again.
+ * The post's writer and whoever saved that version can't answer: their read isn't a second read.
+ */
 export async function decideReview(me: Author, reviewId: string, input: { status: "looks_good" | "needs_changes"; note: string | null; draftVersion: number }): Promise<DecideResult> {
   const d = await db();
   return d.transaction(async (tx): Promise<DecideResult> => {
     const [review] = await tx.select().from(schema.blogReviews).where(eq(schema.blogReviews.id, reviewId)).for("update");
     if (!review) return { ok: false, error: "not_found" };
     if (review.reviewerId !== me.id) return { ok: false, error: "not_reviewer" };
-    const [post] = await tx.select({ draftVersion: schema.blogPosts.draftVersion }).from(schema.blogPosts).where(eq(schema.blogPosts.id, review.postId)).for("update");
+    if (review.status !== "requested") return { ok: false, error: "answered" };
+    const [post] = await tx
+      .select({ draftVersion: schema.blogPosts.draftVersion, authorId: schema.blogPosts.authorId, savedById: schema.blogPosts.draftUpdatedBy })
+      .from(schema.blogPosts)
+      .where(eq(schema.blogPosts.id, review.postId))
+      .for("update");
     if (!post) return { ok: false, error: "not_found" };
-    if (post.draftVersion !== input.draftVersion) return { ok: false, error: "changed" };
+    if (input.draftVersion !== review.draftVersion || post.draftVersion !== review.draftVersion) return { ok: false, error: "changed" };
+    if (!canSayLooksGood(me.id, post)) return { ok: false, error: "own_words" };
     await tx
       .update(schema.blogReviews)
-      .set({ status: input.status, note: input.note, draftVersion: input.draftVersion, decidedAt: new Date() })
+      .set({ status: input.status, note: input.note, decidedAt: new Date() })
       .where(eq(schema.blogReviews.id, reviewId));
     return { ok: true, review: (await latestReview(tx, review.postId))! };
   });
 }
 
-/** A plain transactional email to the reviewer (not a lifecycle email). Locally without a key, a log line. */
-export async function sendReviewEmail(input: { to: string; reviewerName: string; requesterName: string; title: string; postId: string }): Promise<void> {
+/**
+ * The email asking a writer for their read. Through lib/email/send.ts like every email
+ * but sign-in codes: only from production, counted in the day's budget, once per request.
+ */
+export async function sendReviewEmail(input: { reviewId: string; to: string; reviewerName: string; requesterName: string; title: string; postId: string }): Promise<void> {
   const link = absoluteUrl(`/write/${input.postId}/preview`);
   const subject = `${input.requesterName} asked you to read "${input.title}"`;
-  const text = `${input.requesterName} would like your read of "${input.title}" before it goes live.\n\nOpen the preview: ${link}\n\nChoose Looks good or Needs changes at the top of the preview.`;
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.info(`[blog] Review request for ${input.to}: ${link}`);
-    return;
-  }
+  const where = "Choose Looks good or Needs changes at the end of the preview, below the post.";
+  const text = `${input.requesterName} would like your read of "${input.title}" before it goes live.\n\nOpen the preview: ${link}\n\n${where}`;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const html = `<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#fff;font:16px/24px Archivo,Helvetica,Arial,sans-serif;color:#000">
 <p style="margin:0 0 16px">${esc(input.requesterName)} would like your read of <strong>${esc(input.title)}</strong> before it goes live.</p>
 <p style="margin:0 0 16px"><a href="${esc(link)}" style="color:#000">Open the preview</a></p>
-<p style="margin:0;color:#5c5c5c">Choose Looks good or Needs changes at the top of the preview.</p></body></html>`;
-  const { error } = await new Resend(key).emails.send({ from: process.env.RESEND_FROM || "D-Human <hello@dhuman.fit>", to: input.to, subject, html, text });
-  if (error) console.error("[blog] Review email failed:", error.name, error.message);
+<p style="margin:0;color:#5c5c5c">${esc(where)}</p></body></html>`;
+  const outcome = await sendReviewRequest({ key: input.reviewId, to: input.to, subject, text, html });
+  if (outcome.status === "failed") console.error("[blog] Review email failed:", outcome.error);
 }
 
 // ── Author profiles ─────────────────────────────────────────────────────────
@@ -662,10 +682,14 @@ const profileSchema = z
   })
   .strict();
 
-export type ProfileResult = { ok: true } | { ok: false; error: "invalid"; issues: string[] };
+export type ProfileResult = { ok: true } | { ok: false; error: "invalid"; issues: string[] } | { ok: false; error: "sign_in_again" };
 
-/** Name, role, bio, photo and up to two links. Bylines on live posts update when each post is next updated. */
+/**
+ * Name, role, bio, photo and up to two links. The byline shows on every post and /team page,
+ * so like publishing it needs a recent sign-in (FRESH_SESSION_DAYS).
+ */
 export async function updateAuthorProfile(me: Author, input: unknown): Promise<ProfileResult> {
+  if (!me.freshSession) return { ok: false, error: "sign_in_again" };
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid", issues: parsed.error.issues.map((i) => i.path.join(".") || "profile") };
   const p = parsed.data;

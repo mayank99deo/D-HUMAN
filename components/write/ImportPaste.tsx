@@ -5,7 +5,7 @@ import { useState } from "react";
 import { OFFLINE, send } from "@/components/platform/net";
 import { slugify } from "@/lib/blog/checks";
 import { BLOG_LIMITS, type Block } from "@/lib/blog/types";
-import { BLOCK_LABELS } from "./labels";
+import { BLOCK_LABELS, blockCount, droppedWords } from "./labels";
 import { blocksFromClipboard, blocksFromText, newBlockId, type PasteResult } from "./paste";
 
 // Stage 0 (Mayank, 2026-11-18): paste a whole Google Doc and get a draft with its
@@ -59,13 +59,13 @@ export function ImportPaste() {
           acc[b.type] = (acc[b.type] ?? 0) + 1;
           return acc;
         }, {}),
-      ).map(([type, n]) => `${n} ${BLOCK_LABELS[type as Block["type"]].toLowerCase()}${n > 1 ? "s" : ""}`)
+      ).map(([type, n]) => blockCount(type as Block["type"], n))
     : [];
   const left = result
     ? [
-        result.dropped.images && `${result.dropped.images} image${result.dropped.images > 1 ? "s" : ""}: add them as Photo blocks in the editor`,
+        droppedWords(result.dropped).images,
         result.dropped.tables && "tables came in as plain lines: rebuild them as Table blocks",
-        result.dropped.links && `${result.dropped.links} link${result.dropped.links > 1 ? "s" : ""} that weren't https`,
+        droppedWords(result.dropped).links,
         result.dropped.cut && "text past the length limits",
       ].filter(Boolean)
     : [];

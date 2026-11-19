@@ -9,7 +9,7 @@ import { blockTexts, readingMinutes, slugify, TOPIC_LABELS, wordCount, type Writ
 import type { EditorImage } from "@/lib/blog/image-store";
 import type { EditorPost, ReviewView } from "@/lib/blog/store";
 import { BlockFields, newBlock, PhotoWords } from "./BlockFields";
-import { BLOCK_LABELS, BLOCK_MENU } from "./labels";
+import { BLOCK_LABELS, BLOCK_MENU, droppedWords } from "./labels";
 import { clearLocal, localAtLoad, parseLocal, writeLocal } from "./local-copy";
 import { newBlockId, type PasteResult } from "./paste";
 import { PhotoField } from "./PhotoField";
@@ -50,6 +50,8 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
   const [status, setStatus] = useState(initial.status);
   const [featured, setFeatured] = useState(initial.featured);
   const [review, setReview] = useState<ReviewView | null>(initial.review);
+  // Who saved the current version: the second read can't come from them.
+  const [savedById, setSavedById] = useState(initial.savedById);
   const [save, setSave] = useState<SaveState>({ kind: "saved", at: initial.editedAt });
   const [edits, setEdits] = useState(0);
   const [resetKey, setResetKey] = useState(0);
@@ -79,6 +81,7 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
       if (r.ok && r.data.version) {
         versionRef.current = r.data.version;
         setVersion(r.data.version);
+        setSavedById(me.id);
         savedEditsRef.current = at;
         if (editsRef.current === at) {
           clearLocal(postId);
@@ -101,7 +104,7 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
     } finally {
       inFlight.current = null;
     }
-  }, [postId]);
+  }, [postId, me.id]);
 
   // Autosave a moment after the last change; slower retries while offline or failing.
   useEffect(() => {
@@ -171,6 +174,7 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
     savedEditsRef.current = editsRef.current;
     setDraft(post.draft);
     setVersion(post.draftVersion);
+    setSavedById(post.savedById);
     setLiveVersion(post.liveVersion);
     setStatus(post.status);
     setImages(post.images);
@@ -236,7 +240,8 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
     update((d) => ({ ...d, blocks: [...d.blocks.slice(0, emptyHere ? i : i + 1), ...result.blocks, ...d.blocks.slice(i + 1)].slice(0, BLOG_LIMITS.blocksMax) }));
     setFocus(null);
     setResetKey((k) => k + 1);
-    const dropped = [result.dropped.images && `${result.dropped.images} image${result.dropped.images > 1 ? "s" : ""} (add them as Photo blocks)`, result.dropped.tables && "a table's layout (rebuild it as a Table block)", result.dropped.links && `${result.dropped.links} link${result.dropped.links > 1 ? "s" : ""} that weren't https`].filter(Boolean);
+    const words = droppedWords(result.dropped);
+    const dropped = [words.images, result.dropped.tables && "a table's layout (rebuild it as a Table block)", words.links].filter(Boolean);
     setNotice(dropped.length ? `Pasted. Left out: ${dropped.join("; ")}.` : "Pasted.");
   }
 
@@ -478,6 +483,9 @@ export function Editor({ initial, me, reviewers }: { initial: EditorPost; me: { 
           featured={featured}
           review={review}
           version={version}
+          author={initial.author}
+          savedById={savedById}
+          meId={me.id}
           reviewers={reviewers}
           freshSession={me.freshSession}
           onClose={() => setPublishing(false)}

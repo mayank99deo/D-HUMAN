@@ -15,13 +15,14 @@ export function WriteShell({ children, active, nav = true }: { children: ReactNo
   return (
     <div className="min-h-dvh">
       <header className="border-b border-line">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4 sm:px-6">
+        {/* Phones: the links wrap to a second row under the wordmark, so nothing scrolls sideways at 320 px. */}
+        <div className="mx-auto flex min-h-14 max-w-3xl flex-wrap items-center gap-x-3 px-4 sm:flex-nowrap sm:px-6">
           <Link href="/" className="flex h-11 items-center" aria-label="D-Human home">
             <Wordmark className="h-3 w-auto" />
           </Link>
           <span className="text-sm font-semibold semiwide">Write</span>
           {nav && (
-            <nav aria-label="Writing" className="ml-auto flex">
+            <nav aria-label="Writing" className="-ml-2 flex w-full sm:ml-auto sm:w-auto">
               {LINKS.map((l) => (
                 <Link
                   key={l.key}

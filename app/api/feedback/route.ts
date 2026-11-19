@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { z } from "zod";
+import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { saveFeedbackAnswer, syncFeedback } from "@/lib/email/feedback";
 import { OPEN_SURVEY, checkAnswer, isQuestion, nextQuestion } from "@/lib/email/feedback-survey";
@@ -14,7 +15,8 @@ import { json, unauthorized } from "@/lib/platform/http";
 // Who: whoever holds the email's feedback link (`t`: one person, one survey, 30 days), or
 // the signed-in person from Settings (survey "open"). Form posts (the page without
 // JavaScript) must carry a link and get a 303 back to the page; they never act on the
-// session alone, so another site can't post answers with a hidden form.
+// session alone, so another site can't post answers with a hidden form. JSON posts that
+// act on the session must also come from our own pages (lib/auth/origin.ts).
 //
 // After the response, the person's changed answers are copied to the Google Sheet. If the
 // Sheet is down they stay marked as not copied, and the daily job tries again.
@@ -113,6 +115,8 @@ export async function POST(request: Request) {
 
   const parsed = jsonBody.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ error: "invalid" }, 400);
+  // Acting on the session (Settings): only from our own pages. A feedback link speaks for itself.
+  if (!parsed.data.t && !sameOrigin(request)) return json({ error: "bad_origin" }, 403);
   const person = await who(parsed.data.t, parsed.data.source);
   if (person === "bad_link") return json({ error: "bad_link" }, 400);
   if (!person) return unauthorized();

@@ -18,7 +18,6 @@ import {
   BLOG_TOPICS,
   CHECKLIST_ITEMS,
   IMAGE_SOFT_BELOW,
-  REVIEWED_TOPICS,
   SLUG_MAX,
   SLUG_PATTERN,
   TRY_IT_DESTINATIONS,
@@ -634,8 +633,12 @@ export function missingTicks(ticks: Partial<Record<ChecklistItem, string>> | nul
   });
 }
 
-/** Posts on food, blood tests and supplements need the other founder's "Looks good" (Mayank, 2026-11-18). */
-export const needsReview = (topic: BlogTopic | null) => topic !== null && REVIEWED_TOPICS.includes(topic);
+/**
+ * Who may say "Looks good" to a version. Every post needs it before its words go live
+ * (Mayank's default, 2026-11-19; until then only food, blood-test and supplement posts
+ * did). It must be a second read: never the post's writer, never whoever saved the version.
+ */
+export const canSayLooksGood = (readerId: string, post: { authorId: string; savedById: string | null }) => readerId !== post.authorId && readerId !== post.savedById;
 
 /** The source a key number or table cites, numbered as readers see it. */
 export const sourceLabel = (sources: readonly Source[], id: string | undefined) => {

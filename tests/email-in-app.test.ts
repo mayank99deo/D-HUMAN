@@ -38,7 +38,7 @@ async function person() {
 // What components/platform/net.ts's send() gives, but through the route itself.
 async function postToRoute(url: string, init: { body: unknown }) {
   const route = url === "/api/email/prefs" ? prefsRoute : tapRoute;
-  const res = await route.POST(new Request(`${SITE}${url}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) }));
+  const res = await route.POST(new Request(`${SITE}${url}`, { method: "POST", headers: { "content-type": "application/json", origin: SITE }, body: JSON.stringify(init.body) }));
   return { ok: res.ok, offline: false, data: (await res.json()) as Record<string, unknown> };
 }
 

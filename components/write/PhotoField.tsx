@@ -132,14 +132,11 @@ export function PhotoField({
         />
       </button>
       <p className="mt-2 text-sm text-graphite">Tap the most important part of the photo. Crops centre on it:</p>
-      <div className="mt-2 flex items-end gap-3" aria-hidden>
-        {[
-          ["3 / 2", "w-36"],
-          ["1 / 1", "w-20"],
-          ["1.91 / 1", "w-36"],
-        ].map(([ratio, width]) => (
+      {/* Three crops in proportion (144, 80 and 144 px at most), shrinking together on narrow phones. */}
+      <div className="mt-2 grid max-w-[24.5rem] grid-cols-[9fr_5fr_9fr] items-end gap-3" aria-hidden>
+        {["3 / 2", "1 / 1", "1.91 / 1"].map((ratio) => (
           // eslint-disable-next-line @next/next/no-img-element -- crop previews of the same file
-          <img key={ratio} src={editorImageUrl(image, 480)} alt="" className={`${width} object-cover ${look}`} style={{ aspectRatio: ratio, objectPosition: position }} />
+          <img key={ratio} src={editorImageUrl(image, 480)} alt="" className={`w-full min-w-0 object-cover ${look}`} style={{ aspectRatio: ratio, objectPosition: position }} />
         ))}
       </div>
       {image.width < IMAGE_SOFT_BELOW && <p className="error-mark mt-2 text-sm">This photo is small and may look soft on laptops.</p>}

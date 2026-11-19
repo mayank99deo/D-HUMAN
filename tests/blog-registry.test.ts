@@ -13,7 +13,10 @@ allowAppImports({
     export const cacheTag = () => {};
     export const revalidateTag = (...args) => { (globalThis.__revalidated ??= []).push(args); };
   `,
+  // Who's asking for a photo: a reader unless a test signs a writer in.
+  "@/lib/auth/author": `export const writerAccess = async () => globalThis.__writer ? { kind: "author", author: globalThis.__writer } : { kind: "signed_out" };`,
 });
+const gw = globalThis as { __writer?: object | null };
 const removeDatabase = tempDatabase();
 const { eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
@@ -45,10 +48,14 @@ before(async () => {
   await d.insert(schema.blogImages).values([
     { id: "img-face", width: 800, height: 800, uploadedBy: AUTHOR.id },
     { id: "img-cover", width: 1600, height: 1067, focalX: 0.3, uploadedBy: AUTHOR.id },
+    { id: "img-down", width: 960, height: 640, uploadedBy: AUTHOR.id },
+    { id: "img-draft", width: 960, height: 640, uploadedBy: AUTHOR.id },
   ]);
   await d.insert(schema.blogImageFiles).values([
     { imageId: "img-face", name: "w480-face01.webp", mime: "image/webp", width: 480, byteSize: WEBP.length, bytes: WEBP },
     { imageId: "img-cover", name: "w960-cover1.webp", mime: "image/webp", width: 960, byteSize: WEBP.length, bytes: WEBP },
+    { imageId: "img-down", name: "w960-down01.webp", mime: "image/webp", width: 960, byteSize: WEBP.length, bytes: WEBP },
+    { imageId: "img-draft", name: "w960-draft1.webp", mime: "image/webp", width: 960, byteSize: WEBP.length, bytes: WEBP },
     // Never served, whatever got into the table.
     { imageId: "img-cover", name: "w960-evil01.jpg", mime: "text/html", width: 960, byteSize: 5, bytes: Buffer.from("<svg>") },
   ]);
@@ -73,6 +80,9 @@ before(async () => {
       publishedAt: at("2026-11-13"),
     },
     { id: "p7", slug: "by-former-writer", status: "live", topic: "training", authorId: "author-2", live: post("From before"), publishedAt: at("2026-10-01") },
+    // Photos only a taken-down post, or only a draft, uses.
+    { id: "p8", slug: "down-with-photo", status: "taken_down", authorId: AUTHOR.id, live: { ...post("Down"), cover: null, images: { "img-down": { ...post("x").images["img-cover"], id: "img-down" } } }, publishedAt: at("2026-11-03") },
+    { id: "p9", slug: "draft-with-photo", status: "draft", authorId: AUTHOR.id, draft: { title: "Draft", cover: { imageId: "img-draft", alt: "x" } } },
   ]);
   await d.insert(schema.blogSlugs).values([
     { slug: "roti-calories", postId: "p1" },
@@ -211,13 +221,37 @@ describe("the cached readers and revalidation", () => {
 describe("the photo route", () => {
   const get = (id: string, file: string) => imageRoute(new Request(`http://localhost/blog/img/${id}/${file}`), { params: Promise.resolve({ id, file }) });
 
-  it("serves an uploaded file with a year-long, never-changing cache", async () => {
+  it("serves a live post's photo, cached a day by the CDN and an hour by browsers", async () => {
     const res = await get("img-cover", "w960-cover1.webp");
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("content-type"), "image/webp");
-    assert.equal(res.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    assert.equal(res.headers.get("cache-control"), "public, max-age=3600");
+    assert.equal(res.headers.get("cdn-cache-control"), "public, max-age=86400");
     assert.equal(res.headers.get("x-content-type-options"), "nosniff");
     assert.deepEqual(Buffer.from(await res.arrayBuffer()), WEBP);
+    assert.equal((await get("img-face", "w480-face01.webp")).status, 200, "a writer's byline photo");
+  });
+
+  it("keeps a taken-down post's photos and drafts' photos from readers; writers see them, privately", async () => {
+    // An earlier test brings every taken-down post back for a moment; this one is down.
+    await (await db()).update(schema.blogPosts).set({ status: "taken_down" }).where(eq(schema.blogPosts.id, "p8"));
+    for (const [id, file] of [
+      ["img-down", "w960-down01.webp"],
+      ["img-draft", "w960-draft1.webp"],
+    ]) {
+      const res = await get(id, file);
+      assert.equal(res.status, 404, id);
+      assert.equal(res.headers.get("cache-control"), "no-store");
+      gw.__writer = { id: AUTHOR.id };
+      try {
+        const own = await get(id, file);
+        assert.equal(own.status, 200, `${id} for a writer`);
+        assert.equal(own.headers.get("cache-control"), "private, max-age=3600");
+        assert.equal(own.headers.get("cdn-cache-control"), null);
+      } finally {
+        gw.__writer = null;
+      }
+    }
   });
   it("answers 404, uncached, for anything else", async () => {
     for (const [id, file] of [

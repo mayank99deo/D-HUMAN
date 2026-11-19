@@ -9,7 +9,7 @@ import { allowAppImports } from "./support/app.ts";
 
 // checks.ts reads the guide list from lib/seo.ts, whose domain imports are extensionless.
 allowAppImports();
-const { automaticChecks, blockers, cleanSpans, emptyDraft, isPlaceholderSlug, missingTicks, needsReview, parseDraft, placeholderSlug, readingMinutes, safeHref, slugify } =
+const { automaticChecks, blockers, cleanSpans, emptyDraft, canSayLooksGood, isPlaceholderSlug, missingTicks, parseDraft, placeholderSlug, readingMinutes, safeHref, slugify } =
   await import("../lib/blog/checks.ts");
 
 const IMG = "3f2b6a1c-1d2e-4f5a-8b9c-0d1e2f3a4b5c";
@@ -265,11 +265,11 @@ describe("addresses, reading time, checklist, review", () => {
     assert.deepEqual(missingTicks({ ...all, fixed_line: "yes" }), ["fixed_line"]);
   });
 
-  it("asks for a read on food, blood test and supplement posts, not training", () => {
-    assert.equal(needsReview("calories"), true);
-    assert.equal(needsReview("blood-tests"), true);
-    assert.equal(needsReview("supplements"), true);
-    assert.equal(needsReview("training"), false);
-    assert.equal(needsReview(null), false);
+  it("takes a Looks good only as a second read: not from the post's writer or whoever saved the version", () => {
+    assert.equal(canSayLooksGood("b", { authorId: "a", savedById: "a" }), true);
+    assert.equal(canSayLooksGood("a", { authorId: "a", savedById: "b" }), false, "the writer");
+    assert.equal(canSayLooksGood("b", { authorId: "a", savedById: "b" }), false, "the last to save");
+    assert.equal(canSayLooksGood("c", { authorId: "a", savedById: "b" }), true);
+    assert.equal(canSayLooksGood("b", { authorId: "a", savedById: null }), true);
   });
 });

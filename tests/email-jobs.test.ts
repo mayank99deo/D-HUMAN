@@ -378,6 +378,18 @@ describe("welcome, didn't finish, and feedback, live", () => {
     assert.equal(g.__fake.calls.length, 1);
   });
 
+  it("never nudges the blog's writers, who sign in only to write", async () => {
+    const writer = await person({ onboardedAt: null, accountAt: new Date("2026-11-21T04:00:00Z") });
+    process.env.BLOG_OWNER_EMAILS = ` ${writer.email.toUpperCase()} , someone@example.com`;
+    try {
+      const r = await run(new Date("2026-11-22T05:10:00Z"));
+      assert.equal(r.welcome_unfinished.due, 0);
+      assert.deepEqual(toWhom(), []);
+    } finally {
+      delete process.env.BLOG_OWNER_EMAILS;
+    }
+  });
+
   it("asks for feedback on day 10, never on a Sunday, on the right path", async () => {
     const used = await person({ onboardedAt: new Date("2026-11-13T05:00:00Z") });
     await meals(used.id, ["2026-11-13", "2026-11-15", "2026-11-17"]);

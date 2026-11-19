@@ -48,7 +48,9 @@ const oneClick = (t: string | null, body: string | null = "List-Unsubscribe=One-
       body,
     }),
   );
-const postJson = (body: unknown) => prefsRoute.POST(new Request(`${SITE}/api/email/prefs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+// What Settings' fetch() sends: JSON from our own origin. `origin: null` leaves the header out.
+const postJson = (body: unknown, origin: string | null = SITE) =>
+  prefsRoute.POST(new Request(`${SITE}/api/email/prefs`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) }));
 const postForm = (fields: Record<string, string>) =>
   prefsRoute.POST(new Request(`${SITE}/api/email/prefs`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() }));
 
@@ -165,6 +167,17 @@ describe("the settings API", () => {
     g.__testUser = null;
     assert.equal((await postJson({ questions: true })).status, 401);
     assert.equal((await prefsRoute.GET(new Request(`${SITE}/api/email/prefs`))).status, 401);
+  });
+
+  it("on the session, only our own pages can change settings; a stop link works from anywhere", async () => {
+    const p = await person();
+    g.__testUser = { id: p.id, email: p.email };
+    assert.equal((await postJson({ weekly: false }, null)).status, 403, "no Origin");
+    assert.equal((await postJson({ weekly: false }, "https://evil.example")).status, 403, "another site");
+    assert.equal((await getPrefs(p.id)).weekly, true);
+    g.__testUser = null;
+    assert.equal((await postJson({ t: stopToken(p.id, "weekly"), weekly: false }, null)).status, 200);
+    assert.equal((await getPrefs(p.id)).weekly, false);
   });
 
   it("a link wins over the session, and a bad link is refused rather than falling back to it", async () => {
