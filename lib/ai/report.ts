@@ -1,8 +1,8 @@
 import "server-only";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { EXTRACT_MARKERS, MARKERS } from "@/lib/domain/markers";
 import { AiRefusalError, MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
+import { strictOutputFormat } from "./output-format";
 import { ExtractedSchema, ReadSchema, type Extracted, type Read } from "./schemas";
 
 export type ReportFile = { mime: string; bytes: Buffer };
@@ -63,7 +63,8 @@ async function extractWith(model: string, files: ReportFile[], onFound: (name: s
     max_tokens: 32000,
     ...fallbackFor(model),
     // Copying values off a page needs little reasoning; low effort is much faster.
-    output_config: { effort: process.env.CLAUDE_EXTRACT_EFFORT === "medium" ? "medium" : "low", format: betaZodOutputFormat(ExtractedSchema) },
+    // Enums enforced by the API (lib/ai/output-format.ts): each marker's key, sex_on_report.
+    output_config: { effort: process.env.CLAUDE_EXTRACT_EFFORT === "medium" ? "medium" : "low", format: strictOutputFormat(ExtractedSchema) },
     system: EXTRACT_SYSTEM,
     messages: [
       {
@@ -196,7 +197,8 @@ ${languageRule(person.language)}`;
       model: MODELS.read,
       max_tokens: 32000,
       ...fallbackFor(MODELS.read),
-      output_config: { effort: process.env.CLAUDE_READ_EFFORT === "high" ? "high" : "medium", format: betaZodOutputFormat(ReadSchema) },
+      // The verdict level's enum is enforced by the API (lib/ai/output-format.ts).
+      output_config: { effort: process.env.CLAUDE_READ_EFFORT === "high" ? "high" : "medium", format: strictOutputFormat(ReadSchema) },
       system: READ_SYSTEM,
       messages: [{ role: "user", content: prompt }],
     })

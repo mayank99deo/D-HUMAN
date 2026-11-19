@@ -1,7 +1,7 @@
 import "server-only";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
+import { strictOutputFormat } from "./output-format";
 import { USUAL_DAY_RUNS, settledRuns } from "@/lib/domain/food-sums";
 import { foodListText, portionsText } from "@/lib/domain/food-table";
 import { averageUsualDay } from "@/lib/domain/meal-minerals";
@@ -106,7 +106,8 @@ export async function estimateMeal(input: MealRequest): Promise<{ data: Meal; mo
       ...fallbackFor(MODELS.food),
       // A calorie estimate gains little from a long think; this keeps logging a meal quick.
       ...(MODELS.food.startsWith("claude-haiku") ? { thinking: { type: "disabled" as const } } : {}),
-      output_config: { effort: "low", format: betaZodOutputFormat(MealSchema) },
+      // Enums enforced by the API (lib/ai/output-format.ts): reply_language, each ingredient's food code, meal_guess, confidence.
+      output_config: { effort: "low", format: strictOutputFormat(MealSchema) },
       system: SYSTEM,
       messages: [{ role: "user", content }],
     }, MEAL_DEADLINE)
@@ -124,7 +125,7 @@ export async function estimateTypicalDay(description: string, context: FoodConte
       model: MODELS.food,
       max_tokens: 16000,
       ...fallbackFor(MODELS.food),
-      output_config: { effort: "low", format: betaZodOutputFormat(DaySchema) },
+      output_config: { effort: "low", format: strictOutputFormat(DaySchema) },
       system: SYSTEM,
       messages: [
         {

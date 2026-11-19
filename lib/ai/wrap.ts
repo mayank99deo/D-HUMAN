@@ -1,6 +1,6 @@
 import "server-only";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
+import { strictOutputFormat } from "./output-format";
 import { WrapStorySchema, type WrapStory } from "./schemas";
 
 // The meal-slot rule fixes a wrap that called a peanut-butter toast, logged as a snack at
@@ -45,7 +45,8 @@ export async function writeWrap(input: WrapInput): Promise<{ data: WrapStory; mo
       model: MODELS.wrap,
       max_tokens: 16000,
       ...fallbackFor(MODELS.wrap),
-      output_config: { effort: "low", format: betaZodOutputFormat(WrapStorySchema) },
+      // Card kinds are an enum the API enforces (lib/ai/output-format.ts).
+      output_config: { effort: "low", format: strictOutputFormat(WrapStorySchema) },
       system: SYSTEM,
       messages: [{ role: "user", content: wrapMessage(input) }],
     })
