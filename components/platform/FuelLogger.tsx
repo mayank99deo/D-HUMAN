@@ -18,6 +18,9 @@ import {
   type Spoken,
   type SpokenId,
 } from "@/lib/domain/speech";
+import { ASK_COPY } from "./ask-copy";
+import { gapsPrefill, mealPrefill } from "./ask-starters";
+import { AskAbout } from "./AskAbout";
 import { COUNTDOWN_MS, IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { MealOrbit, type MealRun } from "./MealOrbit";
 import { MealRow } from "./MealRow";
@@ -172,11 +175,14 @@ export function FuelLogger({
   plan,
   stackReady,
   focusUsual,
+  ask = false,
 }: {
   /** No report and no stack yet, and their meals are now enough to build one. */
   stackReady: boolean;
   /** Opened from the Stack screen to describe a usual day: start at that section. */
   focusUsual: boolean;
+  /** Ask is open to this person: the meal just logged and the gaps get "Ask about this". */
+  ask?: boolean;
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
   totals: Totals;
@@ -774,6 +780,7 @@ export function FuelLogger({
                   {last.tip}
                 </p>
               )}
+              {ask && <AskAbout prefill={mealPrefill(last)} label={ASK_COPY.aboutMeal} className="mt-2" />}
             </article>
           )}
         </section>
@@ -846,6 +853,7 @@ export function FuelLogger({
                 </li>
               ))}
             </ul>
+            {ask && <AskAbout prefill={gapsPrefill(ASK_COPY.gapsChip)} label={ASK_COPY.aboutGaps} className="mt-2" />}
           </section>
         )}
 

@@ -6,6 +6,9 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { BUDGETS, budgetOf, fitBudget, rupees, typicalFor } from "@/lib/domain/budget";
 import { SHORT_OF_NEED } from "@/lib/domain/nutrition";
+import { ASK_COPY } from "./ask-copy";
+import { stackItemPrefill } from "./ask-starters";
+import { AskAbout } from "./AskAbout";
 import { OFFLINE, send } from "./net";
 import { StallNotice } from "./Stall";
 import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "./stack-state";
@@ -48,6 +51,7 @@ export function StackClient({
   budget: savedBudget,
   flagged,
   hold,
+  ask = false,
 }: {
   stack: StackState | null;
   /** Out of date: a newer (or first) report, or changed diet, medicines or conditions. */
@@ -61,6 +65,8 @@ export function StackClient({
   budget: string | null;
   flagged: Flagged[];
   hold: "urgent" | "pregnant" | null;
+  /** Ask is open to this person: each item card gets "Ask about this". */
+  ask?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -328,6 +334,7 @@ export function StackClient({
                       </div>
                     </div>
                     <p className="px-5 text-[0.9375rem] leading-relaxed">{it.why}</p>
+                    {ask && <AskAbout prefill={stackItemPrefill(it.nutrient)} label={ASK_COPY.aboutThis} className="mx-5" />}
                     <dl className="mt-4 grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-4">
                       {[
                         ["Form", it.form],

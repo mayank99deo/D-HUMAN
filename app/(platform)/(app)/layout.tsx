@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { askRegionOf } from "@/components/platform/ask-copy";
+import { isReadLanguage } from "@/components/platform/ask-starters";
+import { AskHost } from "@/components/platform/AskHost";
 import { EmailTap } from "@/components/platform/EmailTap";
 import { Nav, NavView } from "@/components/platform/Nav";
 import { ScrollReset } from "@/components/platform/ScrollReset";
 import { Tour } from "@/components/platform/Tour";
-import { getSessionUser } from "@/lib/auth/session";
+import { askGate } from "@/lib/ask/types";
+import { getSessionUser, type SessionUser } from "@/lib/auth/session";
+import type { Profile } from "@/lib/db/schema";
 import { getProfile, personaFor } from "@/lib/platform/profile";
 
 export const metadata: Metadata = {
@@ -12,11 +17,24 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+// Ask is open to this person: founders first, then onboarded adults (askGate). The control,
+// the tour's Ask stop and the sheet all follow this one answer.
+const askOpen = (user: SessionUser | null, profile: Profile | null) =>
+  !!user && !!profile && askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok";
+
 async function NavWithUser() {
   const user = await getSessionUser();
   const profile = user ? await getProfile(user.id) : null;
   const initial = (profile?.name?.trim()[0] ?? user?.email[0] ?? "D").toUpperCase();
-  return <Nav initial={initial} />;
+  return <Nav initial={initial} ask={askOpen(user, profile)} />;
+}
+
+// Ask's host: it loads the sheet's code only on intent, so nothing here holds up the page.
+async function AskForUser() {
+  const user = await getSessionUser();
+  const profile = user ? await getProfile(user.id) : null;
+  if (!user || !profile || !askOpen(user, profile)) return null;
+  return <AskHost who={user.id} region={askRegionOf(profile.timezone)} readLanguage={isReadLanguage(profile.language) ? profile.language : "en"} />;
 }
 
 // The first-run tour, for onboarded people. It waits for the tour to be done on
@@ -26,7 +44,7 @@ async function TourForUser() {
   const user = await getSessionUser();
   const profile = user ? await getProfile(user.id) : null;
   if (!user || !profile?.onboardedAt) return null;
-  return <Tour who={user.id} pending={!profile.tourDoneAt} name={personaFor(profile).firstName} />;
+  return <Tour who={user.id} pending={!profile.tourDoneAt} name={personaFor(profile).firstName} ask={askOpen(user, profile)} />;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -54,6 +72,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Its own boundary with no fallback: it never holds up the page. */}
         <Suspense fallback={null}>
           <TourForUser />
+        </Suspense>
+        {/* Ask, in its own boundary with no fallback, like the tour. */}
+        <Suspense fallback={null}>
+          <AskForUser />
         </Suspense>
         {/* Taps on email links (?e=): recorded once, then dropped from the address. */}
         <Suspense fallback={null}>

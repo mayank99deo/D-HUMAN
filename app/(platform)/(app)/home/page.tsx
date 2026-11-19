@@ -10,6 +10,7 @@ import { retestFrom } from "@/components/platform/retest";
 import { Stall } from "@/components/platform/Stall";
 import { overBy, TargetBar } from "@/components/platform/Target";
 import { Verdict } from "@/components/platform/Verdict";
+import { askGate } from "@/lib/ask/types";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { homeData } from "@/lib/platform/dashboard";
 import { localDate } from "@/lib/platform/profile";
@@ -44,7 +45,9 @@ const DELETED: Record<string, string> = {
 };
 
 async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { profile, persona, data } = await homeData();
+  const { user, profile, persona, data } = await homeData();
+  // "Ask about this" beside the markers that matter, for people Ask is open to.
+  const ask = askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok";
   const deleted = DELETED[String((await searchParams).deleted ?? "")] ?? null;
   const read = data.view?.read;
   const notes = new Map(read?.markers.map((m) => [m.id, m.note]) ?? []);
@@ -251,11 +254,11 @@ async function Dashboard({ searchParams }: { searchParams: Promise<Record<string
               <div className="mt-4 grid gap-x-8 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {matter.slice(0, 3).map((m, i) => (
                   <div key={m.id} className={i === 0 ? "sm:col-span-2 lg:col-span-1 xl:col-span-2" : ""}>
-                    <MarkerTile m={m} note={notes.get(m.id)} before={m.key ? data.prev.get(m.key) : undefined} />
+                    <MarkerTile m={m} note={notes.get(m.id)} before={m.key ? data.prev.get(m.key) : undefined} ask={ask} />
                   </div>
                 ))}
                 {matter.slice(3).map((m) => (
-                  <MarkerTile key={m.id} m={m} size="sm" before={m.key ? data.prev.get(m.key) : undefined} />
+                  <MarkerTile key={m.id} m={m} size="sm" before={m.key ? data.prev.get(m.key) : undefined} ask={ask} />
                 ))}
               </div>
             </section>

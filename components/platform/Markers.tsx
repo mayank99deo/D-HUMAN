@@ -1,5 +1,8 @@
 import type { Marker } from "@/lib/db/schema";
-import { markerDef } from "@/lib/domain/markers";
+import { markerDef, type MarkerStatus } from "@/lib/domain/markers";
+import { ASK_COPY } from "./ask-copy";
+import { askAboutMarker, markerPrefill } from "./ask-starters";
+import { AskAbout } from "./AskAbout";
 
 // Range rails and marker tiles. The band is the lab's range; the pin is you.
 
@@ -86,7 +89,13 @@ export function Trend({ now, before }: { now: number | null; before?: number }) 
   );
 }
 
-export function MarkerTile({ m, note, before, size = "lg" }: { m: Marker; note?: string; before?: number; size?: "lg" | "sm" }) {
+/** "Ask about this" for a marker that's out of range, at the edge or flagged, when Ask is open to the person. */
+function AskAboutMarker({ m, name, className = "" }: { m: Marker; name: string; className?: string }) {
+  if (!askAboutMarker(m)) return null;
+  return <AskAbout prefill={markerPrefill({ id: m.id, name, status: m.status as MarkerStatus, flag: m.flag })} label={ASK_COPY.aboutThis} className={className} />;
+}
+
+export function MarkerTile({ m, note, before, size = "lg", ask = false }: { m: Marker; note?: string; before?: number; size?: "lg" | "sm"; ask?: boolean }) {
   const def = markerDef(m.key);
   const name = def?.name ?? m.name;
   const value = m.value != null ? fmt(m.value) : m.valueText ?? "–";
@@ -110,11 +119,12 @@ export function MarkerTile({ m, note, before, size = "lg" }: { m: Marker; note?:
       <RangeRail value={m.value} low={m.refLow} high={m.refHigh} status={m.status} />
       <p className="text-sm text-graphite">Range {rangeText(m)}</p>
       {note && <p className="max-w-prose text-[0.9375rem] leading-relaxed">{note}</p>}
+      {ask && <AskAboutMarker m={m} name={name} className="-mt-2 self-start" />}
     </article>
   );
 }
 
-export function MarkerRow({ m, note }: { m: Marker; note?: string }) {
+export function MarkerRow({ m, note, ask = false }: { m: Marker; note?: string; ask?: boolean }) {
   const def = markerDef(m.key);
   return (
     <li className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 border-t border-line py-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]">
@@ -132,6 +142,7 @@ export function MarkerRow({ m, note }: { m: Marker; note?: string }) {
         {m.flag && <span className="error-mark ml-2 font-semibold text-paper">{m.flag === "urgent" ? "Get medical advice today" : "Worth showing a doctor"}</span>}
         {note && <span className="mt-1 block text-paper/85">{note}</span>}
       </span>
+      {ask && <AskAboutMarker m={m} name={def?.name ?? m.name} className="order-5 col-span-2 justify-self-start sm:col-span-3" />}
     </li>
   );
 }

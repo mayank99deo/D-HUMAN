@@ -6,6 +6,7 @@ import { DeleteReport } from "@/components/platform/DeleteReport";
 import { MarkerRow } from "@/components/platform/Markers";
 import { retestFrom } from "@/components/platform/retest";
 import { Verdict } from "@/components/platform/Verdict";
+import { askGate } from "@/lib/ask/types";
 import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { reportView } from "@/lib/platform/dashboard";
 import { requireMember } from "@/lib/platform/member";
@@ -23,6 +24,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
   if (!view) notFound();
   const { read, markers } = view;
   const notes = new Map(read.markers.map((m) => [m.id, m.note]));
+  const ask = askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok";
 
   const groups = new Map<string, typeof markers>();
   for (const m of markers) {
@@ -108,7 +110,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
             <h3 className="text-sm font-semibold text-graphite">{panel}</h3>
             <ul className="mt-1">
               {list.map((m) => (
-                <MarkerRow key={m.id} m={m} note={notes.get(m.id) ?? markerDef(m.key)?.what} />
+                <MarkerRow key={m.id} m={m} note={notes.get(m.id) ?? markerDef(m.key)?.what} ask={ask} />
               ))}
             </ul>
           </div>

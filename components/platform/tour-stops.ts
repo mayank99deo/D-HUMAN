@@ -1,9 +1,10 @@
 // The first-run tour: its stops and where the card sits beside each one.
 // Pure, so the copy and the layout maths can be tested without a browser.
+import { ASK_LIMITS } from "@/lib/ask/types";
 import { PLAN } from "@/lib/domain/plan";
 
-/** Each stop points at a real control, marked data-tour="<id>" in Nav.tsx. */
-export type TourStop = { id: "fuel" | "upload" | "home" | "stack" | "wraps" | "settings"; title: string; body: string };
+/** Each stop points at a real control, marked data-tour="<id>" in Nav.tsx (Ask's in AskButton.tsx). */
+export type TourStop = { id: "fuel" | "upload" | "home" | "stack" | "ask" | "wraps" | "settings"; title: string; body: string };
 
 // The pilot leads with calorie tracking, so Fuel comes first. Every claim here is
 // checked against the screen it describes; keep them in step when screens change.
@@ -39,6 +40,19 @@ export const TOUR: readonly TourStop[] = [
     body: "Report reads, food notes, wraps and your stack come in English, Hindi or Hinglish. Change it any time here, in Settings. Buttons stay in English for now.",
   },
 ];
+
+/** Shown after Stack, only to people Ask is open to (askGate): it points at the top-bar control. */
+export const ASK_STOP: TourStop = {
+  id: "ask",
+  title: "Ask: quick answers",
+  body: `Ask about food, training, your markers or where something is in the app. Short AI answers, ${ASK_LIMITS.perDay} a day. Not medical advice.`,
+};
+
+const AFTER_STACK = TOUR.findIndex((s) => s.id === "stack") + 1;
+const TOUR_WITH_ASK: readonly TourStop[] = [...TOUR.slice(0, AFTER_STACK), ASK_STOP, ...TOUR.slice(AFTER_STACK)];
+
+/** The tour for this person: the Ask stop goes after Stack only when they have Ask. The same list every time. */
+export const tourStops = (ask: boolean): readonly TourStop[] => (ask ? TOUR_WITH_ASK : TOUR);
 
 /** Said once, on the last stop, from the plan's own numbers. */
 export const FREE_LINE = `Free to start: ${PLAN.freeMeals} meal logs and ${PLAN.freeReads} report reads.`;

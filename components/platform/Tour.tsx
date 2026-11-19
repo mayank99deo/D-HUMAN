@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { send } from "./net";
-import { FREE_LINE, TOUR, cardWidth, placeTour, scrimClip, type Box } from "./tour-stops";
+import { FREE_LINE, cardWidth, placeTour, scrimClip, tourStops, type Box, type TourStop } from "./tour-stops";
 
 // A quick walk round the app for someone who has just finished onboarding: the
 // screen dims and a light moves from tab to tab. Shown once per person (the server
@@ -33,8 +33,8 @@ function rememberHere(key: string) {
 type Outcome = "finished" | "skipped";
 const markDone = (body: { outcome?: Outcome; stop?: number }) => send("/api/profile/tour", { body, keepalive: true });
 
-/** Mounted on every app page for onboarded people; `pending` is true until the server has it as done. */
-export function Tour({ who, pending, name }: { who: string; pending: boolean; name: string }) {
+/** Mounted on every app page for onboarded people; `pending` is true until the server has it as done. `ask`: Ask is open to them, so it gets a stop. */
+export function Tour({ who, pending, name, ask = false }: { who: string; pending: boolean; name: string; ask?: boolean }) {
   const [run, setRun] = useState<{ replay: boolean } | null>(null);
   const [stop, setStop] = useState(0);
   // Once per page life, whatever a refresh of the layout says afterwards.
@@ -70,6 +70,7 @@ export function Tour({ who, pending, name }: { who: string; pending: boolean; na
 
   if (!run) return null;
 
+  const stops = tourStops(ask);
   const end = (outcome: Outcome) => {
     if (!run.replay) {
       rememberHere(storageKey(who));
@@ -77,8 +78,8 @@ export function Tour({ who, pending, name }: { who: string; pending: boolean; na
     }
     setRun(null);
   };
-  const lead = !run.replay && stop === 0 ? `Welcome${name ? `, ${name}` : ""}. A quick look round: ${TOUR.length} stops, skip any time.` : null;
-  return <TourDialog stop={stop} setStop={setStop} lead={lead} replay={run.replay} onEnd={end} />;
+  const lead = !run.replay && stop === 0 ? `Welcome${name ? `, ${name}` : ""}. A quick look round: ${stops.length} stops, skip any time.` : null;
+  return <TourDialog stops={stops} stop={stop} setStop={setStop} lead={lead} replay={run.replay} onEnd={end} />;
 }
 
 /** For Settings: walks through the tour again. Nothing is saved. */
@@ -104,12 +105,14 @@ function setBox(el: HTMLElement | null, b: Box | null) {
 }
 
 function TourDialog({
+  stops,
   stop,
   setStop,
   lead,
   replay,
   onEnd,
 }: {
+  stops: readonly TourStop[];
   stop: number;
   setStop: (n: number) => void;
   lead: string | null;
@@ -124,8 +127,8 @@ function TourDialog({
   const primary = useRef<HTMLButtonElement & HTMLAnchorElement>(null);
   const ended = useRef(false);
   const describedBy = useId();
-  const s = TOUR[stop];
-  const last = stop === TOUR.length - 1;
+  const s = stops[stop];
+  const last = stop === stops.length - 1;
 
   const finish = (outcome: Outcome) => {
     if (ended.current) return;
@@ -141,14 +144,14 @@ function TourDialog({
     if (!d || !c || !d.open) return;
     const view = { width: d.clientWidth, height: d.clientHeight };
     c.style.width = `${cardWidth(view.width)}px`;
-    const r = document.querySelector(`[data-tour="${TOUR[stop].id}"]`)?.getBoundingClientRect();
+    const r = document.querySelector(`[data-tour="${stops[stop].id}"]`)?.getBoundingClientRect();
     const p = placeTour(r ? { top: r.top, left: r.left, width: r.width, height: r.height } : null, c.offsetHeight, view);
     c.style.top = `${p.card.top}px`;
     c.style.left = `${p.card.left}px`;
     if (scrim.current) scrim.current.style.clipPath = scrimClip(p.hole, view);
     setBox(ring.current, p.hole);
     setBox(leader.current, p.leader);
-  }, [stop]);
+  }, [stop, stops]);
 
   // Open as a modal: the rest of the page goes inert, and focus goes back where it was afterwards.
   useLayoutEffect(() => {
@@ -245,13 +248,13 @@ function TourDialog({
 
       <div ref={card} className="tour-in tour-move absolute max-h-[calc(100dvh-2rem)] overflow-y-auto border border-paper bg-ink px-5 pb-5 pt-4">
         <div className="flex gap-1" aria-hidden>
-          {TOUR.map((t, j) => (
+          {stops.map((t, j) => (
             <span key={t.id} className={`h-0.5 flex-1 ${j <= stop ? "bg-paper" : "bg-line-strong"}`} />
           ))}
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
           <span className="text-sm text-graphite" aria-hidden>
-            {stop + 1} of {TOUR.length}
+            {stop + 1} of {stops.length}
           </span>
           <button type="button" className="link-quiet -mr-2 min-h-11 px-2 text-sm" onClick={() => finish(last ? "finished" : "skipped")}>
             {last ? "Done" : "Skip tour"}
@@ -262,7 +265,7 @@ function TourDialog({
         <div id={describedBy} aria-live="polite" aria-atomic="true">
           <div key={stop} className="fact-in">
             <p className="sr-only">
-              Stop {stop + 1} of {TOUR.length}.
+              Stop {stop + 1} of {stops.length}.
             </p>
             {lead && <p className="mb-2 text-[0.9375rem]">{lead}</p>}
             <h2 className="text-xl font-bold leading-tight semiwide">{s.title}</h2>

@@ -19,7 +19,8 @@ const removeDatabase = tempDatabase();
 const { eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
 const { POST: tourRoute } = await import("../app/api/profile/tour/route.ts");
-const { FREE_LINE, GUTTER, TOUR, cardWidth, placeTour, scrimClip } = await import("../components/platform/tour-stops.ts");
+const { ASK_STOP, FREE_LINE, GUTTER, TOUR, cardWidth, placeTour, scrimClip, tourStops } = await import("../components/platform/tour-stops.ts");
+const { ASK_LIMITS } = await import("../lib/ask/types.ts");
 const { PLAN } = await import("../lib/domain/plan.ts");
 
 after(async () => {
@@ -41,7 +42,7 @@ describe("tour copy", () => {
   it("takes the free allowance from the plan, said once", () => {
     assert.ok(FREE_LINE.includes(`${PLAN.freeMeals} meal logs`));
     assert.ok(FREE_LINE.includes(`${PLAN.freeReads} report reads`));
-    assert.ok(!TOUR.some((s) => /free/i.test(s.body)), "only the free line mentions it");
+    assert.ok(!tourStops(true).some((s) => /free/i.test(s.body)), "only the free line mentions it");
   });
 
   it("never claims a doctor reviews anything, and never diagnoses", () => {
@@ -50,11 +51,32 @@ describe("tour copy", () => {
     assert.match(TOUR.find((s) => s.id === "upload")!.body, /AI reads/);
   });
 
+  it("has an Ask stop only when Ask is open to the person, right after Stack", () => {
+    assert.deepEqual(tourStops(false), TOUR);
+    assert.ok(!tourStops(false).some((s) => s.id === "ask"));
+    const withAsk = tourStops(true).map((s) => s.id);
+    assert.equal(withAsk.length, TOUR.length + 1);
+    assert.equal(withAsk[withAsk.indexOf("stack") + 1], "ask");
+    assert.equal(withAsk.at(-1), "settings", "the free line stays on the last stop");
+    assert.equal(tourStops(true), tourStops(true), "the same list every time, so the tour's effects don't churn");
+  });
+
+  it("says Ask is AI, takes the daily number from the limits, and isn't medical advice", () => {
+    assert.equal(ASK_STOP.title, "Ask: quick answers");
+    assert.ok(ASK_STOP.body.includes(`${ASK_LIMITS.perDay} a day`));
+    assert.match(ASK_STOP.body, /AI answers/);
+    assert.match(ASK_STOP.body, /Not medical advice\./);
+  });
+
   it("points only at controls the nav marks for it", () => {
     const nav = readFileSync(path.join(root, "components/platform/Nav.tsx"), "utf8");
     assert.match(nav, /data-tour=\{t\.icon\}/);
+    // Ask's control lives in its own file, rendered by the nav only when Ask is open.
+    assert.match(readFileSync(path.join(root, "components/platform/AskButton.tsx"), "utf8"), /data-tour="ask"/);
+    assert.match(nav, /\{ask && <AskButton \/>\}/);
     for (const s of TOUR) {
       if (s.id === "settings") assert.match(nav, /data-tour="settings"/);
+      else if (s.id === "ask") assert.fail("Ask isn't in the base tour");
       else assert.match(nav, new RegExp(`icon: "${s.id}"`), `${s.id} is a tab`);
     }
   });

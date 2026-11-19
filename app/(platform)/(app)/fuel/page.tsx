@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { Suspense } from "react";
 import { FuelLogger } from "@/components/platform/FuelLogger";
 import { aiMode } from "@/lib/ai/client";
+import { askGate } from "@/lib/ask/types";
 import type { SavedDay } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import { foodFactsFor } from "@/lib/domain/food-facts";
@@ -59,6 +60,7 @@ async function Fuel({ searchParams }: { searchParams: Promise<Record<string, str
       plan={plan}
       stackReady={stackReady}
       focusUsual={usual}
+      ask={askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok"}
     />
   );
 }

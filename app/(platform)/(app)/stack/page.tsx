@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { StackClient } from "@/components/platform/Stack";
 import { aiMode } from "@/lib/ai/client";
+import { askGate } from "@/lib/ask/types";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import type { Profile } from "@/lib/db/schema";
@@ -107,6 +108,7 @@ async function Stack() {
       budget={profile.supplementBudget}
       flagged={flagged}
       hold={hold}
+      ask={askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok"}
     />
   );
 }

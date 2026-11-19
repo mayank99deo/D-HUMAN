@@ -406,6 +406,52 @@
   }
 }
 
+/* Ask (AskButton.tsx): a hairline outline whose top-left corner is cut like the notch in
+   the logo's D. The cut is drawn as a hairline diagonal in the border's own colour. */
+.ask-notch {
+  --notch: 7px;
+  position: relative;
+  clip-path: polygon(var(--notch) 0, 100% 0, 100% 100%, 0 100%, 0 var(--notch));
+}
+.ask-notch::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: calc(var(--notch) - 1.5px);
+  width: calc(var(--notch) * 1.4142 + 1px);
+  height: 1px;
+  background: var(--notch-line, var(--color-line-strong));
+  transform-origin: 0 50%;
+  transform: rotate(-45deg);
+}
+
+/* The Ask sheet slides up on phones and in from the right on laptops; reduced motion: it just appears. */
+@keyframes ask-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes ask-left {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+dialog[open] .ask-in {
+  animation: ask-up 200ms ease-out both;
+}
+@media (min-width: 1024px) {
+  dialog[open] .ask-in {
+    animation-name: ask-left;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[open] .ask-in {
+    animation: none;
+  }
+}
+
 /* The first-run tour (Tour.tsx): the screen dims once, then the light and the card
    glide from stop to stop. Transitions start only after the first placement. */
 @keyframes tour-in {

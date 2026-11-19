@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/brand/Logo";
+import { AskButton } from "./AskButton";
 
 const TABS = [
   { href: "/home", label: "Home", icon: "home" },
@@ -41,14 +42,15 @@ function Icon({ name }: { name: (typeof TABS)[number]["icon"] }) {
   );
 }
 
-export function Nav({ initial }: { initial: string }) {
-  return <NavView initial={initial} path={usePathname()} />;
+/** `ask`: Ask is open to this person (askGate), so the top bar carries its control. */
+export function Nav({ initial, ask = false }: { initial: string; ask?: boolean }) {
+  return <NavView initial={initial} path={usePathname()} ask={ask} />;
 }
 
 // The same bar without reading the URL, for the loading state: on dynamic
 // routes the path isn't known until the request streams in. data-tour marks
 // what the first-run tour points at (components/platform/tour-stops.ts).
-export function NavView({ initial, path }: { initial: string; path: string }) {
+export function NavView({ initial, path, ask = false }: { initial: string; path: string; ask?: boolean }) {
   const active = (href: string) => path === href || (href !== "/home" && path.startsWith(href)) || (href === "/home" && path.startsWith("/reports"));
   return (
     <>
@@ -60,13 +62,17 @@ export function NavView({ initial, path }: { initial: string; path: string }) {
         <Link href="/home" className="flex h-11 items-center" aria-label="D-Human home">
           <Wordmark className="h-3.5 w-auto" />
         </Link>
-        <Link
-          href="/settings"
-          aria-label="Profile and settings"
-          className={`grid h-11 w-11 place-items-center text-sm font-bold ${path.startsWith("/settings") ? "text-paper" : "text-graphite"}`}
-        >
-          <span data-tour="settings" className="grid h-8 w-8 place-items-center border border-line-strong semiwide">{initial}</span>
-        </Link>
+        {/* Ask sits just left of the profile initial, as a right-aligned pair. */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {ask && <AskButton />}
+          <Link
+            href="/settings"
+            aria-label="Profile and settings"
+            className={`grid h-11 w-11 place-items-center text-sm font-bold ${path.startsWith("/settings") ? "text-paper" : "text-graphite"}`}
+          >
+            <span data-tour="settings" className="grid h-8 w-8 place-items-center border border-line-strong semiwide">{initial}</span>
+          </Link>
+        </div>
       </header>
 
       {/* Rail on wide screens, tab bar on phones and tablets: compact, icon beside label, on a phone turned sideways.
