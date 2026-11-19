@@ -5,6 +5,7 @@ import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { BUDGET_IDS } from "@/lib/domain/budget";
+import { sendWelcome } from "@/lib/email/jobs";
 import { ACTIVITY_IDS, CONDITION_IDS, DIET_IDS, GOAL_IDS, LANGUAGE_IDS, LEVEL_IDS, SEX_IDS } from "@/lib/domain/options";
 import { ensureEvents } from "@/lib/platform/events";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -94,5 +95,8 @@ export async function POST(request: Request) {
     const persona = personaFor(saved);
     after(() => ensureEvents(saved, persona));
   }
+  // The welcome email, once per account, after the response so it never holds up the save.
+  // A dry run until EMAIL_LIFECYCLE_LIVE is on; the daily job catches up any that didn't go.
+  if (justFinished) after(() => sendWelcome(saved));
   return json({ status: "saved" });
 }
