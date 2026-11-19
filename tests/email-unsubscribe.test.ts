@@ -204,10 +204,17 @@ describe("taps", () => {
     const [p, other] = [await person(), await person()];
     const d = await db();
     await d.insert(schema.emailSends).values({ id: "send-tap-1", userId: p.id, kind: "weekly", dedupeKey: "2026-11-16", localDate: "2026-11-22", status: "sent" });
-    const tap = (e: unknown) => tapRoute.POST(new Request(`${SITE}/api/email/tap`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ e }) }));
+    const tap = (e: unknown, origin: string | null = SITE) =>
+      tapRoute.POST(new Request(`${SITE}/api/email/tap`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify({ e }) }));
 
     g.__testUser = null;
     assert.equal((await tap("send-tap-1")).status, 401);
+
+    // Only from our own pages: another site's Origin, or none, changes nothing.
+    g.__testUser = { id: p.id, email: p.email };
+    assert.equal((await tap("send-tap-1", "https://evil.example")).status, 403);
+    assert.equal((await tap("send-tap-1", null)).status, 403);
+    assert.equal((await d.select().from(schema.emailSends).where(eq(schema.emailSends.id, "send-tap-1")))[0].firstTapAt, null);
 
     g.__testUser = { id: other.id, email: other.email };
     const theirs = await tap("send-tap-1");

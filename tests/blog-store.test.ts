@@ -478,6 +478,10 @@ describe("photos", () => {
     const cut = riff(["VP8 ", frame]);
     cut.writeUInt32LE(cut.length, 4);
     assert.equal(err(cut), "unreadable", "a RIFF size longer than the file");
+    const short = riff(["VP8 ", frame], ["XMP ", Buffer.from("<x:xmpmeta/>")]);
+    short.writeUInt32LE(4 + 8 + frame.length, 4);
+    assert.equal(err(short), "unreadable", "a RIFF size that stops before an XMP chunk");
+    assert.equal(err(Buffer.concat([riff(["VP8 ", frame]), Buffer.from("GPS 28.61N")])), "unreadable", "bytes after the RIFF end");
   });
 
   it("takes share images only as JPEGs at the share sizes, the link preview required", () => {

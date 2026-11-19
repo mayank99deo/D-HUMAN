@@ -565,7 +565,7 @@ describe("deleting an account", () => {
 
     g.__testUser = p;
     calls = [];
-    const res = await deleteRoute.POST(new Request(`${SITE}/api/account/delete`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "DELETE" }) }));
+    const res = await deleteRoute.POST(new Request(`${SITE}/api/account/delete`, { method: "POST", headers: { "content-type": "application/json", origin: SITE }, body: JSON.stringify({ confirm: "DELETE" }) }));
     assert.equal(res.status, 200);
     assert.equal((await rows(p.id)).length, 0, "answers deleted with the account");
     assert.equal(calls.length, 0, "the Sheet is asked after the response");

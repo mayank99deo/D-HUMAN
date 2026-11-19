@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { recordTap } from "@/lib/email/send";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -10,6 +11,8 @@ import { json, unauthorized } from "@/lib/platform/http";
 const body = z.object({ e: z.string().regex(/^[A-Za-z0-9-]{1,64}$/) });
 
 export async function POST(request: Request) {
+  // Acts on the session alone: only from our own pages (lib/auth/origin.ts).
+  if (!sameOrigin(request)) return json({ error: "bad_origin" }, 403);
   const user = await apiUser();
   if (!user) return unauthorized();
   const parsed = body.safeParse(await request.json().catch(() => null));

@@ -163,4 +163,26 @@ describe("photo uploads carry no location data (§2.4)", () => {
   it("refuses a WebP that carries an EXIF chunk", () => {
     assert.deepEqual(images.checkPhotoFiles([webpWithExif(960, 640)]), { ok: false, error: "metadata" });
   });
+
+  // Retest at 41eebf1: webpFacts walks only the chunks the RIFF size covers, so an EXIF
+  // chunk appended after the RIFF end is stored and served with the photo. JPEG refuses
+  // bytes after its end-of-image ("unreadable"); WebP should refuse bytes after RIFF too.
+  it("refuses a WebP with bytes after its RIFF end (an EXIF chunk tacked on)", () => {
+    const frame = Buffer.alloc(30);
+    frame.set([0x9d, 0x01, 0x2a], 3);
+    frame.writeUInt16LE(960, 6);
+    frame.writeUInt16LE(640, 8);
+    const chunk = (name: string, data: Buffer) => {
+      const size = Buffer.alloc(4);
+      size.writeUInt32LE(data.length);
+      return Buffer.concat([Buffer.from(name), size, data, Buffer.alloc(data.length % 2)]);
+    };
+    const body = Buffer.concat([Buffer.from("WEBP"), chunk("VP8 ", frame)]);
+    const size = Buffer.alloc(4);
+    size.writeUInt32LE(body.length);
+    const plain = Buffer.concat([Buffer.from("RIFF"), size, body]);
+    assert.equal(images.checkPhotoFiles([plain]).ok, true, "control: the same WebP without the trailer");
+    const trailer = chunk("EXIF", Buffer.from("MM\0*GPSLatitude=28.6139N"));
+    assert.equal(images.checkPhotoFiles([Buffer.concat([plain, trailer])]).ok, false);
+  });
 });

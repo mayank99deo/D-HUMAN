@@ -70,8 +70,9 @@ const finishedAt = async (id: string) => {
   const d = await db();
   return (await d.select().from(schema.wraps).where(eq(schema.wraps.id, id)))[0].finishedAt;
 };
-const postFinished = (body: unknown) =>
-  finishedRoute.POST(new Request("https://www.d-human.fit/api/wraps/finished", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+// What the viewer's fetch() sends: JSON from our own origin. `origin: null` leaves the header out.
+const postFinished = (body: unknown, origin: string | null = "https://www.d-human.fit") =>
+  finishedRoute.POST(new Request("https://www.d-human.fit/api/wraps/finished", { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(body) }));
 
 describe("the days with meals", () => {
   it("marks Monday to Sunday, for this person only", async () => {
@@ -107,6 +108,16 @@ describe("finished_at", () => {
     g.__testUser = owner;
     assert.equal((await postFinished({ id })).status, 200);
     assert.ok((await finishedAt(id)) instanceof Date);
+  });
+
+  it("only from our own pages: another site's Origin, or none, gets 403 and changes nothing", async () => {
+    const owner = await person();
+    const id = await wrapFor(owner.id);
+    g.__testUser = owner;
+    assert.equal((await postFinished({ id }, "https://evil.example")).status, 403);
+    assert.equal((await postFinished({ id }, null)).status, 403);
+    assert.equal(await finishedAt(id), null);
+    g.__testUser = null;
   });
 
   it("refuses signed-out and malformed requests", async () => {

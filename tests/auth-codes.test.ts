@@ -103,7 +103,13 @@ describe("account delete", () => {
     await issued(email);
     await issued("staying@example.com");
     g.__testUser = { id: signedIn.userId, email };
-    const res = await deleteAccount(new Request("http://localhost/api/account/delete", { method: "POST", body: JSON.stringify({ confirm: "DELETE" }) }));
+    const remove = (origin: string | null) =>
+      deleteAccount(new Request("http://localhost/api/account/delete", { method: "POST", headers: origin ? { origin } : {}, body: JSON.stringify({ confirm: "DELETE" }) }));
+    // Only from our own pages: another site's Origin, or none, deletes nothing.
+    assert.equal((await remove("https://evil.example")).status, 403);
+    assert.equal((await remove(null)).status, 403);
+    assert.equal((await (await db()).select().from(schema.users).where(eq(schema.users.email, email))).length, 1);
+    const res = await remove("http://localhost");
     g.__testUser = null;
     assert.equal(res.status, 200);
     const d = await db();

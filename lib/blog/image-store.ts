@@ -90,7 +90,8 @@ const WEBP_METADATA = new Set(["EXIF", "XMP "]);
 /**
  * A WebP's size from its first chunk (lossy, lossless or extended), and whether any chunk
  * carries EXIF or XMP (or the extended header says it does). Walks every chunk the RIFF
- * header covers; a chunk that runs past the file means it isn't read.
+ * header covers, which must be the whole file; a chunk that runs past it, or bytes after
+ * it, mean it isn't read.
  */
 function webpFacts(b: Uint8Array): ImageFacts | null {
   if (b.length < 30) return null;
@@ -112,8 +113,11 @@ function webpFacts(b: Uint8Array): ImageFacts | null {
   } else {
     return null;
   }
+  // The size fields above sit inside the first chunk, so it must be long enough to hold them.
+  if (u32le(16) < (chunk === "VP8L" ? 5 : 10)) return null;
+  // The RIFF header's length must cover the file exactly: nothing may ride along after it.
   const end = 8 + u32le(4);
-  if (end > b.length) return null;
+  if (end !== b.length) return null;
   for (let at = 12; at < end; ) {
     if (at + 8 > end) return null;
     const length = u32le(at + 4);

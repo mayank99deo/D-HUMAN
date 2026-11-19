@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { after } from "next/server";
+import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser, endSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { forgetFeedbackInSheet, respondentCode } from "@/lib/email/feedback";
@@ -15,6 +16,8 @@ import { json, unauthorized } from "@/lib/platform/http";
 // Feedback and Replies rows by their respondent code. If the Sheet doesn't answer,
 // the daily job keeps asking (lib/email/feedback.ts).
 export async function POST(request: Request) {
+  // Acts on the session alone: only from our own pages (lib/auth/origin.ts).
+  if (!sameOrigin(request)) return json({ error: "bad_origin" }, 403);
   const user = await apiUser();
   if (!user) return unauthorized();
   const body = (await request.json().catch(() => null)) as { confirm?: string } | null;
