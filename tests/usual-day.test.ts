@@ -242,8 +242,10 @@ describe("logged meals saved before the food table", () => {
     const target = targetsFor({ sex: "female", age: 28, heightCm: 160, weightKg: 55, level: "regular", archetype: "strength", goals: ["muscle"] }).kcal;
     const kcal = Math.round((target * 0.8) / 2);
     const d = await db();
-    const today = new Date().toISOString().slice(0, 10);
-    const dayAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    // Days in India time, as the app saves meals (localDate); UTC dates broke this from 00:00 to 05:30 IST.
+    const ist = (at: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(at);
+    const today = ist(new Date());
+    const dayAgo = (n: number) => ist(new Date(Date.now() - n * 86400000));
     // Three kinds of rows, two meals a day for three days: the model's meal total (until 2026-11-18),
     // the model's micronutrients per item (2026-11-18), and the food table's (now, with ingredients and basis).
     const oldest = { name: "Thali", portion: "1 plate" };

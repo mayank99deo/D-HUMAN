@@ -200,6 +200,7 @@ The running record of this project: where things stand, why they are the way the
 
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
+- [ ] /write's Publish sheet shows the second-read status from when the editor page loaded (`initial.review` in `components/write/Editor.tsx`; refreshed only on a conflict reload). After the other writer's "Looks good", Publish stays greyed until the page is reloaded (Mayank hit this on the first post, 2026-11-19). Fix: fetch the post's review when the sheet opens, or return it from the heartbeat.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
 - [ ] **Blog and email setup (Mayank):**
   - **Vercel Production, then Redeploy:**
@@ -281,6 +282,18 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-19
+- **First blog post live (Mayank and his co-founder):** https://www.d-human.fit/blog/preventive-health-checkup-india. Checked live by the orchestrator:
+  - **Page:** 200 with index and follow, the search title "Preventive health checkups in India: the numbers | D-Human", the canonical address, one H1, and JSON-LD for WebPage, ImageObject, BlogPosting and BreadcrumbList.
+  - **Content:** the fact-check fixes are in.
+  - **Images:** the cover (WebP 1600) and the link-preview image load.
+  - **Links and feed:** the landing footer shows "Blog", and RSS lists the post.
+  - **Mayank's edit:** he kept "Written and edited by Mayank Narayan." in place of the AI-assistance line.
+  - **Publishing:** it needed a reload of the editor after the co-founder's "Looks good" (Open items).
+  - **Ruled out:** Safari sends the real Origin from no-referrer pages, checked in WebKit and Chromium.
+  - **Bug:** `/sitemap.xml` didn't pick up the post. /blog, RSS and the footer refreshed on publish; the sitemap didn't.
+    - **Root cause (SEO lead):** Next hands any prerendered `…/sitemap.xml` route to the host as a plain static file (`isStaticMetadataFile` in `next/dist/build/adapter/build-complete.js`). It gets no function, no cache tags and no revalidation, so on Vercel it changed only with a deploy. Live evidence: the etag was the MD5 of the body, and `x-vercel-id` had one hop.
+    - **Fix:** `app/sitemap.ts` awaits `connection()`, so the build shows it as `ƒ`, and reads `blogListingNow()` (`lib/blog/registry.ts`) straight from the database. That's about 4 small queries a fetch. `withPages` is shared with `authors()`. `tests/sitemap.test.ts` fails against the old file. robots.txt and RSS are unchanged.
+  - **Also:** `tests/usual-day.test.ts` built "today" in UTC while meals save on the IST date, so it failed from 00:00 to 05:30 IST. It now uses the IST date, and passed at 00:05 IST. Checked: 859 tests and the build.
 - **"Ask", an in-app AI assistant (Mayank's request), design round started:**
   - **Mayank's brief:** answers only food and diet, exercise and gym, health and healthcare, and help finding things in the app. Anything else gets a subtle redirect. The lightest model (Haiku 5.5), short and crisp answers, at most 5–6 questions per person a day, added subtly in the house style.
   - **His call (2026-11-19):** the bot sees everything, including report markers.
@@ -305,7 +318,26 @@ Newest first. One entry per change; pushes carry their commit hash.
     - `ASK_DAILY_MAX` defaults to 2000.
     - Ask picks the newest report by collection date.
     - Consent gains "and your questions", with a one-time notice.
-  - **Next:** the staff engineer is writing the build contract (`…-ask-build.md`, `lib/ask/types.ts`). Three lanes follow: data and route, AI, UI.
+  - **Lane 0, committed in `808d6b4` (not pushed):** the staff engineer's build contract `docs/team/specs/2026-11-19-ask-build.md`. It resolves 33 conflicts between the four specs and assigns every file to one owner. Also `lib/ask/types.ts`, a stub `lib/ai/ask.ts` (it throws; nothing imports it yet) and `tests/ask-contracts.test.ts`.
+    - **The contract's main calls:**
+      - The server makes the turn id; the browser sends a `clientKey`.
+      - A fixed IST day.
+      - A blocking one-time consent notice, with 409 `consent_needed`.
+      - The newest report is `coalesce(collected_on, upload date)`.
+      - Safety words live in `lib/domain/ask-notices.ts`; `safety.ts` is untouched.
+  - **Build lanes in worktrees:**
+    - **A (systems and data engineer):** migration `0011_ask`, `lib/platform/ask.ts` and the routes.
+    - **B (AI efficiency lead):** `lib/ai/ask.ts`, the `lib/domain/ask-*.ts` files, the mock and the eval, plus a separate commit fixing the enum gap in the meal, read and wrap schemas.
+    - **C (staff engineer):** the UI.
+    - **Merge order:** B, then A, then C. QA attacks it after that.
+    - **Lane A, done:** branch `worktree-agent-a8b3f710a1077d88d`, commit `0a9a8dd`.
+      - **Built:** migration `0011_ask` (journal 2026-11-19 17:34 UTC), `lib/platform/ask.ts` (claim, complete, release, free turns, `loadAsk`, the breaker's alerts through `job_runs`), the POST, GET and DELETE `/api/ask` and `/api/ask/consent` routes, `newestReadyReport`, `blankAskAnswers` on report deletes, `purgeAsks` in housekeeping, `dietPictureFrom`, and `ask_consent_at` with consent.
+      - **Checked:** 936 tests, the build, and 7 of 7 parallel checks on Postgres 17.10. Every POST answers 500 until Lane B replaces the stub.
+  - **For Mayank before `ASK_OPEN=all`:**
+    - Reviews: a doctor, a mental-health professional, native speakers.
+    - A calorie floor per sex.
+    - The consent wording.
+    - In the Anthropic Console: a monthly spend limit and the Haiku rate limits.
 - **/write Import stuck on "Loading…" (Mayank, Chrome on his Mac, live site):** he clicked Import and the page never left the Suspense fallback.
   - **Not reproduced (staff engineer, production build):** Import opened in 90–410 ms every way in. Paste took about 50 ms and Create draft about 130 ms. Live client navigations took 0.17–0.93 s over 10 minutes.
   - **Forced failures:** a dropped connection, 500 or 504 recover through a full page load, and a cut-off stream shows Next's Reload screen. Only a response that never finishes matches his report, and `WriteLoading` had no way out. The guess is a stuck pooled Postgres connection: the client has a connect timeout but no query timeout. Unproven, because there are no Vercel logs here.
@@ -328,6 +360,7 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Not usable:** `attachDatabasePool` doesn't support postgres.js.
     - **Safe for transactions:** the orchestrator checked every transaction. All are short and DB-only, with AI, Razorpay and email outside them, so a busy connection is never silent long enough to be swept.
     - **Checked:** tests (`tests/db-dead-connections.test.ts` and `tests/support/pg-wire.ts`, which fail before and pass after), 848 tests, typecheck, lint, the build, and TLS.
+  - **Push `4bac4cc`:** the fix and the four Ask design specs. Vercel says "Deployment has completed". A probe across idle gaps then answered in 0.46 s after 7 minutes and 1.28 s after 8, with no hang (the old code hung after 7). The 10-minute check was lost to this Mac's internet outage (`rc=6`, DNS).
   - **Push `47f0015`:** the fix, the blog draft and the cover source. Vercel says "Deployment has completed"; signed out, /write/import still 307s to /signin.
 - **First blog post drafted (Mayank: "my first blog on preventive healthcare in India with good numbers"):**
   - **The draft (SEO lead):** "Preventive health checkups in India: what the numbers say", slug `preventive-health-checkup-india`, topic `blood-tests`, 1,422 words, 10 sources. Metadata, the post and the drafter's source table are in `docs/team/blog/drafts/2026-11-19-preventive-health-india.md`; the paste-ready copy is `~/Downloads/D-Human-blog-preventive-health-india.html`.

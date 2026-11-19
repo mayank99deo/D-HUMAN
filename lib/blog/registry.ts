@@ -7,6 +7,8 @@
 // - read* functions take a database and return plain data. Tests call them on PGlite.
 // - The exported readers wrap them in 'use cache' with cacheLife("max") and the blog's tags,
 //   so pages are static and change only when /write publishes (revalidateBlog below).
+// - One exception, `blogListingNow`: the sitemap reads at request time, straight from the
+//   database (see app/sitemap.ts for why).
 //
 // Builds: a Vercel build reads the production database, and an error fails the build rather
 // than baking an empty blog into production. A local build with no Postgres URL reads
@@ -285,6 +287,10 @@ export async function livePost(slug: string): Promise<PostLookup> {
   return found;
 }
 
+/** Who has a public page: active authors, and anyone with a live post. */
+const withPages = (members: readonly TeamMember[], posts: readonly PostSummary[]): PublicAuthor[] =>
+  members.filter((m) => m.active || posts.some((p) => p.author.id === m.id)).map(publicAuthor);
+
 /** Authors with a public page: active ones, and anyone with a live post. */
 export async function authors(): Promise<PublicAuthor[]> {
   "use cache";
@@ -293,7 +299,18 @@ export async function authors(): Promise<PublicAuthor[]> {
   const d = await readerDb();
   if (!d) return [];
   const [members, posts] = await Promise.all([readAuthors(d), allLivePosts()]);
-  return members.filter((m) => m.active || posts.some((p) => p.author.id === m.id)).map(publicAuthor);
+  return withPages(members, posts);
+}
+
+/**
+ * The live posts and the authors with pages, read now, with no cache in between: what
+ * livePosts() and authors() return, for /sitemap.xml only. Call it after connection(), so
+ * it never runs during a build.
+ */
+export async function blogListingNow(): Promise<{ posts: PostSummary[]; authors: PublicAuthor[] }> {
+  const d = await db();
+  const [posts, members] = await Promise.all([readLivePosts(d), readAuthors(d)]);
+  return { posts, authors: withPages(members, posts) };
 }
 
 export async function hasLivePosts(): Promise<boolean> {
@@ -310,8 +327,9 @@ export const registry = { livePosts, livePost, authors } satisfies BlogRegistry;
 
 /**
  * Call after a publish, update, take-down, restore, delete or slug change commits. Every blog
- * page, the sitemap, the feed and the footers' Blog link read through the list tag, so all of
- * them render fresh on their next visit; { expire: 0 } means nobody is served the old copy.
+ * page, the feed and the footers' Blog link read through the list tag, so all of them render
+ * fresh on their next visit; { expire: 0 } means nobody is served the old copy. The sitemap
+ * needs nothing: it reads the database on every visit.
  */
 export function revalidateBlog(postId?: string): void {
   revalidateTag(BLOG_TAGS.list, { expire: 0 });
