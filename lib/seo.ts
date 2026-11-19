@@ -284,9 +284,10 @@ export const BLOG_PER_PAGE = 30;
 export const HUB_MIN_POSTS = 3;
 export const EDITORIAL_PATH = "/editorial-policy";
 /** The editorial policy's last real change, for the sitemap and its page. */
-export const EDITORIAL_UPDATED = "2026-11-18";
-/** Where readers report an error in a post. Someone must read this inbox (Mayank to confirm). */
-export const CORRECTIONS_EMAIL = "hello@dhuman.fit";
+export const EDITORIAL_UPDATED = "2026-11-19";
+/** Where readers report an error in a post. Both inboxes are read (Mayank, 2026-11-19). */
+export const CORRECTIONS_EMAILS = ["hello@dhuman.fit", "mayank99deo@gmail.com"] as const;
+export const CORRECTIONS_EMAIL = CORRECTIONS_EMAILS[0];
 
 export const postPath = (slug: string) => `${BLOG_PATH}/${slug}`;
 export const topicPath = (topic: BlogTopic) => `${BLOG_PATH}/topics/${topic}`;

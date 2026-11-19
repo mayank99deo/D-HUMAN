@@ -209,11 +209,12 @@ The running record of this project: where things stand, why they are the way the
   - **Apps Script:** paste the new `google-apps-script/Code.gs`, run `setupFeedback`, then Deploy → Manage deployments → Edit → New version.
   - **DNS for dhuman.fit at Namecheap:** DMARC `_dmarc` TXT `v=DMARC1; p=none;`, root SPF `v=spf1 include:_spf.google.com ~all` (merge if one exists), and Workspace DKIM.
   - **Content:** the co-founder's name, role, photo and bio, and Mayank's; the five topic-hub intros (100–200 words); the first 2–3 posts.
-  - **Decisions:**
-    - Name Resend (US) in the consent line?
-    - Is `hello@dhuman.fit` read for corrections?
-    - AI-assisted drafts allowed? The editorial policy says yes, edited by a person.
-    - The postal address in the email footer.
+  - **Decided by Mayank (2026-11-19):**
+    - The consent line does NOT name Resend.
+    - The email footer has no postal address for now (`EMAIL_POSTAL_ADDRESS` unset). Indian law doesn't require it; add the registered address later if wanted.
+    - Replies to emails go to `RESEND_REPLY_TO`; feedback replies go to `FEEDBACK_REPLY_TO` if set.
+    - Corrections go to hello@dhuman.fit or mayank99deo@gmail.com, both read (`CORRECTIONS_EMAILS` in `lib/seo.ts`, shown on `/editorial-policy`).
+  - **Still open:** are AI-assisted drafts allowed? The editorial policy says yes, edited by a person.
 - [ ] IFCT 2017 permission from ICMR-NIN (Mayank to send; draft by the chief of staff in `docs/team/outreach/`). Until it's granted, no IFCT values in the repo or the product; the computed minerals use USDA. Also unblocks SEO food pages (`docs/team/seo/STRATEGY.md`).
 - [ ] The zinc target: even exact zinc against ICMR's 17 mg shows most vegetarian men short. That's a separate target decision, for the doctor or dietitian review (Mayank, 2026-11-18: zinc stays paused until then; `ZINC_FROM_FOOD`).
 - [ ] Prompt caching for meal estimates once traffic passes about one meal every 5 minutes (the computed-minerals schema made a meal $0.00088). Also later: folate and vitamin C from USDA with cooking losses; a recompute script if NIN grants IFCT.
@@ -273,6 +274,11 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-19
+- **Push `b8ad0e0`:** 13 commits, from `11594de` to `b8ad0e0`: the blog, the lifecycle emails and their fixes. Vercel's GitHub status reads success after about 100 s, so Supabase took migration `0010`. Checked live:
+  - **The blog:** `/blog` gives 200 with noindex while empty; `/blog/rss.xml` and `/editorial-policy` give 200.
+  - **Sign-in return:** a signed-out `/write` 307s to `/signin?next=%2Fwrite`, and `/wraps?week=…` carries `next`.
+  - **Until Mayank's setup:** `/api/cron/daily` and `/api/email/webhook` give 503, because their secrets aren't set.
+  - **Robots and links:** robots blocks `/write`, `/email/stop` and `/feedback`, and the landing has no "Blog" link yet (no posts).
 - **Search Console set up by Mayank:**
   - **Properties:** URL-prefix https://www.d-human.fit/ (verified by file) and the dhuman.fit Domain property (verified by DNS TXT).
   - **Sitemap:** submitted. Indexing of `/` requested.

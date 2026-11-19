@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Crumbs } from "@/components/blog/Crumbs";
 import { BlogCta } from "@/components/blog/Lists";
 import { JsonLd, Points, keepBrand } from "@/components/site/Guide";
-import { CORRECTIONS_EMAIL, EDITORIAL_PATH, EDITORIAL_UPDATED, blogPageMetadata, editorialLd } from "@/lib/seo";
+import { CORRECTIONS_EMAILS, EDITORIAL_PATH, EDITORIAL_UPDATED, blogPageMetadata, editorialLd } from "@/lib/seo";
 
 // How the blog is written, sourced, checked and corrected (SEO plan §4.4). Every line here
 // must stay true of how posts are actually made: if the review rule, AI use or the
@@ -58,7 +58,7 @@ const SECTIONS: { title: string; points: string[] }[] = [
     title: "Dates and corrections",
     points: [
       "Each post shows when it was published, and the date of its last real change to what it says. Typo fixes don't change that date.",
-      `Found an error? Write to ${CORRECTIONS_EMAIL}. We check it against the sources and fix the post if we got it wrong.`,
+      `Found an error? Write to ${CORRECTIONS_EMAILS.join(" or ")}. We check it against the sources and fix the post if we got it wrong.`,
     ],
   },
 ];
