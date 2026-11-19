@@ -27,6 +27,9 @@ export const MODELS = {
   // Web searches for events and brands need the newer search tool, which Haiku lacks.
   events: pick("EVENTS", "claude-sonnet-5-5"),
   stack: pick("STACK", "claude-sonnet-5-5"),
+  // Ask: short answers about food, training, health and the app. Measured on 2026-11-19 at
+  // about $0.0002–0.0007 a question with no measurable gain from thinking (lib/ai/ask.ts).
+  ask: pick("ASK", "claude-haiku-5-5"),
 };
 export const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 

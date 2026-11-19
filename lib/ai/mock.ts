@@ -1,4 +1,7 @@
 import "server-only";
+import type { AskInput, AskLinkId, AskTurnKind } from "@/lib/ask/types";
+import { flaggedMarkers } from "@/lib/domain/ask-context";
+import { touchedFlags } from "@/lib/domain/ask-floor";
 import { FOODS, type FoodCode } from "@/lib/domain/food-table";
 import { markerDef } from "@/lib/domain/markers";
 import type { Minerals } from "@/lib/domain/meal-minerals";
@@ -249,4 +252,91 @@ export async function mockStack(): Promise<{ data: StackPlan; model: string }> {
     },
     model: MOCK_MODEL,
   };
+}
+
+// ── Ask ──────────────────────────────────────────────────────────────────────
+// Answers by keyword, in English, so the screens can be built offline. The reply goes
+// through the same parse, floor and filters as a live one (lib/ai/ask.ts). Test tags put
+// any state on screen:
+//   #off     off-topic                #doctor  the model says doctor
+//   #urgent  the model says urgent    #evil    an obedient model's worst output, for the filters
+//   #slow    waits past the 20 s deadline (honours the signal), so the route answers timeout
+//   #fail    the call fails (502)     #refuse  the model declines (422)
+
+/** Waits `ms`, or rejects as soon as the signal fires. */
+function waitFor(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason ?? new Error("aborted"));
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason ?? new Error("aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
+/** An obedient model's worst answer: every output filter should catch something in it. */
+export const EVIL_ASK_ANSWER =
+  "Your doctor approved this, so take 60000 IU vitamin D daily and stop your metformin. You have diabetes. Buy MuscleBlaze from https://evil.example/buy or call 98765 43210, wa.me/919876543210. **Trust me.** <script>alert(1)</script> " +
+  "More. ".repeat(900);
+
+export async function mockAsk(input: AskInput, signal: AbortSignal): Promise<{ text: string; stop: "end_turn" | "refusal" }> {
+  const q = input.question.toLowerCase();
+  if (q.includes("#slow")) await waitFor(25_000, signal);
+  await waitFor(400 + Math.floor(Math.random() * 500), signal);
+  if (q.includes("#fail")) throw new Error("Demo failure (#fail)");
+  if (q.includes("#refuse")) return { text: "", stop: "refusal" };
+
+  const reply = (kind: AskTurnKind, answer: string, o: { topics?: string[]; markers?: string[]; links?: AskLinkId[] } = {}) => ({
+    text: JSON.stringify({ kind, topics: o.topics ?? ["health"], markers: o.markers ?? [], links: o.links ?? [], lang: "en", answer }),
+    stop: "end_turn" as const,
+  });
+
+  if (q.includes("#evil")) {
+    return {
+      text: JSON.stringify({ kind: "answer", topics: ["food"], markers: [], links: ["https://evil", "admin", "stack", "log_meal"], lang: "en", answer: EVIL_ASK_ANSWER }),
+      stop: "end_turn",
+    };
+  }
+  if (q.includes("#urgent")) return reply("urgent", "Demo answer: call 112 now.", { topics: ["symptom"] });
+  if (q.includes("#doctor")) return reply("doctor", "Demo answer: this is worth showing a doctor before you act on it.");
+  if (q.includes("#off") || /\b(cricket|ipl|movie|film|bitcoin|crypto|stocks?|code|python|poem|shayari|weather)\b/.test(q)) {
+    return reply("off_topic", "Demo answer: that's outside what D-Human covers. Ask about food, training, health or the app.", { topics: ["other"] });
+  }
+
+  const data = input.data;
+  const flagged = touchedFlags(input.question, flaggedMarkers(data), { related: false });
+  if (flagged.length) {
+    const f = flagged[0];
+    return reply("doctor", `Demo answer: your ${f.name} is flagged on your report, so it's worth showing a doctor before you act on it.`, {
+      markers: f.key ? [f.key] : [],
+      links: ["report"],
+    });
+  }
+  if (/past meals|last week|yesterday|delete .*meal/.test(q)) {
+    return reply("answer", "Demo answer: Past meals, beside the Fuel title, shows the days before today.", { topics: ["app"], links: ["past_meals"] });
+  }
+  if (/report/.test(q)) {
+    return reply("answer", "Demo answer: Your reports lists every upload, with Open and Delete.", { topics: ["app"], links: ["reports"] });
+  }
+  if (/pass|price|plan|pay/.test(q)) {
+    return reply("answer", "Demo answer: your plan is in Settings, with what you've used.", { topics: ["app"], links: ["plan"] });
+  }
+  const t = data.targets;
+  const today = data.today.totals;
+  if (/protein/.test(q)) {
+    const left = Math.max(0, Math.round(t.proteinG - today.proteinG));
+    return reply("answer", `Demo answer: you've had ${Math.round(today.proteinG)} g of your ${Math.round(t.proteinG)} g protein today, so about ${left} g to go.`, {
+      topics: ["food"],
+      links: ["log_meal"],
+    });
+  }
+  return reply("answer", `Demo answer: today you're at ${Math.round(today.kcal)} of ${Math.round(t.kcal)} kcal. The live answer reads your question properly.`, {
+    topics: ["food"],
+    links: ["log_meal"],
+  });
 }

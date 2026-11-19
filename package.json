@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/db-migrate.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"tests/**/*.test.ts\""
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "ask:eval": "node scripts/ask-eval.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
