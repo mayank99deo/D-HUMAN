@@ -43,6 +43,7 @@ delete process.env.EMAIL_LIFECYCLE_LIVE;
 const { and, eq, like, sql } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
 const jobs = await import("../lib/email/jobs.ts");
+const fb = await import("../lib/email/feedback.ts");
 const { setPrefs } = await import("../lib/email/prefs.ts");
 const { suppress } = await import("../lib/email/suppress.ts");
 const { GET } = await import("../app/api/cron/daily/route.ts");
@@ -394,6 +395,28 @@ describe("welcome, didn't finish, and feedback, live", () => {
     assert.deepEqual([rows[0].dedupeKey, rows[0].variant], ["fb-1", "used"]);
   });
 
+  it("the answer buttons open /feedback with that answer chosen, carry the tap id, and opening saves nothing", async () => {
+    const used = await person({ onboardedAt: new Date("2026-11-13T05:00:00Z") });
+    await meals(used.id, ["2026-11-13", "2026-11-15", "2026-11-17"]);
+    await run(MONDAY_MORNING);
+    const mail = g.__fake.calls.find((c) => c.to === used.email)!;
+    const links = [...mail.text.matchAll(/https:\/\/www\.d-human\.fit\/feedback\?\S+/g)].map((x) => new URL(x[0]));
+    assert.deepEqual(
+      links.map((u) => u.searchParams.get("a")),
+      ["very", "somewhat", "not", "not_used"],
+    );
+    const [send] = await sendsOf(used.id);
+    for (const url of links) {
+      assert.equal(url.searchParams.get("q"), "feel");
+      assert.equal(url.searchParams.get("e"), send.id, "the tap is recorded against this send");
+      const state = await fb.feedbackPageState(url.searchParams.get("t"), { q: url.searchParams.get("q")!, a: url.searchParams.get("a")! }, MONDAY_MORNING.getTime());
+      assert.equal(state.status, "ok");
+      if (state.status === "ok") assert.deepEqual([state.path, state.start, state.pending], ["used", "feel", url.searchParams.get("a")]);
+    }
+    const d = await db();
+    assert.equal((await d.select().from(schema.feedbackAnswers).where(eq(schema.feedbackAnswers.userId, used.id))).length, 0, "nothing saved by opening");
+  });
+
   it("with questions turned off, no feedback email", async () => {
     const a = await person({ onboardedAt: new Date("2026-11-13T05:00:00Z") });
     await setPrefs(a.id, { questions: false }, "settings");
@@ -441,6 +464,56 @@ describe("housekeeping", () => {
     assert.deepEqual([r.housekeeping?.loginCodes, r.housekeeping?.sessions], [1, 1]);
     assert.deepEqual((await d.select({ id: schema.loginCodes.id }).from(schema.loginCodes)).map((x) => x.id), ["new"]);
     assert.deepEqual((await d.select({ id: schema.sessions.id }).from(schema.sessions).where(and(eq(schema.sessions.userId, a.id)))).map((x) => x.id), ["live"]);
+  });
+});
+
+describe("the feedback Sheet's catch-up", () => {
+  const SHEET = { GOOGLE_SHEETS_WEBHOOK_URL: "https://script.example.test/exec", GOOGLE_SHEETS_WEBHOOK_SECRET: "sheet-secret" };
+  async function withSheet(fn: (calls: { action: string; respondent?: string; rows?: unknown[] }[]) => Promise<void>) {
+    const realFetch = globalThis.fetch;
+    const calls: { action: string; respondent?: string; rows?: unknown[] }[] = [];
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      calls.push(body);
+      const reply = body.action === "feedback" ? { ok: true, status: "saved", saved: body.rows.length } : { ok: true, status: "forgotten", deleted: 1 };
+      return new Response(JSON.stringify(reply), { headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    Object.assign(process.env, SHEET);
+    try {
+      await fn(calls);
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const k of Object.keys(SHEET)) delete process.env[k];
+    }
+  }
+
+  it("finishes forgets the Sheet missed and copies answers that didn't arrive; dry runs leave the Sheet alone", async () => {
+    await withSheet(async (calls) => {
+      const a = await person();
+      const d = await db();
+      await d.insert(schema.feedbackAnswers).values({ id: "ans-1", userId: a.id, survey: "fb-1", question: "feel", answer: "very", path: "used", source: "page" });
+      await d.insert(schema.jobRuns).values({ job: "sheet-forget:r_0123456789ab", lastStartedAt: new Date("2026-11-20T00:00:00Z") });
+
+      const dry = await run(SUNDAY_EVENING, { dry: true });
+      assert.equal(dry.sheet, null);
+      assert.equal(calls.length, 0, "a read-only run doesn't touch the Sheet");
+
+      const r = await run(SUNDAY_EVENING);
+      assert.deepEqual(
+        calls.map((c) => c.action),
+        ["forget", "feedback"],
+      );
+      assert.equal(calls[0].respondent, "r_0123456789ab");
+      assert.deepEqual(r.sheet, { forgotten: 1, forgetsPending: 0, sync: { status: "ok", sent: 1, marked: 1 } });
+      assert.equal((await d.select().from(schema.jobRuns).where(like(schema.jobRuns.job, "sheet-forget:%"))).length, 0, "marker gone");
+      const [row] = await d.select().from(schema.feedbackAnswers).where(eq(schema.feedbackAnswers.id, "ans-1"));
+      assert.ok(row.sheetSyncedAt, "marked as copied");
+    });
+  });
+
+  it("without the Sheet's URL and secret, it does nothing", async () => {
+    const r = await run(SUNDAY_EVENING);
+    assert.deepEqual(r.sheet, { forgotten: 0, forgetsPending: 0, sync: { status: "not_configured" } });
   });
 });
 

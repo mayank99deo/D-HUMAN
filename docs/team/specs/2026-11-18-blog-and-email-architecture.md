@@ -341,7 +341,7 @@ The purpose is inside the signed payload, so a stop token can't be used as a fee
 
 **Then the Sheet.** In `after()`, `appendFeedback()` in `lib/waitlist/sheets.ts` calls the Apps Script web app with a new `feedback` action; on success it sets `sheet_synced_at`. Any change clears it, so the daily job resends rows with `sheet_synced_at IS NULL` (partial index `feedback_answers_unsynced_idx`). The Sheet is a mirror; Postgres is the record.
 
-**Row sent:** Answer ID (our row id, for upserts), Received at, Survey, Respondent (`r_` + 10 hex of an HMAC of the person id, never the email), Path, Question, Answer, Plan (free or pass), Days since onboarding, Days with meals logged, Language, Source, Email (only when `contact_ok`). No health data beyond what someone types.
+**Row sent:** Answer ID (our row id, for upserts), Received at, Survey, Respondent (`r_` + 12 hex of an HMAC of the person id, never the email; 12, not 10, because `forget` deletes by this code and a collision would delete someone else's rows), Path, Question, Answer, Plan (free or pass), Days since onboarding, Days with meals logged, Language, Source, Email (only when `contact_ok`). No health data beyond what someone types.
 
 **Apps Script changes** (Mayank pastes; plumbing lane writes):
 
@@ -451,6 +451,9 @@ The privacy policy should name Resend as a processor outside India, as onboardin
 | `ALERT_EMAILS` | Vercel, optional | Who gets the "weekly list nearing the cap" alert; falls back to `BLOG_OWNER_EMAILS` |
 | `FEEDBACK_REPLY_TO` | Vercel, optional | Reply-To for feedback emails; falls back to `RESEND_REPLY_TO` |
 | `EMAIL_BATCH` | Vercel, optional | `1` sends lifecycle email in Resend batches of up to 100; unset sends one by one (the default, safer on the free plan) |
+| `EMAIL_WEEKLY_LIVE` | Vercel, optional | `1` sends the weekly email; unset, the Sunday run is a dry run (counts in `job_runs`, nothing sent) |
+| `EMAIL_LIFECYCLE_LIVE` | Vercel, optional | `1` sends the welcome, "didn't finish" and feedback emails; unset, dry runs |
+| `EMAIL_POSTAL_ADDRESS` | Vercel, optional | The address line in every email's footer; unset leaves the line out |
 | `EMAIL_SEND_LOCAL` | `.env.local` only, optional | `1` lets a local run send lifecycle email (or log it, without a key). Ignored on Vercel, where only `VERCEL_ENV=production` sends |
 | Already set, reused | | `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`, `GOOGLE_SHEETS_WEBHOOK_URL`, `GOOGLE_SHEETS_WEBHOOK_SECRET`, `AUTH_SECRET`, `DATABASE_URL` / `POSTGRES_URL` |
 

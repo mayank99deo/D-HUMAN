@@ -4,11 +4,19 @@
 // must never become an open redirect. Pure, with no server-only imports: the sign-in
 // page, the verify route, onboarding and proxy.ts all use it.
 
-/** Screens a signed-out visit to which is sent to sign in first (proxy.ts matches the same list). */
-export const SIGN_IN_FIRST = ["/home", "/fuel", "/wraps", "/stack", "/settings", "/reports", "/upload", "/onboarding"] as const;
+/**
+ * Screens a signed-out visit to which is sent to sign in first (proxy.ts matches the same
+ * list). /write is the blog editor: it checks the writer itself, but a signed-out writer
+ * should come back to the post they opened. /feedback isn't here: its signed link works
+ * without a session, and nothing signs people in on the way to it.
+ */
+export const SIGN_IN_FIRST = ["/home", "/fuel", "/wraps", "/stack", "/settings", "/reports", "/upload", "/onboarding", "/write"] as const;
 
-/** Every path `next` may lead to: the screens above, plus pages that check sign-in themselves. */
-export const RETURN_PREFIXES = [...SIGN_IN_FIRST, "/write", "/feedback"] as const;
+/** Every path `next` may lead to. */
+export const RETURN_PREFIXES = SIGN_IN_FIRST;
+
+/** Screens that don't need the app's onboarding first: writers needn't be app users (architecture §2.5). */
+const SKIPS_ONBOARDING = ["/write"] as const;
 
 const HOME = "/home";
 const ONBOARDING = "/onboarding";
@@ -56,10 +64,11 @@ export function safeNext(raw: unknown): string | null {
 
 /**
  * Where to go once signed in. Onboarding comes first for someone who hasn't finished it,
- * carrying `next` along so its last screen leads there.
+ * carrying `next` along so its last screen leads there; /write goes straight there.
  */
 export function afterSignIn(onboarded: boolean, next: string | null): string {
   if (onboarded) return next ?? HOME;
+  if (next && SKIPS_ONBOARDING.some((prefix) => isUnder(next, prefix))) return next;
   if (!next || isUnder(next, HOME)) return ONBOARDING;
   if (isUnder(next, ONBOARDING)) return next;
   return `${ONBOARDING}?next=${encodeURIComponent(next)}`;

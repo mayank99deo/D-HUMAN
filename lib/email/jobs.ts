@@ -11,6 +11,7 @@ import { personaFor } from "@/lib/platform/profile";
 import { makeWrap, reportDay, wrapDays, wrapStatsFrom, wrapTargets, type WrapLog } from "@/lib/platform/wraps";
 import { dailyCap, shouldAlert } from "./budget";
 import { sendingAllowed } from "./client";
+import { feedbackEmailOptions, syncFeedbackSheet, type SheetCatchUp } from "./feedback";
 import { pauseWeekly } from "./prefs";
 import {
   DEFAULT_TZ,
@@ -42,9 +43,7 @@ import {
   type LifecycleEmail,
   type SendOutcome,
 } from "./send";
-import { ANSWER_LABELS } from "./templates/feedback";
 import { renderEmail, type EmailToRender } from "./templates/index";
-import { feedbackToken } from "./tokens";
 import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type EmailKind, type FeedbackData, type FeedbackPath, type SendStatus, type WelcomeData } from "./types";
 
 // The daily email job (architecture spec §3.3), run by two Vercel crons into
@@ -56,7 +55,9 @@ import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type E
 //   3. Welcome catch-up, then "didn't finish setting up", the weekly email, feedback:
 //      KIND_PRIORITY's order, so a short budget goes to the earlier kinds first.
 //   4. Housekeeping: old sign-in codes, long-expired sessions, old dry-run rows.
-//   5. Counts (never addresses) in job_runs.last_result; the lease is released.
+//   5. The feedback Sheet's catch-up (lib/email/feedback.ts): forgets for deleted accounts
+//      that the Sheet missed ("sheet-forget:" rows), then answers that didn't arrive.
+//   6. Counts (never addresses) in job_runs.last_result; the lease is released.
 //
 // Switches (Vercel env, both off by default, so Mayank can watch a dry week first):
 //   EMAIL_WEEKLY_LIVE=1     the weekly email sends; unset, the Sunday run is a dry run
@@ -130,6 +131,8 @@ export type RunResult = {
   };
   feedback: Tally & { used: number; barely: number };
   housekeeping: { loginCodes: number; sessions: number; dryRows: number } | null;
+  /** Null on dry runs; "skipped" when the run had no time left; "error" when it threw. */
+  sheet: SheetCatchUp | "skipped" | "error" | null;
   stoppedEarly: "time" | "not_production" | "no_api_key" | "no_link_secret" | null;
   error?: string;
   ms: number;
@@ -148,6 +151,7 @@ function newResult(now: Date, dry: boolean, live: RunResult["live"]): RunResult 
     weekly: { ...tally(), weeks: [], paused: 0, versions: { full: 0, light: 0, report: 0 }, wraps: { made: 0, fresh: 0, failed: 0, notMade: 0 }, alert: null },
     feedback: { ...tally(), used: 0, barely: 0 },
     housekeeping: null,
+    sheet: null,
     stoppedEarly: null,
     ms: 0,
   };
@@ -307,20 +311,20 @@ function unfinishedEmail(userId: string, localDate: string): LifecycleEmail {
   return { userId, kind: "welcome_unfinished", dedupeKey: ONCE, localDate, render: render({ kind: "welcome_unfinished", data: {} }) };
 }
 
-export function feedbackData(userId: string, survey: string, path: FeedbackPath, localDate: string): FeedbackData {
+/**
+ * The feedback email's data. The answer links come from the feedback lane: each opens
+ * /feedback with that answer shown as chosen, and nothing is saved until the person confirms.
+ * `origin` must be the one the send uses (lib/email/send.ts), so the tap id still gets added.
+ */
+export function feedbackData(userId: string, survey: string, path: FeedbackPath, localDate: string, origin?: string): FeedbackData {
   const question = path === "used" ? "feel" : "gotinway";
   // The token's 30 days run from their local midnight, so a retry renders the same email.
-  const t = feedbackToken(userId, survey, Date.parse(`${localDate}T00:00:00Z`));
-  return {
-    path,
-    survey,
-    question,
-    options: Object.entries(ANSWER_LABELS[question]).map(([answer, label]) => ({ answer, label, url: `/feedback?t=${t}&q=${question}&a=${answer}` })),
-  };
+  const issuedAt = Date.parse(`${localDate}T00:00:00Z`);
+  return { path, survey, question, options: feedbackEmailOptions(userId, survey, question, origin, issuedAt) };
 }
 
-function feedbackEmail(userId: string, survey: string, path: FeedbackPath, localDate: string): LifecycleEmail {
-  return { userId, kind: "feedback", dedupeKey: survey, localDate, variant: path, render: render({ kind: "feedback", data: feedbackData(userId, survey, path, localDate) }) };
+function feedbackEmail(userId: string, survey: string, path: FeedbackPath, localDate: string, origin?: string): LifecycleEmail {
+  return { userId, kind: "feedback", dedupeKey: survey, localDate, variant: path, render: render({ kind: "feedback", data: feedbackData(userId, survey, path, localDate, origin) }) };
 }
 
 type WeeklyPerson = { profile: Profile; past: PastSend[] };
@@ -532,6 +536,7 @@ export async function runDaily(opts: RunOptions = {}): Promise<RunResult> {
     await weekly(ctx);
     await feedback(ctx);
     if (!readOnly) result.housekeeping = await housekeeping(d, now);
+    if (!readOnly) result.sheet = await feedbackSheet(ctx);
   } catch (error) {
     result.status = "error";
     result.error = (error instanceof Error ? error.message : String(error)).slice(0, 300);
@@ -551,7 +556,7 @@ function summary(r: RunResult): string {
     const live = k === "weekly" ? r.live.weekly : r.live.lifecycle;
     return `${k} ${live ? "live" : "dry"} due ${t.due} ${live ? `sent ${t.sent}` : `would ${t.wouldSend}`} capped ${t.capped} over-budget ${t.overBudget}${t.failed ? ` failed ${t.failed}` : ""}`;
   });
-  return [`${r.status}`, `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
+  return [`${r.status}`, `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, sheetSummary(r.sheet), r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
 }
 
 // ── 2. Retries ──────────────────────────────────────────────────────────────
@@ -638,7 +643,7 @@ async function rebuild(ctx: Ctx, send: typeof emailSends.$inferSelect, profile: 
     case "welcome":
       return welcomeEmail(profile, send.localDate);
     case "feedback":
-      return feedbackEmail(send.userId, send.dedupeKey, send.variant === "barely" ? "barely" : "used", send.localDate);
+      return feedbackEmail(send.userId, send.dedupeKey, send.variant === "barely" ? "barely" : "used", send.localDate, ctx.opts.origin);
     case "weekly": {
       const week = { start: send.dedupeKey, end: addDays(send.dedupeKey, 6) };
       const built = await weeklyEmails(ctx.d, [{ profile, past }], week, new Map([[send.userId, send.localDate]]), ctx.now);
@@ -955,9 +960,16 @@ async function feedback(ctx: Ctx) {
     const path = feedbackPath(logDays.filter((l) => l.userId === profile.userId).map((l) => l.localDate), onboardedOn, read);
     t.due++;
     t[path]++;
-    emails.push(feedbackEmail(profile.userId, survey, path, clock.date));
+    emails.push(feedbackEmail(profile.userId, survey, path, clock.date, ctx.opts.origin));
   }
   await deliver(ctx, "feedback", emails, t);
+}
+
+function sheetSummary(sheet: RunResult["sheet"]): string {
+  if (sheet === null) return "";
+  if (typeof sheet === "string") return `sheet ${sheet}`;
+  const copy = sheet.sync.status === "ok" ? `copied ${sheet.sync.marked}/${sheet.sync.sent}` : sheet.sync.status === "failed" ? `copy failed (${sheet.sync.pending} waiting)` : "not configured";
+  return `sheet forgets ${sheet.forgotten} (${sheet.forgetsPending} waiting), ${copy}`;
 }
 
 // ── 4. Housekeeping ─────────────────────────────────────────────────────────
@@ -969,4 +981,20 @@ async function housekeeping(d: Db, now: Date) {
     pruneDryRows(d, now),
   ]);
   return { loginCodes: codes.length, sessions: expired.length, dryRows };
+}
+
+// ── 5. The feedback Sheet ───────────────────────────────────────────────────
+// The Sheet is a copy for the founders; Postgres is the record. Answers are copied after
+// each save; this catches what the Sheet missed. It runs last, as no email waits on it, and
+// stops at the run's time budget, so a slow Sheet can't keep the function past its limit.
+
+async function feedbackSheet(ctx: Ctx): Promise<RunResult["sheet"]> {
+  if (outOfTime(ctx)) return "skipped";
+  try {
+    return await syncFeedbackSheet({ now: ctx.now, deadline: ctx.started + TIME_BUDGET_MS });
+  } catch (error) {
+    // The emails have gone by now; a database hiccup here shouldn't mark the run failed.
+    console.error("[email] feedback sheet catch-up failed:", error instanceof Error ? error.message : error);
+    return "error";
+  }
 }

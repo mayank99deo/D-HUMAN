@@ -24,7 +24,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/:screen(home|fuel|wraps|stack|settings|reports|upload|onboarding)/:rest*",
+      source: "/:screen(home|fuel|wraps|stack|settings|reports|upload|onboarding|write)/:rest*",
       missing: [{ type: "cookie", key: "dh_session" }],
     },
   ],

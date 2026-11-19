@@ -584,6 +584,24 @@ describe("deleting an account", () => {
     assert.equal((await d.select().from(schema.jobRuns).where(eq(schema.jobRuns.job, `sheet-forget:${code}`))).length, 0, "marker gone");
   });
 
+  it("the daily catch-up stops at the first forget the Sheet refuses, and keeps the rest for the next run", async () => {
+    const codes = [fb.respondentCode((await person()).id)!, fb.respondentCode((await person()).id)!];
+    const d = await db();
+    const markers = codes.map((c) => `sheet-forget:${c}`);
+    await d.insert(schema.jobRuns).values(markers.map((job, i) => ({ job, lastStartedAt: new Date(Date.now() - (2 - i) * 60_000) })));
+    sheetDown = true;
+    const down = await fb.syncFeedbackSheet();
+    assert.equal(calls.filter((c) => c.body.action === "forget").length, 1, "one try, not one per marker");
+    assert.equal(down.forgotten, 0);
+    for (const job of markers) assert.equal((await d.select().from(schema.jobRuns).where(eq(schema.jobRuns.job, job))).length, 1, `${job} kept`);
+
+    sheetDown = false;
+    calls = [];
+    const up = await fb.syncFeedbackSheet();
+    assert.equal(up.forgotten, 2);
+    assert.deepEqual(new Set(calls.filter((c) => c.body.action === "forget").map((c) => c.body.respondent)), new Set(codes));
+  });
+
   it("rows that reach the Sheet after the account was deleted are forgotten again", async () => {
     const p = await person();
     await post({ t: feedbackToken(p.id, "fb-1"), question: "feel", answer: "very", path: "used" });

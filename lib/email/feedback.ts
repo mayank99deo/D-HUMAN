@@ -376,21 +376,28 @@ export async function forgetFeedbackInSheet(respondent: string, { tries = 3, wai
   return "queued";
 }
 
+export type SheetCatchUp = { forgotten: number; forgetsPending: number; sync: SyncResult };
+
 /**
- * For the daily job: finish any forgets the Sheet missed, then copy answers that didn't
- * arrive. Counts only, never addresses.
+ * For the daily job: finish any forgets the Sheet missed, oldest first, then copy answers
+ * that didn't arrive. A forget that fails means the Sheet isn't answering, so the rest wait
+ * for the next run, as do any left at `deadline` (epoch ms). Counts only, never addresses.
  */
-export async function syncFeedbackSheet({ limit = SYNC_BATCH, now = new Date() }: { limit?: number; now?: Date } = {}): Promise<{ forgotten: number; forgetsPending: number; sync: SyncResult }> {
+export async function syncFeedbackSheet({ limit = SYNC_BATCH, now = new Date(), deadline = Infinity }: { limit?: number; now?: Date; deadline?: number } = {}): Promise<SheetCatchUp> {
   if (!sheetsConfigured()) return { forgotten: 0, forgetsPending: 0, sync: { status: "not_configured" } };
   const d = await db();
   const queued = await d
     .select({ job: schema.jobRuns.job })
     .from(schema.jobRuns)
     .where(like(schema.jobRuns.job, `${FORGET_PREFIX}%`))
+    .orderBy(asc(schema.jobRuns.lastStartedAt))
     .limit(50);
   let forgotten = 0;
   for (const { job } of queued) {
-    if ((await forgetFeedbackInSheet(job.slice(FORGET_PREFIX.length), { tries: 1 })) === "forgotten") forgotten++;
+    if (Date.now() > deadline) break;
+    const outcome = await forgetFeedbackInSheet(job.slice(FORGET_PREFIX.length), { tries: 1 });
+    if (outcome === "queued") break;
+    if (outcome === "forgotten") forgotten++;
   }
   return { forgotten, forgetsPending: queued.length - forgotten, sync: await syncFeedback({ limit, now }) };
 }

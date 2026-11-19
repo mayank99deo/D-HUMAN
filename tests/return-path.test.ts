@@ -30,7 +30,7 @@ after(async () => {
 
 describe("safeNext", () => {
   it("keeps our own app paths, with their query and fragment", () => {
-    for (const p of ["/home", "/fuel", "/fuel/past", "/wraps?week=2026-11-16&e=abc-123", "/settings#emails", "/settings?e=x#emails", "/reports/0b1c", "/upload?report=1", "/stack", "/write", "/feedback?t=abc", "/onboarding"]) {
+    for (const p of ["/home", "/fuel", "/fuel/past", "/wraps?week=2026-11-16&e=abc-123", "/settings#emails", "/settings?e=x#emails", "/reports/0b1c", "/upload?report=1", "/stack", "/write", "/write/0b1c/preview?x=1", "/onboarding"]) {
       assert.equal(safeNext(p), p, p);
     }
   });
@@ -80,7 +80,7 @@ describe("safeNext", () => {
   });
 
   it("refuses paths that aren't app screens, look-alikes and odd input", () => {
-    for (const p of ["/", "/signin", "/signin?next=/home", "/api/account/delete", "/api/auth/signout", "/blog/x", "/homework", "/home.evil.com", "/fuelish", "/HOME", "/dev/emotes", ""]) {
+    for (const p of ["/", "/signin", "/signin?next=/home", "/api/account/delete", "/api/auth/signout", "/blog/x", "/homework", "/home.evil.com", "/fuelish", "/HOME", "/dev/emotes", "/writer", "/feedback?t=abc", "/email/stop?t=x", ""]) {
       assert.equal(safeNext(p), null, p);
     }
     for (const v of [undefined, null, 42, ["/home"], { toString: () => "/home" }]) assert.equal(safeNext(v), null);
@@ -107,6 +107,12 @@ describe("after sign-in", () => {
     assert.equal(afterSignIn(false, "/wraps?week=2026-11-16&e=s1"), "/onboarding?next=%2Fwraps%3Fweek%3D2026-11-16%26e%3Ds1");
     // The "didn't finish" email links to onboarding itself.
     assert.equal(afterSignIn(false, "/onboarding?e=s2"), "/onboarding?e=s2");
+  });
+
+  it("sends writers straight back to /write, onboarded or not", () => {
+    assert.equal(afterSignIn(false, "/write"), "/write");
+    assert.equal(afterSignIn(false, "/write/0b1c?x=1"), "/write/0b1c?x=1");
+    assert.equal(afterSignIn(true, "/write/import"), "/write/import");
   });
 
   it("onboarding leads anywhere on the list except back to itself", () => {
@@ -151,7 +157,7 @@ describe("proxy: signed-out visits to app screens", async () => {
       assert.ok(runs(s), s);
       assert.ok(runs(`${s}/deeper`), `${s}/deeper`);
     }
-    for (const p of ["/", "/signin", "/blog/x", "/calorie-tracker", "/api/profile", "/write", "/feedback", "/email/stop", "/homework", "/_next/static/a.js"]) {
+    for (const p of ["/", "/signin", "/blog/x", "/calorie-tracker", "/api/profile", "/api/write/posts", "/writer", "/feedback", "/email/stop", "/homework", "/_next/static/a.js"]) {
       assert.ok(!runs(p), p);
     }
     const literal = /\(([^)]+)\)/.exec(config.matcher[0].source)![1].split("|").map((s) => `/${s}`);
@@ -173,6 +179,12 @@ describe("proxy: signed-out visits to app screens", async () => {
     assert.equal(to.pathname, "/signin");
     assert.equal(to.searchParams.get("next"), "/wraps?week=2026-11-16&e=s1");
     assert.equal(new URL(proxy(new NextRequest("https://www.d-human.fit/home")).headers.get("location")!).search, "");
+  });
+
+  it("sends a signed-out writer to sign in with the post they opened", () => {
+    const to = new URL(proxy(new NextRequest("https://www.d-human.fit/write/0b1c/preview")).headers.get("location")!);
+    assert.equal(to.pathname, "/signin");
+    assert.equal(to.searchParams.get("next"), "/write/0b1c/preview");
   });
 
   it("lets a request with the cookie through untouched", () => {

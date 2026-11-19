@@ -49,7 +49,7 @@ export function Gate({ kind }: { kind: "signed_out" | "not_author" }) {
         {kind === "signed_out" ? (
           <>
             <h1 className="verdict-type text-[clamp(2rem,6vw,3rem)]">Sign in to write</h1>
-            <p className="mt-4 text-graphite">Use the email you write with. We send a 6-digit code; then come back to d-human.fit/write.</p>
+            <p className="mt-4 text-graphite">Use the email you write with. We send a 6-digit code, then bring you back to your posts.</p>
             <Link href="/signin?next=/write" className="button-primary mt-8 h-12">
               Sign in
             </Link>

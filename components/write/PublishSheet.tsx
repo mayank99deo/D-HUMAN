@@ -342,8 +342,9 @@ export function SignInAgain() {
         setBusy(true);
         await send("/api/auth/signout");
         // A full page load, as sign-in itself does: nothing from the old session stays cached.
+        // Back to this post afterwards (sign-in accepts any path under /write).
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.assign("/signin?next=/write");
+        window.location.assign(`/signin?next=${encodeURIComponent(window.location.pathname)}`);
       }}
     >
       {busy ? "Signing out…" : "Sign out and sign in again"}
