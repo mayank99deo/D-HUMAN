@@ -215,6 +215,12 @@ The running record of this project: where things stand, why they are the way the
     - Replies to emails go to `RESEND_REPLY_TO`; feedback replies go to `FEEDBACK_REPLY_TO` if set.
     - Corrections go to hello@dhuman.fit or mayank99deo@gmail.com, both read (`CORRECTIONS_EMAILS` in `lib/seo.ts`, shown on `/editorial-policy`).
   - **Still open:** are AI-assisted drafts allowed? The editorial policy says yes, edited by a person.
+- [ ] **When Resend Pro is bought (Mayank: in about 10–11 days, from 2026-11-19):** `lib/email/budget.ts` hard-codes the free plan's 100 a day (the cap is `min(EMAIL_DAILY_CAP, 70 − everything sent today)`). Make the plan limit an env var (e.g. `RESEND_DAILY_LIMIT`, default 100), set it for Pro, and raise `EMAIL_DAILY_CAP`; also pay or settle the unpaid invoice the dashboard shows.
+- [ ] **Move email to @d-human.fit (Mayank, later):**
+  - **Resend:** verify d-human.fit and change `RESEND_FROM` and `RESEND_REPLY_TO`.
+  - **Workspace:** add d-human.fit as a domain or alias.
+  - **DNS for d-human.fit:** MX, SPF (`include:_spf.google.com` plus Resend's), DKIM for both Google and Resend, and DMARC.
+  - **Keep:** dhuman.fit mail working during the switch.
 - [ ] IFCT 2017 permission from ICMR-NIN (Mayank to send; draft by the chief of staff in `docs/team/outreach/`). Until it's granted, no IFCT values in the repo or the product; the computed minerals use USDA. Also unblocks SEO food pages (`docs/team/seo/STRATEGY.md`).
 - [ ] The zinc target: even exact zinc against ICMR's 17 mg shows most vegetarian men short. That's a separate target decision, for the doctor or dietitian review (Mayank, 2026-11-18: zinc stays paused until then; `ZINC_FROM_FOOD`).
 - [ ] Prompt caching for meal estimates once traffic passes about one meal every 5 minutes (the computed-minerals schema made a meal $0.00088). Also later: folate and vitamin C from USDA with cooking losses; a recompute script if NIN grants IFCT.
@@ -274,6 +280,18 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-19
+- **Blog and email setup, part 1 (Mayank in Vercel and Resend; verified live):**
+  - **Done:** `BLOG_OWNER_EMAILS` (both founders), `CRON_SECRET`, `EMAIL_LINK_SECRET` (both generated on this Mac and copied by clipboard, never in chat or repo) and `RESEND_WEBHOOK_SECRET` set in Production; the Resend webhook added with the six events; redeployed.
+  - **Checked live:** the webhook gives 401 unsigned or forged; the cron gives 401 without or with a wrong secret.
+  - **The `?dry=1` run** gave 200: welcome due 4, feedback due 3, weekly 0 (Sundays only), budget 67 left with 3 codes today. Both live switches are off.
+  - **Resend tracking:** no tracking subdomain exists, so tracking is already off; nothing to do.
+  - **Resend billing:** the account shows Pro with an unpaid invoice. Mayank will buy Pro in 10–11 days; until then, keep the free-plan caps.
+  - **Apps Script v2 deployed:** the same web app URL, which the local `.env.local` URL matches. `setupFeedback` made Feedback (14 columns) and Replies (6 columns); `WEBHOOK_SECRET` is set; the web app GET answers `{"ok":true,"feedback":true}`.
+  - **DNS for dhuman.fit skipped (Mayank, 2026-11-19):** email will later move to @d-human.fit, and SPF, DKIM and DMARC get set up there then. dhuman.fit today has MX (Workspace), a Search Console TXT and Resend's DKIM and SPF on `send.dhuman.fit`. App email is authenticated by Resend; founders' Workspace replies lack SPF, DKIM and DMARC and may land in spam.
+  - **Still to do:** bios and the first posts; after the dry week, `EMAIL_LIFECYCLE_LIVE=1` and `EMAIL_WEEKLY_LIVE=1`.
+  - **The secret copy:** the orchestrator keeps `CRON_SECRET` in the session scratchpad (mode 600) until Sunday's weekly dry run is read, then deletes it.
+- **Push `260313a`:** the editorial policy's corrections line now names hello@dhuman.fit and mayank99deo@gmail.com (both read by Mayank). Live after Vercel success.
+- **Note for Mayank's setup:** `RESEND_WEBHOOK_SECRET` is new and not yet set (the webhook gave 503 live). It's distinct from `RESEND_API_KEY` (sending, already set), `GOOGLE_SHEETS_WEBHOOK_SECRET` (waitlist to Sheet) and `RAZORPAY_WEBHOOK_SECRET` (payments). It comes from Resend's Webhooks page when the endpoint is added.
 - **Push `b8ad0e0`:** 13 commits, from `11594de` to `b8ad0e0`: the blog, the lifecycle emails and their fixes. Vercel's GitHub status reads success after about 100 s, so Supabase took migration `0010`. Checked live:
   - **The blog:** `/blog` gives 200 with noindex while empty; `/blog/rss.xml` and `/editorial-policy` give 200.
   - **Sign-in return:** a signed-out `/write` 307s to `/signin?next=%2Fwrite`, and `/wraps?week=…` carries `next`.
