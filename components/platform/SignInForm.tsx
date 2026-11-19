@@ -17,6 +17,15 @@ const MESSAGES: Record<string, string> = {
 // sessionStorage doesn't announce changes in the same tab, so there is nothing to subscribe to.
 const noChanges = () => () => {};
 
+// The screen to return to after sign-in (/signin?next=…), read when the code is checked,
+// so the page itself stays static. A #fragment the browser kept through the redirect (an
+// email's /settings#emails) goes along. The server decides whether the path is allowed.
+function returnPath(): string | undefined {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next) return undefined;
+  return next.includes("#") ? next : `${next}${window.location.hash}`;
+}
+
 export function SignInForm() {
   const [step, setStep] = useState<"email" | "code">("email");
   // The email typed on the landing page, if any. Empty on the server, filled
@@ -27,9 +36,12 @@ export function SignInForm() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Our records say mail to this address bounced or was marked as spam, so the code may not
+  // arrive: the code route's "suppressed" notice, with its own words.
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function post(url: string, body: unknown) {
-    const r = await send<{ error: string; next: string }>(url, { body });
+    const r = await send<{ error: string; next: string; notice: string; message: string }>(url, { body });
     return { ok: r.ok, data: r.offline ? { error: "offline" } : r.data };
   }
 
@@ -37,10 +49,12 @@ export function SignInForm() {
     e?.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     setTyped(email); // fixed from here, even once the hand-off is cleared
     const { ok, data } = await post("/api/auth/code", { email });
     setBusy(false);
     if (!ok) return setError(MESSAGES[data.error ?? ""] ?? MESSAGES.unavailable);
+    if (data.notice === "suppressed" && data.message) setNotice(data.message);
     setStep("code");
   }
 
@@ -48,7 +62,7 @@ export function SignInForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { ok, data } = await post("/api/auth/verify", { email, code });
+    const { ok, data } = await post("/api/auth/verify", { email, code, next: returnPath() });
     if (!ok) {
       setBusy(false);
       return setError(MESSAGES[data.error ?? ""] ?? MESSAGES.invalid);
@@ -90,6 +104,11 @@ export function SignInForm() {
       <label htmlFor="code" className="block text-sm text-graphite">
         Code sent to <span className="text-paper">{email}</span>
       </label>
+      {notice && (
+        <p id="signin-notice" role="alert" className="error-mark text-sm">
+          {notice}
+        </p>
+      )}
       <input
         id="code"
         inputMode="numeric"
@@ -102,7 +121,7 @@ export function SignInForm() {
         onChange={(e) => setCode(e.target.value)}
         className="field h-16 text-center text-3xl tracking-[0.4em] display-num"
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? "signin-error" : undefined}
+        aria-describedby={[error && "signin-error", notice && "signin-notice"].filter(Boolean).join(" ") || undefined}
       />
       <button type="submit" disabled={busy || code.replace(/\D/g, "").length !== 6} className="button-primary h-13 w-full">
         {busy ? "Checking…" : "Sign in"}
@@ -113,7 +132,7 @@ export function SignInForm() {
         </p>
       )}
       <div className="flex justify-between pt-2 text-sm">
-        <button type="button" className="link-quiet min-h-11" onClick={() => { setStep("email"); setCode(""); setError(null); }}>
+        <button type="button" className="link-quiet min-h-11" onClick={() => { setStep("email"); setCode(""); setError(null); setNotice(null); }}>
           Use another email
         </button>
         <button type="button" className="link-quiet min-h-11" onClick={() => sendCode()} disabled={busy}>

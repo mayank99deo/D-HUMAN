@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { EmailTap } from "@/components/platform/EmailTap";
 import { Nav, NavView } from "@/components/platform/Nav";
 import { ScrollReset } from "@/components/platform/ScrollReset";
 import { Tour } from "@/components/platform/Tour";
@@ -53,6 +54,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Its own boundary with no fallback: it never holds up the page. */}
         <Suspense fallback={null}>
           <TourForUser />
+        </Suspense>
+        {/* Taps on email links (?e=): recorded once, then dropped from the address. */}
+        <Suspense fallback={null}>
+          <EmailTap />
         </Suspense>
       </div>
     </div>

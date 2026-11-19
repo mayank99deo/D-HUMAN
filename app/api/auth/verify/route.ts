@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { verifyCode } from "@/lib/auth/codes";
+import { afterSignIn, safeNext } from "@/lib/auth/next-path";
 import { startSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
@@ -8,6 +9,9 @@ import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
 const body = z.object({
   email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
   code: z.string().transform((c) => c.replace(/\D/g, "")).pipe(z.string().length(6)),
+  // The screen they were heading for (/signin?next=…). Checked by safeNext: anything but
+  // one of our own app paths is dropped, never an error, so sign-in always works.
+  next: z.unknown().optional(),
 });
 
 export async function POST(request: Request) {
@@ -27,5 +31,5 @@ export async function POST(request: Request) {
     .from(schema.profiles)
     .where(eq(schema.profiles.userId, result.userId))
     .limit(1);
-  return Response.json({ next: profile?.onboardedAt ? "/home" : "/onboarding" });
+  return Response.json({ next: afterSignIn(Boolean(profile?.onboardedAt), safeNext(parsed.data.next)) });
 }

@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { WrapsClient, type PeriodCard } from "@/components/platform/Wraps";
+import { WrapsClient, type PeriodCard, type WeekLink } from "@/components/platform/Wraps";
 import { aiMode } from "@/lib/ai/client";
+import { weekFromParam } from "@/lib/domain/periods";
 import { requireMember } from "@/lib/platform/member";
 import { localDate } from "@/lib/platform/profile";
+import { loggedDays } from "@/lib/platform/wrap-viewer";
 import { hasAnyLogs, listWraps, periodLabel, periodRange, type Period } from "@/lib/platform/wraps";
 import { PageLoading } from "@/components/platform/PageLoading";
 
 export const metadata: Metadata = { title: "Wraps" };
 
-const SLOTS: { period: Period; offset: number; name: string }[] = [
+type Slot = { period: Period; offset: number; name: string };
+
+const SLOTS: Slot[] = [
   { period: "week", offset: 0, name: "This week" },
   { period: "week", offset: -1, name: "Last week" },
   { period: "month", offset: 0, name: "This month" },
@@ -17,12 +21,19 @@ const SLOTS: { period: Period; offset: number; name: string }[] = [
   { period: "year", offset: 0, name: "This year" },
 ];
 
-async function Wraps() {
+type Search = Promise<Record<string, string | string[] | undefined>>;
+
+// /wraps?week=2026-11-16 (the weekly email's "Play my wrap") opens that week's story at
+// once: played if it's made, made first if not. A week older than last week gets its own
+// card at the top, so closing the story lands on it.
+async function Wraps({ searchParams }: { searchParams: Search }) {
   const { user, profile, persona } = await requireMember();
   const today = localDate(profile.timezone);
-  const all = await listWraps(user.id);
+  const [all, { week }] = await Promise.all([listWraps(user.id), searchParams]);
+  const asked = weekFromParam(week, today);
+  const slots = asked && !SLOTS.some((s) => s.period === "week" && s.offset === asked.offset) ? [{ period: "week" as const, offset: asked.offset, name: "Earlier week" }, ...SLOTS] : SLOTS;
   const cards: PeriodCard[] = await Promise.all(
-    SLOTS.map(async (s) => {
+    slots.map(async (s) => {
       const { start, end } = periodRange(s.period, today, s.offset);
       const wrap = all.find((w) => w.period === s.period && w.startsOn === start) ?? null;
       return {
@@ -37,13 +48,17 @@ async function Wraps() {
       };
     }),
   );
-  return <WrapsClient cards={cards} firstName={persona.firstName} aiOff={aiMode() === "off"} />;
+  const askedCard = asked ? cards.find((c) => c.key === `week:${asked.offset}`) : undefined;
+  // The days with meals, for the "Wrapping…" screen: only needed when there's a wrap to make.
+  const link: WeekLink | null =
+    asked && askedCard ? { key: askedCard.key, days: !askedCard.wrap && askedCard.hasData ? await loggedDays(user.id, asked.start) : [] } : null;
+  return <WrapsClient cards={cards} firstName={persona.firstName} aiOff={aiMode() === "off"} link={link} />;
 }
 
-export default function WrapsPage() {
+export default function WrapsPage({ searchParams }: PageProps<"/wraps">) {
   return (
     <Suspense fallback={<PageLoading title="Wraps" />}>
-      <Wraps />
+      <Wraps searchParams={searchParams} />
     </Suspense>
   );
 }

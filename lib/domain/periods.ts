@@ -26,3 +26,22 @@ export function periodLabel(period: Period, start: string, end: string) {
   return start.slice(0, 4);
 }
 
+/** How far back a link can open a week's wrap: the wraps API makes wraps up to 60 periods ago. */
+export const OLDEST_WEEK_OFFSET = -60;
+
+/**
+ * The week a link asks for (/wraps?week=2026-11-16, the Monday it starts, from the weekly
+ * email), as a range and an offset from `today`'s week (0 this week, -1 last week), or null
+ * when `raw` isn't a real date, is in a week still to come, or is too far back. Any day
+ * of a week stands for that week.
+ */
+export function weekFromParam(raw: unknown, today: string): { start: string; end: string; offset: number } | null {
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const at = Date.parse(`${raw}T00:00:00Z`);
+  if (Number.isNaN(at) || new Date(at).toISOString().slice(0, 10) !== raw) return null; // e.g. 2026-02-30
+  const { start, end } = periodRange("week", raw, 0);
+  const offset = Math.round((Date.parse(`${start}T00:00:00Z`) - Date.parse(`${periodRange("week", today, 0).start}T00:00:00Z`)) / (7 * 86400000));
+  if (offset > 0 || offset < OLDEST_WEEK_OFFSET) return null;
+  return { start, end, offset };
+}
+

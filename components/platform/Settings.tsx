@@ -6,6 +6,8 @@ import { useState } from "react";
 import { ACTIVITIES, CONDITIONS, DIETS, GOALS, LANGUAGES, LEVELS, SEXES } from "@/lib/domain/options";
 import type { PlanView } from "@/lib/domain/plan";
 import { birthYearOk, MIN_AGE } from "./age";
+import type { EmailSwitches } from "./email-prefs";
+import { EmailSettings } from "./EmailSettings";
 import { OFFLINE, send } from "./net";
 import { PlanCard, type PaidPass } from "./Paywall";
 import { ReplayTour } from "./Tour";
@@ -47,7 +49,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function Settings({ email, profile, plan, passes }: { email: string; profile: P; plan: PlanView; passes: PaidPass[] }) {
+export function Settings({ email, profile, plan, passes, emails }: { email: string; profile: P; plan: PlanView; passes: PaidPass[]; emails: EmailSwitches }) {
   const router = useRouter();
   const [p, setP] = useState(profile);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -219,6 +221,8 @@ export function Settings({ email, profile, plan, passes }: { email: string; prof
           Manage reports
         </Link>
       </section>
+
+      <EmailSettings initial={emails} />
 
       <section className="mt-14 border-t border-line pt-6">
         <button type="button" onClick={signOut} disabled={signingOut} className="button-ghost h-12">

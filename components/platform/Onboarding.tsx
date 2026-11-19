@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Wordmark } from "@/components/brand/Logo";
+import { isUnder } from "@/lib/auth/next-path";
 import { ACTIVITIES, CONDITIONS, DIETS, GOALS, LANGUAGES, LEVELS, SEXES, labelOf } from "@/lib/domain/options";
 import { personaOf } from "@/lib/domain/persona";
 import { birthYearOk, MIN_AGE } from "./age";
@@ -120,7 +121,19 @@ const primary = (d: Draft) => d.primaryActivity ?? d.activities[0] ?? null;
 const eventWord = (a: string | null) =>
   ({ running: "race", hyrox: "race", trekking: "trek or trip", cycling: "ride", swimming: "swim", team: "tournament", walking: "walk" })[a ?? ""] ?? "event";
 
-export function Onboarding({ initial }: { initial: Partial<Draft> }) {
+const FUEL = { href: "/fuel", label: "Log your first meal" };
+const UPLOAD = { href: "/upload", label: "Upload a blood report" };
+
+/** The finish screen's two buttons, the first leading where sign-in was heading (`next`), if anywhere. */
+function finishLinks(next: string | null): { href: string; label: string }[] {
+  if (!next || isUnder(next, "/home")) return [FUEL, UPLOAD];
+  if (isUnder(next, "/fuel")) return [{ ...FUEL, href: next }, UPLOAD];
+  if (isUnder(next, "/upload")) return [{ ...UPLOAD, href: next }, FUEL];
+  return [{ href: next, label: "Continue" }, FUEL];
+}
+
+/** `next`: a checked app path (onboardingNext) to lead to once set up. */
+export function Onboarding({ initial, next = null }: { initial: Partial<Draft>; next?: string | null }) {
   const [d, setD] = useState<Draft>({ ...EMPTY, ...initial });
   const [i, setI] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -226,14 +239,14 @@ export function Onboarding({ initial }: { initial: Partial<Draft> }) {
           next={d.eventInMind.trim() ? `Aiming at ${d.eventInMind.trim()}` : "Next: your first blood report"}
           nextDetail="Upload a report and your bib gets its verdict."
         />
-        {/* Food first: logging a meal works today, with or without a report. */}
+        {/* Food first: logging a meal works today, with or without a report. Someone sent here
+            on the way to another screen (an email link, a blog's "Try it") is led there instead. */}
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <Link href="/fuel" className="button-primary h-13">
-            Log your first meal
-          </Link>
-          <Link href="/upload" className="button-ghost h-13">
-            Upload a blood report
-          </Link>
+          {finishLinks(next).map((l, n) => (
+            <Link key={l.href} href={l.href} className={n === 0 ? "button-primary h-13" : "button-ghost h-13"}>
+              {l.label}
+            </Link>
+          ))}
         </div>
         <Link href="/home" className="link-quiet mt-3 inline-flex min-h-11 items-center self-start text-sm">
           Go to my dashboard
@@ -477,6 +490,11 @@ function StepBody({
               servers.
             </li>
             <li>We don&apos;t sell your data or share it with brands.</li>
+            {/* Mayank, 2026-11-18: the weekly wrap and feedback emails are on by default, said plainly here. */}
+            <li>
+              We email you a wrap of your week on Sunday evenings and, now and then, a quick question from the team. Every email has a link to stop
+              it, and Settings has a switch for each.
+            </li>
             <li>Reads are AI, not a diagnosis. When a marker needs a doctor, we say so.</li>
             <li>You can delete everything, any time, from Settings.</li>
           </ul>
