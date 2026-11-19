@@ -91,6 +91,36 @@ Browser ──► Route Handlers (app/api/*) ──► lib/platform/* (services)
 - **Screens:** `components/platform/Paywall.tsx` (the paywall card, Pay button and usage lines) and `checkout.ts` (loads Razorpay's script, opens Checkout, confirms). Upload and Fuel show what's left and swap their controls for the paywall when nothing is; a refused request (402) refreshes the page into that state.
 - **Not handled yet:** refunds don't take a pass away; there's no invoice or GST handling in the app (Razorpay's dashboard has the records); deleting an account deletes its payments and usage, so signing up again with the same email starts a new free allowance. The parallel-claim tests run on PGlite, which runs one query at a time, so the locks are only proven on real Postgres by reading the code.
 
+## Ask
+
+Ask answers short questions about food, training, general health and the app, from the person's own data. The contract is `docs/team/specs/2026-11-19-ask-build.md`; the four Ask specs beside it explain the screens, the AI, the data and the threats.
+
+- **Who sees it:** founders only (`BLOG_OWNER_EMAILS`) until `ASK_OPEN=all`; then every onboarded adult. Under 18 by birth year, or an unknown birth year, never (`askGate` in `lib/ask/types.ts`).
+- **Consent:** the onboarding consent step now names questions. People who agreed before Ask existed see a one-time notice; "Got it" calls `POST /api/ask/consent`, which sets `profiles.ask_consent_at`. Until then `POST /api/ask` answers `consent_needed`.
+- **The route** (`app/api/ask/route.ts`): POST asks, GET reads today's thread, DELETE clears it. Every reply is `no-store`, nothing is cached, and the question travels only in the POST body. POST runs its checks in the contract's order (§3.2): cheap checks first, then code-written crisis and emergency replies, which work even when Ask is off, paused or used up.
+- **The AI** (`lib/ai/ask.ts`): reached only through `askPreCheck` and `answerAsk`. The data layer (`lib/platform/ask.ts`) never calls it, and the AI never touches the database.
+- **Limits** (`ASK_LIMITS` in `lib/ask/types.ts`):
+  - 5 questions a person per IST day, outside the plan. Answers, off-topic replies and doctor replies count; code's urgent and crisis replies don't.
+  - Failures, refusals and timeouts hand the question back, but at most 10 model calls a person a day are started.
+  - One question in flight per person. Burst limits in memory: 6 a minute per person, 30 per 10 minutes per IP.
+  - The day is IST from the server's clock for everyone, so a profile's time zone can't open a second day. It turns at 18:30 UTC.
+- **The breaker:** `ASK_DAILY_MAX` model calls a day across everyone (default 2,000; `0` switches Ask off). At the limit, Ask says it's resting until midnight IST and nobody's own count moves. The founders get one email at 80% and one at the limit, once a day each (`job_runs` markers `alert:ask-80:<day>` and `alert:ask-cap:<day>`).
+- **Tables** (migration `0011_ask`, safe to run twice, RLS on with no policies):
+  - `ask_turns`: each question and its answer, the code-written notice, link ids (never URLs), the kind, whether it counted, and the report it used. Health data: read only by its owner through GET.
+  - `ask_days`: each person's `used` and `attempts` for an IST day. No text, so clearing questions or deleting a report never resets a count.
+  - `ask_totals`: everyone's calls, answers by kind, tokens and cost for a day. No personal data; kept.
+  - `profiles.ask_consent_at`.
+- **The ledger** (`lib/platform/ask.ts`): the claim is one transaction that locks the person's `ask_days` row first, then inserts the question, then counts everyone; any refusal rolls all of it back. Complete saves only a turn still pending and untouched by a report delete. Release deletes a pending turn and gives its question back, and is safe to run twice. A question still pending after 45 s has died; the next claim hands it back. Proven under parallel load on a real Postgres 17: `TEST_DATABASE_URL=… node tests/pg/ask-parallel.mts`.
+- **What the AI gets** (`loadAsk`): one parallel batch after the session and profile. The profile's answers, today's meals, 14 days of meals as the diet picture, the usual day, the stack as the Stack screen shows it (held and out of date carry no doses), and the newest ready report by collection date (`newestReadyReport` in `lib/platform/reports.ts`) with its markers. Never names, email, city, the lab, the read's words, brand searches or event searches.
+- **Keeping and deleting:**
+  - Today only: the daily job's housekeeping deletes `ask_turns` and `ask_days` from before today (IST), by about 10:30 IST the next morning. If an earlier step of that run fails, the purge waits for the next run.
+  - A report delete blanks every answer that used any report and keeps the questions.
+  - "Clear now" deletes answered questions; the count stays.
+  - An account delete takes everything by cascade.
+- **Logs:** one line per question, `[ask] kind=… counted=… raised=… filter=… left=… ms=…`. Never the question, the answer, a marker, a medicine or a meal; errors log their class name only.
+- **Locally:** with `D_HUMAN_AI_MOCK=1`, answers come from the mock and go through the same claim, complete and release. Set `ASK_DAILY_MAX=3` to see the breaker.
+- **Growth:** at 10x nothing changes. At 100x (around a million questions a day) the shared `ask_totals` row is the first hot spot: split it into a few rows by user hash and add them up. Past about a million turns a day, partition `ask_turns` by day and drop old partitions instead of deleting rows.
+
 ## Safety rules built in
 
 - `lib/domain/safety.ts` enforces the floor in code, whatever Claude writes:
@@ -148,6 +178,9 @@ Add in Vercel (Settings → Environment Variables), then redeploy:
 | `RAZORPAY_KEY_SECRET` | The secret shown with that key. |
 | `RAZORPAY_WEBHOOK_SECRET` | The secret you type when adding the webhook below. Different from the key secret. |
 | `NEXT_PUBLIC_SITE_MODE` | Optional. `waitlist` brings back the waitlist landing page; unset (or anything else) shows "Start free". Baked in at build, so redeploy after changing it. |
+| `ASK_OPEN` | Optional. `all` opens Ask to every onboarded adult; unset (or anything else), only `BLOG_OWNER_EMAILS` see it. Redeploy after changing it. |
+| `ASK_DAILY_MAX` | Optional. Ask's model calls a day across everyone; default 2,000, and `0` switches Ask off. Redeploy after changing it. |
+| `CLAUDE_MODEL_ASK` | Optional. Overrides Ask's model. |
 
 ### Razorpay
 

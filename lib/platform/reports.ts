@@ -1,6 +1,8 @@
 import "server-only";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db";
+import { and, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { db, schema, type Db } from "@/lib/db";
+import type { Report } from "@/lib/db/schema";
+import { blankAskAnswers } from "./ask";
 
 export type ReportRow = {
   id: string;
@@ -39,6 +41,31 @@ export async function listReports(userId: string): Promise<ReportRow[]> {
 }
 
 /**
+ * Newest first by when the blood was taken, then by upload time. A report that doesn't say
+ * when it was collected counts from the day it was uploaded (in IST), so it isn't buried
+ * under last year's dated one.
+ */
+export function newestReportOrder(): SQL[] {
+  return [sql`coalesce(${schema.reports.collectedOn}, (${schema.reports.createdAt} at time zone 'Asia/Kolkata')::date) desc`, desc(schema.reports.createdAt)];
+}
+
+/**
+ * The newest report that's been read: by when the blood was taken, then by upload time.
+ * Null if none is ready. Reports still being read, or whose read failed, are skipped. Ask
+ * uses it now; Home, Wraps and Stack still go by upload order (an open item).
+ */
+export async function newestReadyReport(userId: string, q?: Db): Promise<Report | null> {
+  const d = q ?? (await db());
+  const [r] = await d
+    .select()
+    .from(schema.reports)
+    .where(and(eq(schema.reports.userId, userId), eq(schema.reports.status, "ready")))
+    .orderBy(...newestReportOrder())
+    .limit(1);
+  return r ?? null;
+}
+
+/**
  * The name printed on a report when it doesn't look like the person's own (a friend's
  * report tried out on the app), else null. Loose on purpose, because it sits beside a
  * delete: any part of their name counts as a match, so "Mayank N.", "M. NARAYAN" and
@@ -62,8 +89,9 @@ export function printedFor(nameOnReport: string | null, profileName: string | nu
  * compares a report in its period with the one uploaded before it, which can be from
  * any date, so only that is sure to leave no wrap quoting a deleted report. The Wraps
  * screen offers to make them again, from meals that are all still there. Reads already
- * used stay counted (lib/domain/plan.ts), so deleting never hands back a read. Returns
- * how many reports went.
+ * used stay counted (lib/domain/plan.ts), so deleting never hands back a read. Ask's
+ * answers that used any report are blanked too, keeping the questions (blankAskAnswers).
+ * Returns how many reports went.
  */
 export async function deleteReports(userId: string, which: "all" | string[]): Promise<number> {
   if (which !== "all" && which.length === 0) return 0;
@@ -75,6 +103,7 @@ export async function deleteReports(userId: string, which: "all" | string[]): Pr
     // the old ones left without their report).
     if (!gone.length) return 0;
     await tx.delete(schema.wraps).where(and(eq(schema.wraps.userId, userId), sql`coalesce((${schema.wraps.stats}->>'reportsInPeriod')::int, 0) > 0`));
+    await blankAskAnswers(tx, userId);
     return gone.length;
   });
 }

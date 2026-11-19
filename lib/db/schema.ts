@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   customType,
   date,
@@ -93,6 +94,8 @@ export const profiles = pgTable("profiles", {
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   // When they finished or skipped the first-run tour; null means it's still to show.
   tourDoneAt: timestamp("tour_done_at", { withTimezone: true }),
+  // When they agreed to Ask's notice (their question and data go to Claude to answer it); null until then.
+  askConsentAt: timestamp("ask_consent_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
@@ -608,6 +611,84 @@ export const emailDailyCounts = pgTable(
   },
   (t) => [primaryKey({ columns: [t.day, t.stream] })],
 ).enableRLS();
+
+// ── Ask ─────────────────────────────────────────────────────────────────────
+// The in-app assistant (docs/team/specs/2026-11-19-ask-data.md). Days are IST days for
+// everyone, from the server clock, so a profile's time zone can't open a new day.
+// Question and answer text is health data: never logged or emailed, read only by its
+// owner through /api/ask, and deleted by the daily job (ASK_KEEP_DAYS).
+
+// One row per question being answered or answered. A failed call deletes its row and
+// hands the question back. `client_key` is the browser's id for the question, so a retry
+// is never asked twice; the server makes `id`.
+export const askTurns = pgTable(
+  "ask_turns",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientKey: text("client_key").notNull(),
+    day: date("day").notNull(), // the IST day it counted on
+    status: text("status").notNull().default("pending"), // pending | answered
+    kind: text("kind"), // answer | off_topic | doctor | urgent | crisis; null while pending
+    counted: boolean("counted").notNull().default(true), // used one of the day's questions
+    question: text("question").notNull(),
+    answer: text("answer"), // the AI text; null for urgent and crisis, and once removed
+    notice: jsonb("notice"), // code's fixed safety words, with marker names
+    links: jsonb("links"), // link ids from the fixed table, at most 2
+    lang: text("lang"), // BCP 47 of the answer
+    // The report whose markers were in the pack. No foreign key: deleting any report
+    // blanks every answer that used one (lib/platform/reports.ts) and keeps the question.
+    reportId: text("report_id"),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    model: text("model"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    ms: integer("ms"),
+    createdAt: created(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Today's thread, the one-in-flight check, and report and clear deletes.
+    index("ask_turns_user_day_idx").on(t.userId, t.day, t.createdAt),
+    // A retry of the same question finds it; scoped by person.
+    uniqueIndex("ask_turns_client_key_idx").on(t.userId, t.clientKey),
+    // The daily purge.
+    index("ask_turns_day_idx").on(t.day),
+  ],
+).enableRLS();
+
+// Each person's count for an IST day. No text, so clearing questions or deleting a report
+// never resets it. `used` counts toward the daily 5 and goes down when a call fails or its
+// kind doesn't count; `attempts` counts every model call started and never goes down.
+export const askDays = pgTable(
+  "ask_days",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    used: integer("used").notNull().default(0),
+    attempts: integer("attempts").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+).enableRLS();
+
+// Everyone's Ask for an IST day: the spend circuit breaker (ASK_DAILY_MAX counts
+// `attempts`) and cost tracking. Counts only, no personal data, kept for good.
+export const askTotals = pgTable("ask_totals", {
+  day: date("day").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  answered: integer("answered").notNull().default(0),
+  offTopic: integer("off_topic").notNull().default(0),
+  doctor: integer("doctor").notNull().default(0),
+  urgent: integer("urgent").notNull().default(0),
+  crisis: integer("crisis").notNull().default(0),
+  inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+  outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+  costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0), // US$ millionths, from costOf()
+}).enableRLS();
 
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;

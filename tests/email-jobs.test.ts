@@ -477,6 +477,28 @@ describe("housekeeping", () => {
     assert.deepEqual((await d.select({ id: schema.loginCodes.id }).from(schema.loginCodes)).map((x) => x.id), ["new"]);
     assert.deepEqual((await d.select({ id: schema.sessions.id }).from(schema.sessions).where(and(eq(schema.sessions.userId, a.id)))).map((x) => x.id), ["live"]);
   });
+
+  // Ask keeps questions for the IST day only (contract §11). SUNDAY_EVENING is the 22nd in IST.
+  it("deletes Ask's questions and counts from before today (IST), keeping today's and everyone's totals", async () => {
+    const a = await person();
+    const d = await db();
+    await d.insert(schema.askTurns).values([
+      { id: "yesterday", userId: a.id, clientKey: "k1", day: "2026-11-21", status: "answered", kind: "answer", question: "q1", answer: "a1" },
+      { id: "today", userId: a.id, clientKey: "k2", day: "2026-11-22", status: "answered", kind: "answer", question: "q2", answer: "a2" },
+    ]);
+    await d.insert(schema.askDays).values([
+      { userId: a.id, day: "2026-11-21", used: 3, attempts: 3 },
+      { userId: a.id, day: "2026-11-22", used: 1, attempts: 1 },
+    ]);
+    await d.insert(schema.askTotals).values({ day: "2026-11-21", attempts: 3, answered: 3 }).onConflictDoNothing();
+    const r = await run(SUNDAY_EVENING);
+    assert.deepEqual([r.housekeeping?.askTurns, r.housekeeping?.askDays], [1, 1]);
+    assert.deepEqual((await d.select({ id: schema.askTurns.id }).from(schema.askTurns)).map((x) => x.id), ["today"]);
+    assert.deepEqual((await d.select({ day: schema.askDays.day }).from(schema.askDays)).map((x) => x.day), ["2026-11-22"]);
+    assert.equal((await d.select().from(schema.askTotals).where(eq(schema.askTotals.day, "2026-11-21"))).length, 1, "totals hold no personal data and stay");
+    const dry = await run(SUNDAY_EVENING, { dry: true });
+    assert.equal(dry.housekeeping, null, "a read-only run deletes nothing");
+  });
 });
 
 describe("the feedback Sheet's catch-up", () => {

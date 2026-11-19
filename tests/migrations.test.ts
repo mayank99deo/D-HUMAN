@@ -80,6 +80,20 @@ async function assertCurrentShape(pg: PGlite) {
   // 0010: the daily count of emails sent outside the lifecycle ledger, keyed by day and stream.
   const pk = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'email_daily_counts_day_stream_pk'`);
   assert.equal(pk?.def, "PRIMARY KEY (day, stream)");
+
+  // 0011: Ask's three tables (RLS is checked above for every table), their keys and indexes.
+  for (const t of ["ask_turns", "ask_days", "ask_totals"]) assert.ok(tables.includes(t), `${t} exists`);
+  const askPk = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'ask_days_user_id_day_pk'`);
+  assert.equal(askPk?.def, "PRIMARY KEY (user_id, day)");
+  const askFks = await pg.query<{ t: string; del: string; ref: string }>(`select conrelid::regclass::text as t, confdeltype as del, confrelid::regclass::text as ref
+    from pg_constraint where contype = 'f' and conrelid in ('public.ask_turns'::regclass, 'public.ask_days'::regclass, 'public.ask_totals'::regclass) order by 1`);
+  assert.deepEqual(askFks.rows, [{ t: "ask_days", del: "c", ref: "users" }, { t: "ask_turns", del: "c", ref: "users" }], "user keys cascade; report_id has none");
+  const askIdx = await pg.query<{ name: string; def: string }>(`select indexname as name, indexdef as def from pg_indexes where tablename = 'ask_turns' and indexname like 'ask_turns_%_idx' order by 1`);
+  assert.deepEqual(askIdx.rows.map((r) => r.name), ["ask_turns_client_key_idx", "ask_turns_day_idx", "ask_turns_user_day_idx"]);
+  assert.ok(askIdx.rows[0].def.includes("UNIQUE INDEX") && askIdx.rows[0].def.includes("(user_id, client_key)"), askIdx.rows[0].def);
+  assert.ok(askIdx.rows[2].def.includes("(user_id, day, created_at)"), askIdx.rows[2].def);
+  const consentCol = await pg.query(`select 1 from information_schema.columns where table_name = 'profiles' and column_name = 'ask_consent_at' and data_type = 'timestamp with time zone'`);
+  assert.equal(consentCol.rows.length, 1, "profiles.ask_consent_at exists");
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -177,6 +191,50 @@ describe("migrations", () => {
     await deploy(pg);
     await assertCurrentShape(pg);
     assert.equal((await one<{ n: number }>(pg, `select sent as n from email_daily_counts`)).n, 2, "counts kept");
+    await pg.close();
+  });
+
+  // Production with 0010, then only 0011 pasted into Supabase (twice), then the deploy.
+  it("0011 pasted onto production, then the deploy", async () => {
+    const at = journal.entries.findIndex((e) => e.tag.startsWith("0011_"));
+    assert.ok(at > 0, "0011 is in the journal");
+    const pg = new PGlite();
+    await deploy(pg, at);
+    await pg.exec(`insert into users (id, email) values ('u1', 'a@x'); insert into profiles (user_id, consent_at, onboarded_at) values ('u1', now(), now());`);
+    await pg.exec(files[at]);
+    await pg.exec(`insert into ask_days (user_id, day, used, attempts) values ('u1', '2026-11-19', 2, 3)`);
+    await pg.exec(files[at]);
+    await deploy(pg);
+    await assertCurrentShape(pg);
+    assert.equal((await one<{ n: number }>(pg, `select used as n from ask_days`)).n, 2, "counts kept");
+    assert.equal((await one<{ c: string | null }>(pg, `select ask_consent_at::text as c from profiles`)).c, null, "existing people see the one-time notice");
+    await pg.close();
+  });
+
+  it("0011's keys: one question per client key a person, deletes cascade with the account, nobody but the owner reads Ask", async () => {
+    const pg = new PGlite();
+    await deploy(pg);
+    await pg.exec(`
+      insert into users (id, email) values ('u1', 'a@x'), ('u2', 'b@x');
+      insert into ask_turns (id, user_id, client_key, day, question, report_id) values ('t1', 'u1', 'k', '2026-11-19', 'q', 'gone-report');
+      insert into ask_turns (id, user_id, client_key, day, question) values ('t2', 'u2', 'k', '2026-11-19', 'q');
+      insert into ask_days (user_id, day, used, attempts) values ('u1', '2026-11-19', 1, 1);
+      insert into ask_totals (day, attempts) values ('2026-11-19', 2);
+    `);
+    await assert.rejects(pg.exec(`insert into ask_turns (id, user_id, client_key, day, question) values ('t3', 'u1', 'k', '2026-11-20', 'again')`), /ask_turns_client_key_idx/);
+    assert.deepEqual(await one(pg, `select status, counted from ask_turns where id = 't2'`), { status: "pending", counted: true });
+
+    // Supabase's Data API roles: row-level security on with no policies shows them nothing.
+    await pg.exec(`do $$ begin create role anon_test nologin; exception when duplicate_object then null; end $$;
+      grant usage on schema public to anon_test; grant select on ask_turns, ask_days, ask_totals to anon_test;`);
+    await pg.exec(`set role anon_test`);
+    const seen = await one(pg, `select (select count(*)::int from ask_turns) as t, (select count(*)::int from ask_days) as d, (select count(*)::int from ask_totals) as x`);
+    await pg.exec(`reset role`);
+    assert.deepEqual(seen, { t: 0, d: 0, x: 0 });
+
+    await pg.exec(`delete from users where id = 'u1'`);
+    const left = await one(pg, `select (select count(*)::int from ask_turns) as t, (select count(*)::int from ask_days) as d, (select count(*)::int from ask_totals) as x`);
+    assert.deepEqual(left, { t: 1, d: 0, x: 1 }, "u1's questions and counts go; u2's and the totals stay");
     await pg.close();
   });
 

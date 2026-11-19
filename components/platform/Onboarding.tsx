@@ -484,10 +484,10 @@ function StepBody({
         <div className="space-y-5 text-[0.9375rem]">
           <ul className="space-y-3 text-graphite">
             <li>D-Human is for adults, {MIN_AGE} and over.</li>
-            <li>We use your reports and answers only to give you your reads, your food notes and your stack.</li>
+            <li>We use your reports and answers only to give you your reads, your food notes, your stack and answers to your questions.</li>
             <li>
-              Claude, an AI model made by Anthropic, reads your reports and meals for us. That processing happens outside India, on Anthropic&apos;s
-              servers.
+              Claude, an AI model made by Anthropic, reads your reports, meals and questions for us. That processing happens outside India, on
+              Anthropic&apos;s servers.
             </li>
             <li>We don&apos;t sell your data or share it with brands.</li>
             {/* Mayank, 2026-11-18: the weekly wrap and feedback emails are on by default, said plainly here. */}

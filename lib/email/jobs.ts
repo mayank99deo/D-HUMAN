@@ -8,6 +8,7 @@ import type { Profile } from "@/lib/db/schema";
 import { PLAN } from "@/lib/domain/plan";
 import { addDays } from "@/lib/domain/periods";
 import { langTag } from "@/lib/domain/speech";
+import { purgeAsks } from "@/lib/platform/ask";
 import { personaFor } from "@/lib/platform/profile";
 import { makeWrap, reportDay, wrapDays, wrapStatsFrom, wrapTargets, type WrapLog } from "@/lib/platform/wraps";
 import { dailyCap, shouldAlert } from "./budget";
@@ -55,7 +56,8 @@ import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type E
 //   2. Retries: refused sends and unanswered ones (lane C's sweep rules).
 //   3. Welcome catch-up, then "didn't finish setting up", the weekly email, feedback:
 //      KIND_PRIORITY's order, so a short budget goes to the earlier kinds first.
-//   4. Housekeeping: old sign-in codes, long-expired sessions, old dry-run rows.
+//   4. Housekeeping: old sign-in codes, long-expired sessions, old dry-run rows, and Ask's
+//      questions and counts from before today (IST; lib/platform/ask.ts purgeAsks).
 //   5. The feedback Sheet's catch-up (lib/email/feedback.ts): forgets for deleted accounts
 //      that the Sheet missed ("sheet-forget:" rows), then answers that didn't arrive.
 //   6. Counts (never addresses) in job_runs.last_result; the lease is released.
@@ -131,7 +133,8 @@ export type RunResult = {
     alert: string | null;
   };
   feedback: Tally & { used: number; barely: number };
-  housekeeping: { loginCodes: number; sessions: number; dryRows: number } | null;
+  /** askTurns and askDays: Ask's questions and per-person counts from before today (IST), deleted. */
+  housekeeping: { loginCodes: number; sessions: number; dryRows: number; askTurns: number; askDays: number } | null;
   /** Null on dry runs; "skipped" when the run had no time left; "error" when it threw. */
   sheet: SheetCatchUp | "skipped" | "error" | null;
   stoppedEarly: "time" | "not_production" | "no_api_key" | "no_link_secret" | null;
@@ -978,12 +981,14 @@ function sheetSummary(sheet: RunResult["sheet"]): string {
 // ── 4. Housekeeping ─────────────────────────────────────────────────────────
 
 async function housekeeping(d: Db, now: Date) {
-  const [codes, expired, dryRows] = await Promise.all([
+  const [codes, expired, dryRows, asks] = await Promise.all([
     d.delete(loginCodes).where(lt(loginCodes.createdAt, new Date(now.getTime() - LOGIN_CODES_KEEP_DAYS * DAY_MS))).returning({ id: loginCodes.id }),
     d.delete(sessions).where(lt(sessions.expiresAt, new Date(now.getTime() - EXPIRED_SESSIONS_KEEP_DAYS * DAY_MS))).returning({ id: sessions.id }),
     pruneDryRows(d, now),
+    // Ask keeps questions for the IST day only (contract §11): yesterday's words go by about 10:30 IST.
+    purgeAsks(d, now),
   ]);
-  return { loginCodes: codes.length, sessions: expired.length, dryRows };
+  return { loginCodes: codes.length, sessions: expired.length, dryRows, askTurns: asks.askTurns, askDays: asks.askDays };
 }
 
 // ── 5. The feedback Sheet ───────────────────────────────────────────────────

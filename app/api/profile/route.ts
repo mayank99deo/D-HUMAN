@@ -72,8 +72,14 @@ export async function POST(request: Request) {
       /* ignore an unknown zone */
     }
   }
-  // Keep the moment they first agreed.
-  if (consent && !before?.consentAt) values.consentAt = new Date();
+  // Keep the moment they first agreed. The consent step's words now cover Ask's questions too
+  // (contract §7.3), so people agreeing now never see Ask's one-time notice; people who agreed
+  // before Ask existed keep ask_consent_at null and see it once.
+  if (consent && !before?.consentAt) {
+    const now = new Date();
+    values.consentAt = now;
+    values.askConsentAt = before?.askConsentAt ?? now;
+  }
   if (fields.activities && !fields.primaryActivity && fields.activities.length === 1) values.primaryActivity = fields.activities[0];
 
   if (complete) values.onboardedAt = before?.onboardedAt ?? new Date();

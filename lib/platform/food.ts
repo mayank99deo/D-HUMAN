@@ -218,14 +218,30 @@ export const USUAL_DAY_SHARE = 0.6;
 export async function dietPicture(userId: string, profile: Profile, days = 14): Promise<DietPicture> {
   const today = localDate(profile.timezone);
   const from = localDate(profile.timezone, new Date(Date.now() - (days - 1) * 86400000));
+  const d = await db();
+  // The usual day only counts when the logs fall short, but fetching it alongside them costs no extra wait.
+  const [logs, [base]] = await Promise.all([
+    logsBetween(userId, from, today),
+    d.select({ estimate: schema.dietBaselines.estimate }).from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, userId)).limit(1),
+  ]);
+  return dietPictureFrom(profile, logs, base ?? null);
+}
+
+/** A logged meal, as much of it as the diet picture reads. */
+export type PictureLog = Pick<FoodLog, "localDate" | "kcal" | "proteinG" | "carbsG" | "fatG" | "fibreG" | "micros">;
+
+/**
+ * dietPicture's pure core, from the logs of the window and the saved usual day (or null).
+ * Ask's loader feeds it from its own parallel batch (lib/platform/ask.ts).
+ */
+export function dietPictureFrom(profile: Profile, logs: PictureLog[], baseline: { estimate: unknown } | null): DietPicture {
   const persona = personaFor(profile);
   const targets = targetsFor({
     sex: profile.sex, age: persona.age, heightCm: profile.heightCm, weightKg: profile.weightKg,
     level: profile.level, archetype: persona.archetype, goals: profile.goals,
   });
   const reaches = (kcal: number, share: number) => kcal >= targets.kcal * share;
-  const logs = await logsBetween(userId, from, today);
-  const byDay = new Map<string, FoodLog[]>();
+  const byDay = new Map<string, PictureLog[]>();
   for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), l]);
   const fullDays = [...byDay.values()].filter((meals) => meals.length >= 2 && reaches(meals.reduce((t, m) => t + m.kcal, 0), LOGGED_DAY_SHARE));
 
@@ -242,10 +258,8 @@ export async function dietPicture(userId: string, profile: Profile, days = 14): 
     };
     source = "logs";
   } else {
-    const d = await db();
-    const [base] = await d.select().from(schema.dietBaselines).where(eq(schema.dietBaselines.userId, userId)).limit(1);
-    if (base) {
-      const est = base.estimate as SavedDay;
+    if (baseline) {
+      const est = baseline.estimate as SavedDay;
       const t = totalsOf(est.meals.map((m) => ({ kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g, fibreG: m.fibre_g, micros: {} })));
       // Patterns still show on Fuel; the numbers only count when they describe a day's food.
       patterns = est.patterns;
