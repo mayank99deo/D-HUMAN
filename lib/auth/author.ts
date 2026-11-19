@@ -84,10 +84,19 @@ async function sessionWithAge(): Promise<{ user: { id: string; email: string }; 
   return row ? { user: { id: row.id, email: row.email }, createdAt: row.createdAt } : null;
 }
 
-/** Once per request: who is asking, as a writer. */
+/**
+ * Once per request: who is asking, as a writer. A slow check is logged with where the
+ * time went (a /write screen once sat on "Loading…" live and couldn't be reproduced).
+ */
 export const writerAccess = cache(async (): Promise<WriterAccess> => {
+  await connection(); // before reading the clock (Cache Components)
+  const started = Date.now();
   const session = await sessionWithAge();
-  return accessFor(session?.user ?? null, session?.createdAt ?? null);
+  const signedIn = Date.now();
+  const access = await accessFor(session?.user ?? null, session?.createdAt ?? null);
+  const took = Date.now() - started;
+  if (took > 1500) console.warn(`[write] slow access check ${took} ms (session ${signedIn - started} ms, author ${Date.now() - signedIn} ms, ${access.kind})`);
+  return access;
 });
 
 // ── API routes ──────────────────────────────────────────────────────────────

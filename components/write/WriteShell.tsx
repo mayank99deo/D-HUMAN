@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/brand/Logo";
+import { Stall } from "@/components/platform/Stall";
 
 // The frame of every /write screen: the wordmark, "Write", and the three places a writer
 // goes. Black, like the app. Not the app's tab bar: writers needn't be app users.
@@ -68,14 +69,16 @@ export function Gate({ kind }: { kind: "signed_out" | "not_author" }) {
   );
 }
 
+/** While a /write screen streams in. After 6 s it says so and offers Reload, like the app's screens, so a stuck load is never a dead end. */
 export function WriteLoading({ title }: { title: string }) {
   return (
     <WriteShell>
       <main className="mx-auto max-w-3xl px-4 pt-10 sm:px-6">
         <h1 className="verdict-type text-[clamp(2rem,6vw,3rem)]">{title}</h1>
-        <p className="mt-4 text-graphite" role="status">
+        <p className="mt-4 text-graphite" role="status" aria-live="polite">
           Loading…
         </p>
+        <Stall />
       </main>
     </WriteShell>
   );

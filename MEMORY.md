@@ -280,6 +280,39 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-19
+- **"Ask", an in-app AI assistant (Mayank's request), design round started:**
+  - **Mayank's brief:** answers only food and diet, exercise and gym, health and healthcare, and help finding things in the app. Anything else gets a subtle redirect. The lightest model (Haiku 5.5), short and crisp answers, at most 5–6 questions per person a day, added subtly in the house style.
+  - **His call (2026-11-19):** the bot sees everything, including report markers.
+  - **Defaults taken by the orchestrator:**
+    - 5 a day for everyone, outside the plan's reads and meal logs.
+    - Answers in the language the question is written in.
+    - The report's safety floor applies: the doctor and urgent wording are decided in code.
+  - **Four lanes in parallel, design docs only:** the product designer (`docs/team/specs/2026-11-19-ask-ux.md`), the AI efficiency lead (`…-ask-ai.md`, with a live eval under $0.50), the systems and data engineer (`…-ask-data.md`) and QA and security (`…-ask-threats.md`). The build follows once the four agree.
+- **/write Import stuck on "Loading…" (Mayank, Chrome on his Mac, live site):** he clicked Import and the page never left the Suspense fallback.
+  - **Not reproduced (staff engineer, production build):** Import opened in 90–410 ms every way in. Paste took about 50 ms and Create draft about 130 ms. Live client navigations took 0.17–0.93 s over 10 minutes.
+  - **Forced failures:** a dropped connection, 500 or 504 recover through a full page load, and a cut-off stream shows Next's Reload screen. Only a response that never finishes matches his report, and `WriteLoading` had no way out. The guess is a stuck pooled Postgres connection: the client has a connect timeout but no query timeout. Unproven, because there are no Vercel logs here.
+  - **Shipped:**
+    - `WriteLoading` gets `Stall` ("taking longer" and Reload after 6 s).
+    - `writerAccess` logs `[write] slow access check` past 1.5 s, with the split between session and author. It calls `connection()` before reading the clock, or the build fails.
+    - Checked: typecheck, 841 tests, the build, and /write/import as a writer (200 in 0.44 s).
+  - **Open:** a Postgres statement timeout, for the systems and data engineer. Next time it sticks, the Vercel logs around that time will show the slow-check line.
+- **First blog post drafted (Mayank: "my first blog on preventive healthcare in India with good numbers"):**
+  - **The draft (SEO lead):** "Preventive health checkups in India: what the numbers say", slug `preventive-health-checkup-india`, topic `blood-tests`, 1,422 words, 10 sources. Metadata, the post and the drafter's source table are in `docs/team/blog/drafts/2026-11-19-preventive-health-india.md`; the paste-ready copy is `~/Downloads/D-Human-blog-preventive-health-india.html`.
+  - **The numbers:** ICMR-INDIAB 2023 (diabetes 11.4%, prediabetes 15.3%, hypertension 35.5%, dyslipidaemia 81.2%), WHO NCD profile 2018 (63% of deaths), WHO hypertension report 2025 (210.2 million, 39% diagnosed, 17% controlled), NFHS-5 anaemia (57% of women, 25% of men aged 15–49), NHA 2023–24 out-of-pocket share (42.7%), NP-NCD screening from 30, ICMR-NIN 2024 (56.4% of disease burden from diet), and the house vitamin D figure.
+  - **Checked:**
+    - **Editor checks:** it went through the editor's own Import, save and publish checks with no blockers.
+    - **Independent fact-check:** a separate agent checked it against the primary sources without seeing the drafter's table. Every statistic, quote and population passed, including NFHS-5 (Tables 10.23.1–2: 57.0% and 25.1%), WHO p. 171 (read from the rendered page) and NHA 2023–24. All 15 links work.
+    - **Fixed after it:**
+      - The post had said Fuel's targets come from ICMR-NIN 2020. Only micronutrients do; energy is Mifflin–St Jeor and protein is per kg by training.
+      - "A simple blood count" became "a simple haemoglobin test" (NFHS used HemoCue).
+      - "A large part of every bill" became "more than ₹2 of every ₹5 spent on health in India".
+      - "An estimated 26%" now carries WHO's own hedge.
+  - **Cover (Mayank asked for one; graphic designer):** "Soundings".
+    - **The picture:** a "Feels fine" line with three ruler drops below it, drawn to scale to ICMR-INDIAB's diabetes 11.4%, prediabetes 15.3% and hypertension 35.5%, over contour layers seeded from the slug like `ContourCover.tsx`. Monochrome, Archivo.
+    - **Files:** the master is `~/Downloads/D-Human-blog-cover-preventive-health.png` (1600 × 1067). The source and `render.sh` are in `docs/team/blog/covers/2026-11-19-preventive-health/`: edit `DATA` and re-run. It loads Archivo from `video/intro/assets/fonts/`.
+    - **Crops:** covers are centre-cropped to 3:2, 2:1, 4:3 and 1:1 (as small as 88 px), so everything that matters sits in the central 1067 × 800 px. All four crops were checked, and alt text, caption and credit fit the editor's limits (300/300/200).
+    - **Not yet seen:** the cover hasn't been uploaded through `/write`.
+  - **The byline line** "Written with AI assistance and edited by Mayank Narayan." follows the editorial policy; AI-assisted drafts are still Mayank's call in Open items.
 - **Blog and email setup, part 1 (Mayank in Vercel and Resend; verified live):**
   - **Done:** `BLOG_OWNER_EMAILS` (both founders), `CRON_SECRET`, `EMAIL_LINK_SECRET` (both generated on this Mac and copied by clipboard, never in chat or repo) and `RESEND_WEBHOOK_SECRET` set in Production; the Resend webhook added with the six events; redeployed.
   - **Checked live:** the webhook gives 401 unsigned or forged; the cron gives 401 without or with a wrong secret.
