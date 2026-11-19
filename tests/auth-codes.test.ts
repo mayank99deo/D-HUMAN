@@ -11,6 +11,9 @@ const g = globalThis as TestGlobals;
 allowAppImports({
   // The delete route reads the signed-in user from cookies; tests set it directly.
   "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null; export const endSession = async () => {};",
+  // The delete route asks the feedback Sheet to forget the person in after(); not run here
+  // (tests/feedback.test.ts covers it).
+  "next/server": "export const after = () => {}; export const connection = async () => {};",
 });
 const removeDatabase = tempDatabase();
 const { and, eq } = await import("drizzle-orm");

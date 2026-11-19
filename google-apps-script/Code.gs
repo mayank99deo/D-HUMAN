@@ -1,5 +1,24 @@
 /**
- * D-Human waitlist webhook for Google Sheets.
+ * D-Human waitlist and feedback webhook for Google Sheets.
+ *
+ * NEW (2026-11-18): the Feedback tab. To switch it on, Mayank:
+ *   1. Opens the Sheet > Extensions > Apps Script, selects everything in Code.gs,
+ *      pastes this whole file over it and clicks Save.
+ *   2. Picks "setupFeedback" in the function menu and clicks Run. It adds and
+ *      formats the Feedback and Replies tabs and checks the secret. Safe to run
+ *      again: it never deletes data, and it stops if a tab's headers differ and
+ *      there is data below them.
+ *   3. Deploy > Manage deployments > selects the web app > Edit (pencil icon) >
+ *      Version: New version > Deploy. The URL stays the same, so nothing changes
+ *      in Vercel. Without a new version the live URL keeps running the old code.
+ *   4. Checks: opening the web app URL in a browser shows "feedback": true.
+ * The website then copies each answer to the Feedback tab (action "feedback",
+ * added or updated by Answer ID) and, when someone deletes their account, asks
+ * for every Feedback and Replies row with their respondent code to be deleted
+ * (action "forget"). Both use the same WEBHOOK_SECRET as the waitlist. Rows carry
+ * a respondent code, not an email address, unless the person ticked "You can email
+ * me about this". Keep the Sheet shared with the founding team only: typed
+ * answers may hold personal details.
  *
  * Setup (once):
  *   1. In the Sheet: Extensions > Apps Script, paste this file as Code.gs.
@@ -65,6 +84,32 @@ const FORM_INTRO = [
 const PLAN_CHOICES = ['Baseline', 'Core', 'Complete', 'Not sure yet'];
 const TRAINING_CHOICES = ['Lifting', 'Running', 'Hyrox', 'Marathons and endurance', 'General health'];
 
+// Feedback answers from the website (lib/waitlist/sheets.ts). One row per answer.
+const FEEDBACK_TAB = 'Feedback';
+const FEEDBACK_HEADERS = [
+  'Answer ID',
+  'Received at',
+  'Updated at',
+  'Survey',
+  'Respondent',
+  'Path',
+  'Question',
+  'Answer',
+  'Plan',
+  'Days since onboarding',
+  'Days with meals logged',
+  'Language',
+  'Source',
+  'Email',
+];
+// Replies to the feedback email, for a later Gmail import. "forget" clears these too.
+const REPLIES_TAB = 'Replies';
+const REPLIES_HEADERS = ['Received at', 'From', 'Subject', 'Reply', 'Respondent', 'Status'];
+const ANSWER_ID = /^[A-Za-z0-9-]{1,64}$/;
+const RESPONDENT = /^r_[0-9a-f]{12}$/;
+const MAX_FEEDBACK_ROWS = 200;
+const TEXT_MAX = 1000;
+
 function doPost(e) {
   let body;
   try {
@@ -72,10 +117,19 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: 'bad_json' });
   }
+  if (!body || typeof body !== 'object') return json_({ ok: false, error: 'bad_json' });
 
   const secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
   if (!secret || body.secret !== secret) return json_({ ok: false, error: 'unauthorized' });
 
+  // Feedback rows carry no email address, so they're handled before the waitlist's checks.
+  if (body.action === 'feedback') return locked_(function () { return saveFeedback_(body.rows); });
+  if (body.action === 'forget') return locked_(function () { return forgetRespondent_(body.respondent); });
+  return waitlist_(body);
+}
+
+// The waitlist's "join" and "update", unchanged.
+function waitlist_(body) {
   const email = String(body.email || '').trim().toLowerCase();
   if (!email || email.indexOf('@') < 1) return json_({ ok: false, error: 'missing_email' });
 
@@ -117,8 +171,184 @@ function doPost(e) {
 }
 
 // Visiting the web app URL in a browser shows this, which confirms the deployment works.
+// "feedback": true means the deployed version has the Feedback tab's actions.
 function doGet() {
-  return json_({ ok: true, service: 'd-human-waitlist' });
+  return json_({ ok: true, service: 'd-human-waitlist', feedback: true });
+}
+
+function locked_(run) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return json_({ ok: false, error: 'busy' });
+  try {
+    return json_(run());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Adds each answer, or updates the row with its Answer ID, so a resend never duplicates.
+// Every row is checked before any is written.
+function saveFeedback_(rows) {
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_FEEDBACK_ROWS) {
+    return { ok: false, error: 'bad_rows' };
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !ANSWER_ID.test(String(row.answerId)) || !RESPONDENT.test(String(row.respondent))) {
+      return { ok: false, error: 'bad_row' };
+    }
+  }
+
+  const sheet = getTab_(FEEDBACK_TAB, FEEDBACK_HEADERS);
+  const rowOf = {};
+  const last = sheet.getLastRow();
+  if (last > 1) {
+    sheet.getRange(2, 1, last - 1, 1).getValues().forEach(function (cell, i) {
+      rowOf[String(cell[0]).replace(/^'/, '').trim()] = i + 2;
+    });
+  }
+
+  rows.forEach(function (row) {
+    const values = feedbackValues_(row);
+    const at = rowOf[row.answerId];
+    if (at) {
+      sheet.getRange(at, 1, 1, values.length).setValues([values]);
+    } else {
+      sheet.appendRow(values);
+      rowOf[row.answerId] = sheet.getLastRow();
+    }
+  });
+  return { ok: true, status: 'saved', saved: rows.length };
+}
+
+function feedbackValues_(row) {
+  return [
+    clean_(row.answerId, 64),
+    date_(row.receivedAt),
+    date_(row.updatedAt),
+    clean_(row.survey, 40),
+    clean_(row.respondent, 20),
+    clean_(row.path, 20),
+    clean_(row.question, 20),
+    clean_(row.answer, TEXT_MAX),
+    clean_(row.plan, 10),
+    count_(row.daysSinceOnboarding),
+    count_(row.daysWithMeals),
+    clean_(row.language, 20),
+    clean_(row.source, 20),
+    clean_(row.email, 254),
+  ];
+}
+
+// Deletes every Feedback and Replies row for one respondent (their account was deleted).
+// Bottom up, so the row numbers still to check don't move.
+function forgetRespondent_(code) {
+  code = String(code || '');
+  if (!RESPONDENT.test(code)) return { ok: false, error: 'bad_respondent' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let deleted = 0;
+  [
+    [FEEDBACK_TAB, FEEDBACK_HEADERS],
+    [REPLIES_TAB, REPLIES_HEADERS],
+  ].forEach(function (tab) {
+    const sheet = ss.getSheetByName(tab[0]);
+    if (!sheet) return;
+    const last = sheet.getLastRow();
+    if (last < 2) return;
+    const col = tab[1].indexOf('Respondent') + 1;
+    const cells = sheet.getRange(2, col, last - 1, 1).getValues();
+    for (let i = cells.length - 1; i >= 0; i--) {
+      if (String(cells[i][0]).replace(/^'/, '').trim() === code) {
+        sheet.deleteRow(i + 2);
+        deleted++;
+      }
+    }
+  });
+  return { ok: true, status: 'forgotten', deleted: deleted };
+}
+
+/**
+ * Run once from the editor (after pasting this file) to prepare the Feedback and
+ * Replies tabs. Like setup(), it never deletes data, so running it again only
+ * reapplies the headers and formatting.
+ */
+function setupFeedback() {
+  setupTab_(FEEDBACK_TAB, FEEDBACK_HEADERS, ['Received at', 'Updated at'], 'Answer', {
+    'Answer ID': 110,
+    'Received at': 140,
+    'Updated at': 140,
+    Respondent: 130,
+    Answer: 360,
+    Email: 240,
+  });
+  setupTab_(REPLIES_TAB, REPLIES_HEADERS, ['Received at'], 'Reply', {
+    'Received at': 140,
+    From: 240,
+    Subject: 240,
+    Reply: 420,
+  });
+
+  const secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+  Logger.log(
+    secret
+      ? 'WEBHOOK_SECRET is set (' + secret.length + ' characters).'
+      : 'WEBHOOK_SECRET is missing. Add it under Project Settings > Script properties.'
+  );
+  Logger.log('Now deploy a new version: Deploy > Manage deployments > Edit > Version: New version > Deploy.');
+  Logger.log('Keep this spreadsheet shared with the founding team only: typed answers may hold personal details.');
+}
+
+function setupTab_(name, headers, dateCols, wrapCol, widths) {
+  const sheet = getTab_(name, headers);
+  const header = sheet.getRange(1, 1, 1, headers.length);
+  const current = header.getValues()[0].map(String);
+  if (current.join('|') !== headers.join('|')) {
+    if (sheet.getLastRow() > 1) {
+      throw new Error(
+        'Row 1 of the "' + name + '" tab has different headers and there is data below it. ' +
+          'Rename that tab (e.g. "' + name + ' old") and run setupFeedback again.'
+      );
+    }
+    header.setValues([headers]);
+  }
+
+  header.setFontWeight('bold').setBackground('#000000').setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+
+  if (sheet.getMaxRows() < 2) sheet.insertRowsAfter(1, 999);
+  const rows = sheet.getMaxRows() - 1;
+  dateCols.forEach(function (col) {
+    sheet.getRange(2, headers.indexOf(col) + 1, rows, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  });
+  sheet.getRange(2, headers.indexOf(wrapCol) + 1, rows, 1).setWrap(true);
+  headers.forEach(function (col, i) {
+    sheet.setColumnWidth(i + 1, widths[col] || 130);
+  });
+
+  if (!sheet.getFilter()) sheet.getRange(1, 1, sheet.getMaxRows(), headers.length).createFilter();
+  Logger.log('The "' + name + '" tab is ready with ' + headers.length + ' columns.');
+}
+
+// A tab by name, made with its headers if it's missing or empty.
+function getTab_(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  }
+  return sheet;
+}
+
+function date_(value) {
+  const d = new Date(String(value || ''));
+  return isNaN(d.getTime()) ? '' : d;
+}
+
+function count_(value) {
+  return typeof value === 'number' && isFinite(value) && value >= 0 ? Math.floor(value) : '';
 }
 
 /**
@@ -432,9 +662,11 @@ function findRow_(sheet, email) {
 
 // The leading apostrophe stores a value as plain text: "=IMPORTXML(...)" can't run
 // as a formula, and numbers such as "09876 54321" keep their leading zero.
-function clean_(value) {
+// `max` (500 when left out) counts characters as people see them, so typed feedback
+// keeps its 1,000 and an emoji is never cut in half.
+function clean_(value, max) {
   if (value === undefined || value === null) return '';
-  let s = String(value).trim().slice(0, 500);
+  let s = Array.from(String(value).trim()).slice(0, max || 500).join('');
   if (/^[=+\-@\t\r0-9]/.test(s)) s = "'" + s;
   return s;
 }
