@@ -193,6 +193,7 @@ The running record of this project: where things stand, why they are the way the
   - The mobile field rejects numbers that look made up (9999999999, 9876543210); a realistic one passes.
   - On desktop the UPI tab shows only a QR code, so use Netbanking: picking a bank opens the demo bank window at once (listen for it before the click), which has Success and Failure buttons.
   - Razorpay can't reach localhost, so test the webhook by signing a payload with `RAZORPAY_WEBHOOK_SECRET` from `.env.local`.
+- **Sleeping functions and pooled Postgres connections (2026-11-19):** a Vercel function's timers don't run while it's suspended, so postgres.js's `idle_timeout` never closes idle connections. The network drops them after about 350 s, and the first query after waking hangs on the dead socket with no error. `lib/db/pool.ts` guards against it. Keep its deadlines, the wall-clock sweep and the `[db]` log lines. Never hold a transaction open across an AI, payment or email call: the sweep would take a connection silent for more than about 2 minutes as dead. To check live, run the scratchpad's `live-probe.sh` across 7–10 minute idle gaps; `rc=28` means a hang.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
 ## Open items
@@ -288,6 +289,23 @@ Newest first. One entry per change; pushes carry their commit hash.
     - Answers in the language the question is written in.
     - The report's safety floor applies: the doctor and urgent wording are decided in code.
   - **Four lanes in parallel, design docs only:** the product designer (`docs/team/specs/2026-11-19-ask-ux.md`), the AI efficiency lead (`…-ask-ai.md`, with a live eval under $0.50), the systems and data engineer (`…-ask-data.md`) and QA and security (`…-ask-threats.md`). The build follows once the four agree.
+  - **Design results:**
+    - **Cost (measured live on Haiku 5.5):** 972 calls for $0.25, and v6 passed 115 of 116. About 4,890 tokens in (3,413 of them a cacheable shared system prompt) and 135 out on average, at $0.0002–0.0007 a question. Mean latency 1.7 s, mean 34 words. ₹3–9 per user a month at 5 a day.
+    - **Code decides the reply's kind:** the model's own label was too low 15 times in 156 calls, including 6 urgent cases.
+    - **The data:** the systems engineer's claim SQL held under parallel load on real Postgres 17, letting exactly 5 through.
+  - **Found on the way:** `betaZodOutputFormat` sends enums as descriptions only, so the API doesn't enforce them. That's true of the meal (language and food codes), read and wrap schemas too. A stray value fails the whole call. Fix it with hand-written schemas.
+  - **Mayank's calls (2026-11-19):**
+    - Founders first for 2–3 days: `BLOG_OWNER_EMAILS` only, until `ASK_OPEN=all` and a redeploy.
+    - Questions kept for today only.
+  - **Defaults taken:**
+    - Off-topic answers count; failures hand the question back, capped at 10 calls a day.
+    - While an urgent result stands, Ask answers only app and meal questions.
+    - Two earlier turns are resent; caching on; thinking off.
+    - Fixed safety notices are English for now.
+    - `ASK_DAILY_MAX` defaults to 2000.
+    - Ask picks the newest report by collection date.
+    - Consent gains "and your questions", with a one-time notice.
+  - **Next:** the staff engineer is writing the build contract (`…-ask-build.md`, `lib/ask/types.ts`). Three lanes follow: data and route, AI, UI.
 - **/write Import stuck on "Loading…" (Mayank, Chrome on his Mac, live site):** he clicked Import and the page never left the Suspense fallback.
   - **Not reproduced (staff engineer, production build):** Import opened in 90–410 ms every way in. Paste took about 50 ms and Create draft about 130 ms. Live client navigations took 0.17–0.93 s over 10 minutes.
   - **Forced failures:** a dropped connection, 500 or 504 recover through a full page load, and a cut-off stream shows Next's Reload screen. Only a response that never finishes matches his report, and `WriteLoading` had no way out. The guess is a stuck pooled Postgres connection: the client has a connect timeout but no query timeout. Unproven, because there are no Vercel logs here.
@@ -296,6 +314,21 @@ Newest first. One entry per change; pushes carry their commit hash.
     - `writerAccess` logs `[write] slow access check` past 1.5 s, with the split between session and author. It calls `connection()` before reading the clock, or the build fails.
     - Checked: typecheck, 841 tests, the build, and /write/import as a writer (200 in 0.44 s).
   - **Open:** a Postgres statement timeout, for the systems and data engineer. Next time it sticks, the Vercel logs around that time will show the slow-check line.
+  - **Live evidence:** the read-only probe (an RSC GET with a made-up cookie, so one session query) answered 19 of 20 times in 0.29–1.6 s. After an 8.5-minute idle gap (16:20 → 16:28 UTC), one request got no bytes for 90 s: no status, no `x-vercel-id`. The next one answered at 1.25 s.
+  - **Root cause (systems and data engineer, reproduced):** a pooled postgres.js connection dies while the function sleeps. Its `idle_timeout` timer doesn't run while frozen, and the network forgets idle TCP flows after about 350 s. On waking, the query is written into the dead socket and waits until Vercel kills the function. Vercel's and Supabase's docs both describe it.
+    - **Reproduced:** a drop proxy left a query pending past 60 s, and the probe's request never finished on a production build.
+    - **Likely the same bug:** the Home skeleton (2026-11-11) and Stack refresh (2026-11-17) stalls.
+  - **The fix:** `lib/db/pool.ts`, behind `createPool` in `lib/db/index.ts`.
+    - **Sockets:** our own TCP socket per connection, watched by byte counters.
+    - **The sweep:** before every query or transaction, connections silent longer than `idle_timeout` + 5 s by the wall clock are destroyed.
+    - **Deadlines:** `query_timeout` 10 s, `cancel_timeout` 2, `queue_timeout` 10.
+    - **Retries:** one, for plain selects only; writes never.
+    - **Pipelining:** `max_pipeline: 1`.
+    - **Logs:** `[db] dropping …` and `[db] connection lost …`.
+    - **Not usable:** `attachDatabasePool` doesn't support postgres.js.
+    - **Safe for transactions:** the orchestrator checked every transaction. All are short and DB-only, with AI, Razorpay and email outside them, so a busy connection is never silent long enough to be swept.
+    - **Checked:** tests (`tests/db-dead-connections.test.ts` and `tests/support/pg-wire.ts`, which fail before and pass after), 848 tests, typecheck, lint, the build, and TLS.
+  - **Push `47f0015`:** the fix, the blog draft and the cover source. Vercel says "Deployment has completed"; signed out, /write/import still 307s to /signin.
 - **First blog post drafted (Mayank: "my first blog on preventive healthcare in India with good numbers"):**
   - **The draft (SEO lead):** "Preventive health checkups in India: what the numbers say", slug `preventive-health-checkup-india`, topic `blood-tests`, 1,422 words, 10 sources. Metadata, the post and the drafter's source table are in `docs/team/blog/drafts/2026-11-19-preventive-health-india.md`; the paste-ready copy is `~/Downloads/D-Human-blog-preventive-health-india.html`.
   - **The numbers:** ICMR-INDIAB 2023 (diabetes 11.4%, prediabetes 15.3%, hypertension 35.5%, dyslipidaemia 81.2%), WHO NCD profile 2018 (63% of deaths), WHO hypertension report 2025 (210.2 million, 39% diagnosed, 17% controlled), NFHS-5 anaemia (57% of women, 25% of men aged 15–49), NHA 2023–24 out-of-pocket share (42.7%), NP-NCD screening from 30, ICMR-NIN 2024 (56.4% of disease burden from diet), and the house vitamin D figure.

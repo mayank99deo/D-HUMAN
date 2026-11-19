@@ -1,0 +1,144 @@
+// A real Postgres wire endpoint for tests, and a proxy that can make its connections go
+// silent. Together they reproduce what production's driver meets on Vercel: a pooled
+// connection whose network path was dropped while the function slept.
+//
+// - pgWireServer: the embedded PGlite behind a TCP socket that speaks the Postgres
+//   protocol, so postgres.js (the production driver) connects to it as to Supabase.
+//   No TLS, and cancel requests are ignored (closed), like pglite-socket.
+// - blackholeProxy: forwards bytes to the server until drop() is called. From then on
+//   every connection open through it is a black hole, as when a NAT or load balancer
+//   forgets an idle flow: whatever the client sends vanishes, nothing comes back and
+//   nothing is closed. Connections opened after drop() work normally.
+import net from "node:net";
+import { PGlite } from "@electric-sql/pglite";
+
+const SSL_REQUEST = 80877103;
+const CANCEL_REQUEST = 80877102;
+
+export type WireServer = { port: number; db: PGlite; close(): Promise<void> };
+
+export async function pgWireServer(given?: PGlite): Promise<WireServer> {
+  const db = given ?? new PGlite();
+  await db.waitReady;
+  // PGlite is one session: every connection's messages run one batch at a time.
+  let turn: Promise<unknown> = Promise.resolve();
+  const sockets = new Set<net.Socket>();
+
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.setNoDelay(true);
+    socket.on("close", () => sockets.delete(socket));
+    socket.on("error", () => {});
+    let buffer = Buffer.alloc(0);
+    let started = false;
+
+    socket.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      const batch: Buffer[] = [];
+      for (;;) {
+        if (!started) {
+          if (buffer.length < 8) break;
+          const length = buffer.readInt32BE(0);
+          if (buffer.length < length) break;
+          const code = buffer.readInt32BE(4);
+          const message = buffer.subarray(0, length);
+          buffer = buffer.subarray(length);
+          if (code === SSL_REQUEST) {
+            socket.write("N");
+            continue;
+          }
+          if (code === CANCEL_REQUEST) {
+            socket.end();
+            return;
+          }
+          started = true;
+          batch.push(message);
+          continue;
+        }
+        if (buffer.length < 5) break;
+        const length = 1 + buffer.readInt32BE(1);
+        if (buffer.length < length) break;
+        batch.push(buffer.subarray(0, length));
+        buffer = buffer.subarray(length);
+      }
+      if (!batch.length) return;
+      turn = turn
+        .then(() =>
+          db.runExclusive(async () => {
+            for (const message of batch) {
+              await db.execProtocolRawStream(new Uint8Array(message), {
+                onRawData: (data) => {
+                  if (socket.writable) socket.write(Buffer.from(data));
+                },
+              });
+            }
+          }),
+        )
+        .catch(() => socket.destroy());
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (server.address() as net.AddressInfo).port,
+    db,
+    async close() {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => server.close(resolve));
+      await db.close();
+    },
+  };
+}
+
+export type BlackholeProxy = {
+  port: number;
+  /** Every connection open now goes silent for good. New ones work. */
+  drop(): void;
+  /** Connections currently open through the proxy. */
+  readonly open: number;
+  close(): Promise<void>;
+};
+
+export async function blackholeProxy(targetPort: number): Promise<BlackholeProxy> {
+  type Flow = { client: net.Socket; upstream: net.Socket; dead: boolean };
+  const flows = new Set<Flow>();
+
+  const server = net.createServer((client) => {
+    const upstream = net.connect(targetPort, "127.0.0.1");
+    const flow: Flow = { client, upstream, dead: false };
+    flows.add(flow);
+    client.on("data", (data) => {
+      if (!flow.dead) upstream.write(data);
+    });
+    upstream.on("data", (data) => {
+      if (!flow.dead) client.write(data);
+    });
+    client.on("close", () => {
+      flows.delete(flow);
+      upstream.destroy();
+    });
+    upstream.on("close", () => {
+      if (!flow.dead) client.destroy();
+    });
+    client.on("error", () => {});
+    upstream.on("error", () => {});
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (server.address() as net.AddressInfo).port,
+    drop() {
+      for (const flow of flows) flow.dead = true;
+    },
+    get open() {
+      return flows.size;
+    },
+    async close() {
+      for (const flow of flows) {
+        flow.client.destroy();
+        flow.upstream.destroy();
+      }
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}

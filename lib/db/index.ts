@@ -21,16 +21,11 @@ const MIGRATIONS = path.join(process.cwd(), "drizzle");
 async function connect(): Promise<Db> {
   const url = databaseUrl();
   if (url) {
-    const { default: postgres } = await import("postgres");
+    const { createPool } = await import("./pool");
     const { drizzle } = await import("drizzle-orm/postgres-js");
-    // prepare:false keeps it working behind transaction poolers (Neon, Supabase).
-    // A warm copy keeps its connections for 2 idle minutes, so someone reading a
-    // page and tapping on doesn't wait for fresh TLS connections each time (with
-    // few visitors, 20 s meant reconnecting on almost every page). Connecting gives
-    // up after 10 s instead of the driver's 30, so a stuck connect fails into the
-    // error screen. Each connection is replaced after 30 minutes.
-    const client = postgres(url, { max: 5, prepare: false, idle_timeout: 120, connect_timeout: 10, max_lifetime: 30 * 60 });
-    return drizzle(client, { schema }) as unknown as Db;
+    // postgres.js with deadlines, and no reuse of connections that went dead while the
+    // function slept: lib/db/pool.ts says why and how.
+    return drizzle(createPool(url), { schema }) as unknown as Db;
   }
   if (process.env.VERCEL) {
     throw new Error("No database: set DATABASE_URL (or connect Supabase, which sets POSTGRES_URL) in Vercel.");
