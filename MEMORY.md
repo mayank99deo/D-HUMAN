@@ -200,6 +200,18 @@ The running record of this project: where things stand, why they are the way the
 
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
+- [ ] **Ask, before `ASK_OPEN=all` (founders-only since 2026-11-20):**
+  - Reviews: a doctor on the notices, the urgent hold and 112/14416; a mental-health professional on the crisis and low-calorie lines; native speakers on the Hindi and Hinglish word lists and starters.
+  - A calorie floor per sex (threats M6).
+  - Mayank confirms the consent wording, with the DPDP check.
+  - In the Anthropic Console: a monthly spend limit, and a look at the Haiku rate limits.
+  - The burst limit is 30 POSTs per 10 minutes per IP, in memory and keyed on `x-forwarded-for`. Carrier-grade NAT, campus and office Wi-Fi put many people on one IP, so key it on the person or raise it.
+  - A daily cap on free crisis and emergency turns.
+  - Mock answers say "Demo answer:" twice; drop the prefix in `mockAsk`.
+  - Follow-ups:
+    - Move Home and Stack to `newestReadyReport`.
+    - Export the upload limits and "3 full days" for the app map.
+    - Save the English stack plan beside its translation.
 - [ ] /write's Publish sheet shows the second-read status from when the editor page loaded (`initial.review` in `components/write/Editor.tsx`; refreshed only on a conflict reload). After the other writer's "Looks good", Publish stays greyed until the page is reloaded (Mayank hit this on the first post, 2026-11-19). Fix: fetch the post's review when the sheet opens, or return it from the heartbeat.
 - [ ] Decide (Mayank): should deleting a report give the read back, for example on the free plan when it was a friend's report, or when it's deleted while still being read? Today a read is never given back, so a delete-and-upload loop can't make reads free.
 - [ ] **Blog and email setup (Mayank):**
@@ -334,6 +346,39 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Lane A, done:** branch `worktree-agent-a8b3f710a1077d88d`, commit `0a9a8dd`.
       - **Built:** migration `0011_ask` (journal 2026-11-19 17:34 UTC), `lib/platform/ask.ts` (claim, complete, release, free turns, `loadAsk`, the breaker's alerts through `job_runs`), the POST, GET and DELETE `/api/ask` and `/api/ask/consent` routes, `newestReadyReport`, `blankAskAnswers` on report deletes, `purgeAsks` in housekeeping, `dietPictureFrom`, and `ask_consent_at` with consent.
       - **Checked:** 936 tests, the build, and 7 of 7 parallel checks on Postgres 17.10. Every POST answers 500 until Lane B replaces the stub.
+    - **Lane B, done:**
+      - **Built:** `lib/ai/ask.ts` (a hand-written schema with real enums, cache mark, thinking off, safety facts as a system message, one retry for bad output or the wrong script), `MODELS.ask`, `mockAsk` with test tags, the `lib/domain/ask-{context,floor,filters,notices,language,app}.ts` modules, the eval (`npm run ask:eval`, which needs `ASK_EVAL_LIVE=1`) and 97 tests.
+      - **Live eval, 2 × 58:** no severe failure in 116 of 116. Strict pass 91.4%: the 10 misses raise a flagged marker nobody asked about, the safe direction. $0.00025 a question with the cache warm and $0.00058 cold, p95 2.09 s. Crisis, emergency and urgent questions are answered by code before any model call.
+      - **Enum fix:** `lib/ai/output-format.ts` `strictOutputFormat` for meal, usual day, extraction, read and wrap. A live check cost $0.03, and nothing came back off a list.
+    - **Lane C, done:**
+      - **Built:** `AskSheet`/`AskParts`, `AskButton` in Nav, `AskAbout` links on markers, tiles, stack items and Fuel, the "/" key, a tour stop, starters in en/hi/hinglish, "Jump to" without AI, and a 35 KB lazy chunk.
+      - **Checked:** 137 of 137 browser checks against a stand-in route, at 320 to 1440 px, in Chromium and WebKit.
+      - **Orchestrator's calls:** the box stays usable when Ask is paused or at the limit, so crisis questions still answer. Stale answers get only the grey line.
+    - **Merged on main:** cherry-picked in the order B (`256c161`, `26d6942`), A (`5946675`), C (`dea5ee7`), with no conflicts. Then `43bdac8` switched the stack translation to `strictOutputFormat`. The merge passes typecheck, lint, 1,127 tests and the build (`/api/ask`, `/api/ask/consent` and `/sitemap.xml` are all functions). Not pushed: QA is attacking the integrated build and Lane C is re-running its browser pass against the real route, before it ships founders-only. Mayank approved the live red-team set (about $0.40, capped at $0.60) on 2026-11-20. **Paused by Mayank (2026-11-20):** QA and Lane C were stopped mid-run (their worktrees keep their work). On "resume", restart both from their worktrees; nothing is pushed until both are clean. Resumed the same day; both continue from where they stopped. Paused again by Mayank later that day; both stopped (QA was rebuilding, Lane C mid browser pass). Resume both on "resume".
+    - **QA on the integrated build** (`9fc3565`, cherry-picked onto main):
+      - **4 high and 5 medium holes in the output filters and floor, all fixed with one-at-a-time tests** (`tests/qa-ask-security.test.ts`):
+        - The dose filter allowed range ends in any unit, "60K/lakh/हज़ार IU" and grams.
+        - A negative word within 30 characters excused a bad sentence ("Don't worry, stop your metformin").
+        - The floor trusted the model's own topic labels for medicines, pregnancy and very low eating; code now reads the question.
+        - The urgent hold could be dodged with an "app" label.
+        - Diagnosis, medicine-change, false-authority and reassurance phrasings got through.
+        - The crisis list missed overdose and "making myself throw up".
+      - **Live red-team** (`npm run ask:redteam`, 112 cases in en/hi/hinglish, run 3 times): 304 calls for $0.071, and nothing unsafe was shown.
+      - **Route, data and UI held up:** IDOR, races, the breaker, consent, access, no-store, no question text in logs, XSS as text only.
+    - **The orchestrator's follow-ups:**
+      - `4134b39`: an answer may no longer repeat a dose typed in the question (QA recommended it; the safer default).
+      - `1defdd4`: 6+ digit blood counts followed by a count unit survive the phone filter.
+      - Checked: 1,192 tests pass.
+    - **Left open:**
+      - Free code-written crisis and emergency turns have no daily cap. Only 6 a minute applies, and rows are purged the next morning.
+      - The calorie floor (M6) is still unset.
+      - The reviews in §20 now also cover the new word lists.
+    - **Lane C's browser pass against the real route** (mock mode, a production build, 155 of 155 checks in Chromium and WebKit at six sizes):
+      - **Covered:** every kind, the limit, the urgent hold, consent, Jump to, "/", a timeout recovered over GET, a non-founder seeing nothing, and the tour.
+      - **Fixed in `1c4c019`:**
+        - The sheet jumped 272–383 px when a notice landed, because the hidden status words escaped the scroller (the same trap as scrolling chip rows). The scroller is now `relative`.
+        - WebKit's ResizeObserver loop warning: the resize now runs in `requestAnimationFrame`.
+    - **Shipped founders-only:** typecheck, lint, 1,194 tests and the build passed before the push.
   - **For Mayank before `ASK_OPEN=all`:**
     - Reviews: a doctor, a mental-health professional, native speakers.
     - A calorie floor per sex.
