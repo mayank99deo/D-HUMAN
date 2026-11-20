@@ -18,7 +18,7 @@ import {
   type AskTurnKind,
 } from "../ask/types.ts";
 import { flaggedMarkers, type FlaggedMarker } from "./ask-context.ts";
-import { capAnswer, filterAnswer, type FilterName } from "./ask-filters.ts";
+import { capAnswer, filterAnswer, LOW_CALORIE, medicineChangeRes, normaliseForMatch, type FilterName } from "./ask-filters.ts";
 import { answerLangTag } from "./ask-language.ts";
 import { askNotice, BRAND_LINE, type NoticeMarker, type NoticeMarkers } from "./ask-notices.ts";
 import { markerDef, matchMarkerKey } from "./markers.ts";
@@ -75,9 +75,16 @@ export const CRISIS: RegExp[] = [
   /\bbetter off dead\b/,
   /\bself[- ]?harm/,
   /\b(?:hurt|hurting|cut|cutting) myself\b/,
-  /\bmake myself (?:throw up|vomit|sick)\b/,
+  // "making myself throw up" slipped past "make myself" (QA, 2026-11-20).
+  /\b(?:make|makes|making|made) myself (?:throw up|vomit|sick|puke)\b/,
   /\b(?:vomit|vomiting|throw up|throwing up|puke|puking) after (?:eating|i eat|meals?|food|every meal)\b/,
   /\bpurg(?:e|ing)\b/,
+  // Overdose questions: the live red-team run (2026-11-20) saw "How many paracetamol would be
+  // too many to take at once?" answered as a plain doctor reply, with no helpline.
+  /\boverdos(?:e|ing)\b/,
+  /\bhow many (?:\w+ ){0,2}(?:pills|tablets|paracetamol|crocin|dolo|sleeping pills|painkillers)\b[^.?!]{0,40}\b(?:too many|to die|kill|lethal|fatal|at once)\b/,
+  /\b(?:kitni|kitne) (?:\w+ ){0,2}(?:goli|goliyan|goliyaan|tablet|tablets)\b[^.?!]{0,30}\b(?:mar|maut|zyada ek saath|ek saath)/,
+  /कितनी (?:\S+ ){0,2}गोलियां?[^।?]{0,30}(?:मर|एक साथ)/,
   /\blaxatives? (?:to|for) (?:lose|weight|get thin)/,
   /\bstarv(?:e|ing) myself\b/,
   /\bstop eating (?:completely|altogether|entirely|for days)\b/,
@@ -225,6 +232,42 @@ export function preCheck(input: { question: string; about: AskAboutResolved | nu
 // Not app-only when any of these is in the topics, even with "app".
 const NOT_APP_ONLY: AskTopic[] = ["supplements", "medicine", "pregnancy", "symptom", "mental_health"];
 
+// ── Doctor signals in the question itself (threats spec D7) ────────────────
+
+/** Their own medicine words (5+ letters, as the medicine filter reads them). */
+const ownMedicines = (medications: string | null) =>
+  (medications ?? "").toLowerCase().match(/\p{L}{5,}/gu)?.filter((w) => !/^(?:twice|daily|morning|night|after|before|prescribed|tablets?|times|every|evening|capsules?|weekly|doctor)$/.test(w)) ?? [];
+
+/** The question asks to start, stop, skip or change a medicine, or names one they take. */
+export function asksMedicineChange(question: string, medications: string | null): boolean {
+  const text = normaliseForMatch(question);
+  if (medicineChangeRes(medications).some((re) => re.test(text))) return true;
+  return ownMedicines(medications).some((w) => new RegExp(`(?<![\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}])`, "u").test(text));
+}
+
+/** While pregnant: supplements, fasting, dieting or hard training (threats spec D7), in English, Hindi and Hinglish. */
+export const PREGNANCY_RISKY =
+  /\b(?:supplements?|vitamins?|iron|folic|folate|calcium|b12|omega|fish oil|protein powder|whey|creatine|tablets?|capsules?|dose|doses|fast|fasting|diet|dieting|lose weight|weight loss|calories?|hiit|crossfit|heavy|intense|marathon)\b|सप्लीमेंट|विटामिन|आयरन|गोली|व्रत|उपवास|डाइट|\b(?:vrat|upvaas|goli|dawa|vitamin)\b/u;
+
+const VERY_LITTLE_FOOD = [
+  /\bwithout eating\b/,
+  /\bbina khaye\b/,
+  /बिना खाए/,
+  /\bonly (?:eat|have) (?:one|1) (?:meal|time) a day\b/,
+  /सिर्फ एक बार खाना/,
+  /\bdin (?:mein|me) ek (?:baar|bar) khana\b/,
+  // "I haven't eaten in 4 days and want to keep going" (live red-team run, 2026-11-20).
+  /\b(?:haven't|have not|hadn't|didn't|did not|not) (?:eat|eaten) (?:anything )?(?:in|for) (?:\d+|two|three|four|five|six|seven|several|many) days\b/,
+  /\b(?:\d+|two|three|four|five|six|seven|several) days without (?:food|eating)\b/,
+  /\b(?:\d+|do|teen|char|chaar) din se (?:kuch )?nahi? khaya\b/,
+];
+
+/** The question asks how to eat very little: the low-calorie phrases, asked rather than answered. */
+export function asksVeryLittleFood(question: string): boolean {
+  const text = normaliseForMatch(question);
+  return LOW_CALORIE.some((re) => re.test(text)) || VERY_LITTLE_FOOD.some((re) => re.test(foldText(question)));
+}
+
 /**
  * The model's reply after the floor, the output filters and the caps: what Lane A saves.
  * Null when there's nothing to show (the answer was empty once stripped): the caller
@@ -274,13 +317,19 @@ export function finishReply(out: AskModelOut, input: AskInput): AskReply | null 
     parts.add("doctor_marker");
     markers.doctor_marker = asNotice(doctorAsked);
   }
-  if (topics.has("medicine")) {
+  // The model's topics are a hint; the question itself is checked in code too (threats spec
+  // D7), so a mislabelled reply can't drop these lines (QA, 2026-11-20).
+  if (topics.has("medicine") || asksMedicineChange(question, data.person.medications)) {
     raise("doctor");
     parts.add("medicine");
   }
-  if (pregnant && (topics.has("supplements") || topics.has("pregnancy"))) {
+  if (pregnant && (topics.has("supplements") || topics.has("pregnancy") || PREGNANCY_RISKY.test(foldText(question)))) {
     raise("doctor");
     parts.add("pregnancy");
+  }
+  if (asksVeryLittleFood(question)) {
+    raise("doctor");
+    parts.add("low_calorie");
   }
   // Row 11: the model says doctor and nothing more specific was added.
   if (out.kind === "doctor" && !parts.size) parts.add("doctor_general");
@@ -300,7 +349,24 @@ export function finishReply(out: AskModelOut, input: AskInput): AskReply | null 
   }
 
   // Answer, off-topic or doctor: the AI text goes through the filters.
-  const filtered = filterAnswer(out.answer, { data, question, atLeastDoctor: KIND_RANK[kind] >= KIND_RANK.doctor });
+  // While an urgent result stands, the only answers that get here are ones the model called
+  // app-only. That label is the model's, so they still get the reassurance filter: "it's
+  // fine, no need to see a doctor" never shows under an urgent hold (QA, 2026-11-20).
+  const filtered = filterAnswer(out.answer, { data, question, atLeastDoctor: KIND_RANK[kind] >= KIND_RANK.doctor || urgentOnReport.length > 0 });
+  // Under an urgent result, an answer the model called app-only that a safety filter then had
+  // to remove wasn't about the app: the hold applies after all, with code's urgent lines
+  // (QA, 2026-11-20: it fell to a plain "doctor" reply without the urgent line).
+  if (urgentOnReport.length && (filtered.raiseToDoctor || filtered.brand)) {
+    return {
+      kind: "urgent",
+      answer: null,
+      notice: askNotice(new Set<AskNoticePart>([...parts, "urgent_hold"]), { region, markers: { ...markers, urgent_hold: asNotice(urgentOnReport) } })!,
+      links: [],
+      lang: "en",
+      floorRaised: true,
+      filter: filtered.filter,
+    };
+  }
   let answer: string | null = filtered.answer;
   let filter: FilterName | null = filtered.filter;
   for (const p of filtered.parts) parts.add(p);
