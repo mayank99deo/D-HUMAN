@@ -294,6 +294,28 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-20
+- **Voice: the mic bug, Fuel's Say card, dictation in Ask** (staff engineer, worktree commit `58b9372`, cherry-picked; spec `docs/team/specs/2026-11-20-voice-ux.md`):
+  - **The bug's root cause:** reproduced with Chrome, WebKit and "wedged" stand-in engines.
+    - **Clean failures recovered.** The dead end was the screen saying "Listening…" the moment `start()` was called. If the engine never started after a failed language, nothing noticed, and Say did nothing while the false flag was on.
+    - **Other gaps:** `aborted`, `no-speech` and unknown errors showed nothing, and the failed language was saved to `dh-spoken`.
+    - **WebKit (read in its source):** iPhone fails Tamil and Bangla with `service-not-allowed` and fires no `end` afterwards. It may also hand a queued abort to the next recogniser. That last part is inferred; only an iPhone can confirm it.
+  - **The fix:**
+    - "Speak now" only after the recogniser's own `start` or `audiostart`. After 4 s without it, "Still getting your mic…" with Try again and Type instead.
+    - Errors end the session at once, and every code has words.
+    - A failed language is never retried in that visit, and a pick is remembered only after it hears words.
+    - A new recogniser waits for the old one's `end`, up to 400 ms.
+    - A language the browser can't hear offers Listen in English, Listen in हिंदी, or Type instead.
+  - **The Say card:**
+    - **Files:** `SayCard.tsx`, `say-view.ts`, `voice-copy.ts`, `VoiceRing.tsx` (48 ticks that move only with the voice and turn into the countdown clock), `SpokenChips.tsx`, `useRecognizer.ts`, `listen-state.ts`, `spoken-pick.ts`.
+    - **The countdown:** `autolog.ts` has one 3 s countdown with `finish` `by: pause|tap`. A tap on the mic means done; Keep talking, Edit, and "Tap to log now" skip ahead.
+    - **Fuel:** `FuelLogger.tsx` lost about 330 lines of recogniser code.
+  - **Ask's mic:** `AskMic.tsx` / `ask-mic.ts` dictate in the shared "Speaking in" pick, never send, stop after 3 s of silence, and still work at the limit for Jump to.
+  - **Checked:**
+    - Tests: 1,234, including `voice`, `voice-memory` and `autolog`.
+    - Browser checks with stand-in engines: Chromium 390 81/81, WebKit 390 81/81, 1440 68/68, limit and consent 20/20.
+    - The build passes, and the orchestrator reviewed the screens.
+  - **Only a real phone can verify:** the iPhone wedge and the 400 ms wait, real error codes, the permission prompt, Android haptics, and real mic levels.
+  - **Open (Mayank):** the "Check before logging" setting is deferred. Should iPhone users be told up front that only English, Hinglish and Hindi listen there?
 - **Stack: vitamin D's food-gap note reads as one line (Mayank, from a meals-only stack in Hinglish):** the full paragraph, with the sachet warning, crowded "What your food is short of".
   - **The display:** `GapNote` in `components/platform/Stack.tsx` shows a long note's first sentence and keeps the rest behind More / Less (`<details>`, 44 × 44 px). `splitNote` in `components/platform/stack-state.ts` splits on ". " or "। ", so stacks already saved in Hindi or Hinglish work too.
   - **The words:** `VITAMIN_D_TEST` now leads with its summary ("Food gives little vitamin D, so only a blood test shows if you're low."). The 4,000 IU / 60,000 IU sachet warning is kept, behind More, which updates the 2026-11-17 decision.
