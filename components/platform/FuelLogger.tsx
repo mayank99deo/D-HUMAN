@@ -2,35 +2,25 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { MEAL_ORDER, type MealView } from "@/lib/domain/meals";
 import type { PlanView } from "@/lib/domain/plan";
-import {
-  MEAL_ENGLISH_MAX,
-  MEAL_WORDS_MAX,
-  SPOKEN,
-  langTag,
-  soundsLikeHindi,
-  spokenById,
-  spokenForAppLanguage,
-  spokenOf,
-  translateSource,
-  type Spoken,
-  type SpokenId,
-} from "@/lib/domain/speech";
+import { MEAL_ENGLISH_MAX, MEAL_WORDS_MAX, langTag, spokenById, spokenForAppLanguage, translateSource, type SpokenId } from "@/lib/domain/speech";
 import { ASK_COPY } from "./ask-copy";
 import { gapsPrefill, mealPrefill } from "./ask-starters";
 import { AskAbout } from "./AskAbout";
-import { COUNTDOWN_MS, IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { MealOrbit, type MealRun } from "./MealOrbit";
 import { MealRow } from "./MealRow";
 import { OFFLINE, send } from "./net";
 import { Paywall, PlanLine } from "./Paywall";
 import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
+import { SayCard, type SayHandle, type SayLeave } from "./SayCard";
 import { shrinkImage } from "./shrink";
+import { useSpokenPick } from "./spoken-pick";
 import { toEnglish } from "./translate";
-import { useReducedMotion, VoiceActivity, VoiceMeter } from "./VoiceMeter";
+import { useSpeechSupported } from "./useRecognizer";
+import { SAY_COPY } from "./voice-copy";
 
 type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number };
 type Log = MealView;
@@ -53,58 +43,9 @@ const ERRORS: Record<string, string> = {
   empty: "Add a photo or a few words first.",
 };
 
-// Minimal typing for the browser's speech recognition, which TypeScript doesn't ship.
-type Recognition = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onaudiostart: (() => void) | null;
-  onsoundstart: (() => void) | null;
-  onspeechstart: (() => void) | null;
-  onspeechend: (() => void) | null;
-};
-
-const noop = () => () => {};
 // Handlers and timers read the time through this. They never run during render, but
 // the React compiler's purity check can't always tell, and flags Date.now() in them.
 const clock = () => Date.now();
-const hasSpeech = () => {
-  const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
-  return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
-};
-
-// The last "Speaking in" pick, remembered in this browser.
-const SPOKEN_KEY = "dh-spoken";
-function savedSpoken(): SpokenId | null {
-  try {
-    return spokenOf(localStorage.getItem(SPOKEN_KEY))?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-function rememberSpoken(id: SpokenId) {
-  try {
-    localStorage.setItem(SPOKEN_KEY, id);
-  } catch {
-    /* private mode or blocked storage: the pick still holds for this visit */
-  }
-}
-
-// What to say when the browser stops listening. Errors not listed (no speech, aborted) say nothing.
-function listenError(error: string, lang: Spoken): string | null {
-  if (error === "not-allowed") return "Allow the microphone to talk, or type instead.";
-  if (error === "language-not-supported" || error === "service-not-allowed")
-    return `This browser can't listen in ${lang.name}. Type it in the box below, or use the mic on your keyboard.`;
-  if (error === "audio-capture") return "We couldn't find a microphone. Type what you ate instead.";
-  if (error === "network") return "Listening needs a connection. Check your signal, or type instead.";
-  return null;
-}
 
 // Today's plate. The ring is the day's energy target, split by where the
 // energy came from. Past the target the ring stays full and a thin outer arc
@@ -207,37 +148,16 @@ export function FuelLogger({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<Log | null>(null);
-  const [listening, setListening] = useState(false);
-  // Why the browser stopped listening, shown by the language row rather than under the buttons.
-  const [heardProblem, setHeardProblem] = useState<string | null>(null);
-  const voiceSupported = useSyncExternalStore(noop, hasSpeech, () => true);
-  const [voiceFailed, setVoiceFailed] = useState(false);
-  const voiceOk = voiceSupported && !voiceFailed;
-  const rec = useRef<Recognition | null>(null);
-  // "Speaking in": this visit's pick, else the one remembered here, else the app language.
+  const voiceOk = useSpeechSupported();
+  // "Speaking in": this screen's pick, else the one remembered here, else the app language.
   // The saved pick is read after hydration, so server and browser render the same.
-  const [picked, setPicked] = useState<SpokenId | null>(null);
-  const saved = useSyncExternalStore(noop, savedSpoken, () => null);
-  const spokenId = picked ?? saved ?? spokenForAppLanguage(language);
-  const spoken = spokenById(spokenId);
-  const langRow = useRef<HTMLDivElement>(null);
+  const { spoken, saved, pick: pickSpoken } = useSpokenPick(spokenForAppLanguage(language));
+  // The language the words in the box were heard in, when they came from the Say card.
+  const [heardIn, setHeardIn] = useState<SpokenId | null>(null);
   const camera = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
-  const reduced = useReducedMotion();
-  // What the recogniser hears, for the mic's bars (VoiceMeter.tsx).
-  const [activity] = useState(() => new VoiceActivity());
-  // Logging a spoken meal by itself after a pause (autolog.ts). The ref is the truth
-  // for callbacks; the state mirrors it for the screen.
-  const auto = useRef<AutoLog>(IDLE);
-  const [autoView, setAutoView] = useState<AutoLog>(IDLE);
-  const counting = autoView.kind === "counting";
-  const suggestHindi = mode === "voice" && voiceOk && spoken.id === "en" && soundsLikeHindi(text);
-  // Recogniser callbacks and the clock outlive the render that made them; they go
-  // through this ref so they always see the current screen.
-  const driveRef = useRef<(e: AutoEvent) => void>(() => {});
   // One meal log at a time, however it was started.
   const inFlight = useRef(false);
-  const drain = useRef<HTMLSpanElement>(null);
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
   // Opened from the Stack screen (?usual=1) with a usual day too light to count: straight to the editor, with what they wrote.
   const [editingTypical, setEditingTypical] = useState(!typical || (focusUsual && typical.short));
@@ -245,158 +165,21 @@ export function FuelLogger({
   const [run, setRun] = useState<MealRun | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  // The browser can't tell languages apart by itself, so it listens in the one picked.
-  // Only the current recognition may write: one replaced or dropped stays quiet.
-  function listen(lang: Spoken) {
-    const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return setVoiceFailed(true);
-    rec.current?.abort();
-    const r = new Ctor();
-    r.lang = lang.speech;
-    r.interimResults = true;
-    r.continuous = true;
-    const before = text.trim() ? `${text.trim()} ` : "";
-    const mine = () => rec.current === r;
-    activity.reset();
-    r.onaudiostart = () => mine() && activity.note("audiostart");
-    r.onsoundstart = r.onspeechstart = () => mine() && activity.note("speechstart");
-    r.onspeechend = () => {
-      if (!mine()) return;
-      activity.note("speechend");
-      driveRef.current({ type: "speechend", at: clock() });
-    };
-    r.onresult = (e) => {
-      if (!mine()) return;
-      let s = "";
-      let final = false;
-      for (let i = 0; i < e.results.length; i++) {
-        s += e.results[i][0].transcript;
-        final ||= e.results[i].isFinal;
-      }
-      // The box's maxLength doesn't cap what code puts in it.
-      const words = (before + s).slice(0, MEAL_WORDS_MAX);
-      setText(words);
-      activity.note("result");
-      driveRef.current({ type: "result", at: clock(), final, spoke: s.trim() !== "", words });
-    };
-    r.onend = () => {
-      if (!mine()) return;
-      setListening(false);
-      activity.note("end");
-      driveRef.current({ type: "ended", at: clock() });
-    };
-    r.onerror = (e) => {
-      if (!mine()) return;
-      setListening(false);
-      setHeardProblem(listenError(e.error, lang));
-      if (e.error === "audio-capture") activity.captureFailed();
-      // Don't log half a sentence because the browser stumbled.
-      driveRef.current({ type: "hold" });
-    };
-    rec.current = r;
-    setHeardProblem(null);
-    try {
-      r.start();
-      setListening(true);
-      drive({ type: "start", at: clock(), words: text });
-    } catch {
-      rec.current = null;
-      setListening(false);
-    }
+  // The Say card (SayCard.tsx): it listens, shows what it hears, and logs after a pause or a
+  // tap, with a 3, 2, 1 to stop it. Its words land in this form's box whichever way it closes.
+  const sayCard = useRef<SayHandle>(null);
+
+  // The card closed. Edit and Type instead focus the box here, inside the same tap, so
+  // iPhone opens the keyboard; Close leaves focus on Say, where the dialog puts it back.
+  function leaveSay(how: SayLeave, lang: SpokenId | null) {
+    setHeardIn(lang);
+    if (how === "type") setMode("text");
+    if (how === "close") return;
+    const b = box.current;
+    if (!b) return;
+    b.focus();
+    b.setSelectionRange(b.value.length, b.value.length);
   }
-
-  // Stop listening but keep the last words, which can arrive just after. A stop by
-  // hand means they'll log it themselves.
-  function stop() {
-    rec.current?.stop();
-    setListening(false);
-    drive({ type: "hold" });
-  }
-
-  // Stop listening and drop anything still on its way (on log, cancel or leaving voice).
-  function quiet() {
-    rec.current?.abort();
-    rec.current = null;
-    setListening(false);
-    setHeardProblem(null);
-    drive({ type: "hold" });
-  }
-
-  function drive(event: AutoEvent) {
-    const before = auto.current;
-    const next = stepAutoLog(before, event, { allowed: mode === "voice" && voiceOk && !plan.mealBlock && !aiOff });
-    if (next === before) return;
-    auto.current = next;
-    setAutoView(next);
-    // The countdown ran out: log it, as if they'd tapped the button.
-    if (next.kind === "logging" && event.type === "tick") void submit();
-  }
-
-  useEffect(() => {
-    driveRef.current = drive;
-  });
-
-  // A clock for the pause and the countdown, only while one could be running.
-  const ticking = autoView.kind === "listening" || counting;
-  useEffect(() => {
-    if (!ticking) return;
-    const id = setInterval(() => driveRef.current({ type: "tick", at: clock() }), 100);
-    return () => clearInterval(id);
-  }, [ticking]);
-
-  // The shrinking bar on the Log button while counting down.
-  const countdownEnds = autoView.kind === "counting" ? autoView.endsAt : null;
-  useEffect(() => {
-    if (countdownEnds == null || reduced) return;
-    const bar = drain.current?.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], {
-      duration: Math.max(0, countdownEnds - clock()),
-      easing: "linear",
-      fill: "forwards",
-    });
-    return () => bar?.cancel();
-  }, [countdownEnds, reduced]);
-
-  // Leaving the page stops listening (keeping the words) and never logs behind their back.
-  useEffect(() => {
-    const onHide = () => {
-      if (!document.hidden) return;
-      rec.current?.stop();
-      setListening(false);
-      driveRef.current({ type: "hold" });
-    };
-    document.addEventListener("visibilitychange", onHide);
-    return () => document.removeEventListener("visibilitychange", onHide);
-  }, []);
-
-  useEffect(() => () => rec.current?.abort(), []);
-
-  // Picking a language listens in it straight away when already listening, or when
-  // asked to (the "Sounds like Hindi?" suggestion). Otherwise it waits for Talk again.
-  function pickSpoken(next: Spoken, andListen = false) {
-    setPicked(next.id);
-    rememberSpoken(next.id);
-    setHeardProblem(null);
-    if (listening || andListen) listen(next);
-    else drive({ type: "hold" });
-  }
-
-  // During the countdown: carry on speaking, or stop and fix the words by hand.
-  function keepTalking() {
-    if (listening) drive({ type: "start", at: clock(), words: text });
-    else listen(spoken);
-  }
-  function editWords() {
-    stop();
-    box.current?.focus();
-  }
-
-  // Show the picked language when the row opens, even if it's off to the side on a phone.
-  useEffect(() => {
-    const row = langRow.current;
-    const chip = row?.querySelector<HTMLElement>("[data-picked]");
-    if (row && chip) row.scrollLeft += chip.getBoundingClientRect().left - row.getBoundingClientRect().left - 16;
-  }, [mode]);
 
   async function pickPhoto(files: FileList | null) {
     const f = files?.[0];
@@ -411,24 +194,23 @@ export function FuelLogger({
     }
   }
 
-  async function submit() {
+  /** Log the meal. The Say card passes the words it heard and their language; the form uses its box. */
+  async function submit(said?: string, lang?: SpokenId | null) {
     if (inFlight.current) return;
     inFlight.current = true;
-    drive({ type: "submit" });
     try {
-      await logNow();
+      await logNow(said, lang);
     } finally {
       inFlight.current = false;
-      drive({ type: "done" });
     }
   }
 
-  async function logNow() {
-    quiet();
+  async function logNow(said?: string, lang?: SpokenId | null) {
     setBusy(true);
     setError(null);
-    const words = text.trim();
-    const speaking = mode === "voice" && voiceOk ? spokenId : null;
+    const words = (said ?? text).trim();
+    // The language they spoke in, for words that came from the Say card; typed words go by their script.
+    const speaking = said != null ? (lang ?? null) : mode === "voice" ? heardIn : null;
     const startedAt = clock();
     setRun({ kind: "meal", startedAt, state: "running" });
     // Into English on this device when the browser can; if not, their words go as they are.
@@ -519,6 +301,22 @@ export function FuelLogger({
     // right, so each one lands where you can see it. One column on phones and tablets.
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:grid lg:max-w-6xl lg:grid-cols-12 lg:gap-x-12 lg:pt-12">
       {run && <MealOrbit run={run} facts={facts} categories={categories} onClose={() => setRun(null)} />}
+      {voiceOk && !plan.mealBlock && (
+        <SayCard
+          handle={sayCard}
+          words={text}
+          setWords={setText}
+          spoken={spoken}
+          pickSpoken={pickSpoken}
+          firstTime={saved == null}
+          allowed={!aiOff}
+          onLog={(words, lang) => {
+            setHeardIn(lang);
+            void submit(words, lang);
+          }}
+          onLeave={leaveSay}
+        />
+      )}
       <div className="lg:col-span-5">
         <div className="lg:sticky lg:top-20">
           <div className="flex items-baseline justify-between gap-4">
@@ -584,10 +382,7 @@ export function FuelLogger({
               <div className="mt-4 grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    quiet();
-                    camera.current?.click();
-                  }}
+                  onClick={() => camera.current?.click()}
                   className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}
                 >
                   <span className="text-lg font-bold semiwide">Snap</span>
@@ -597,7 +392,8 @@ export function FuelLogger({
                   type="button"
                   onClick={() => {
                     setMode("voice");
-                    if (voiceOk && !listening) listen(spoken);
+                    // Open the card and start listening inside this tap: iPhone needs that.
+                    if (voiceOk) sayCard.current?.open();
                   }}
                   className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "voice" ? "border-paper" : "border-line-strong"}`}
                 >
@@ -606,10 +402,7 @@ export function FuelLogger({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    quiet();
-                    setMode("text");
-                  }}
+                  onClick={() => setMode("text")}
                   className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}
                 >
                   <span className="text-lg font-bold semiwide">Type</span>
@@ -625,104 +418,27 @@ export function FuelLogger({
                     <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
                   )}
                   {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
-                  {mode === "voice" && voiceOk && (
-                    // min-w-0: a fieldset otherwise grows to fit its widest row, which would widen the page.
-                    <fieldset className="min-w-0">
-                      <legend className="mb-2 text-sm text-graphite">Speaking in</legend>
-                      {/* One row that scrolls sideways on phones, inside its own box; it wraps on wider screens.
-                          relative: the hidden radios are absolutely placed, and would otherwise widen the page. */}
-                      <div ref={langRow} className="relative -mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
-                        <div className="flex w-max gap-2 pb-1 sm:w-auto sm:flex-wrap">
-                          {SPOKEN.map((s) => (
-                            <label
-                              key={s.id}
-                              className="choice shrink-0"
-                              lang={s.translateFrom ?? "en"}
-                              dir={s.id === "ur" ? "rtl" : undefined}
-                              data-picked={spoken.id === s.id ? "" : undefined}
-                            >
-                              <input type="radio" name="spoken" className="sr-only" checked={spoken.id === s.id} onChange={() => pickSpoken(s)} />
-                              {s.label}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      {heardProblem && (
-                        <p role="alert" className="error-mark mt-3 text-sm">
-                          {heardProblem}
-                        </p>
-                      )}
-                      {/* A quiet offer, never a switch: with English picked, Hindi comes out in Latin letters. */}
-                      {suggestHindi && (
-                        <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-graphite">
-                          Sounds like Hindi?
-                          <button type="button" className="link-quiet min-h-11 text-paper" onClick={() => pickSpoken(spokenById("hi"), true)}>
-                            Listen in <span lang="hi">हिंदी</span>
-                          </button>
-                        </p>
-                      )}
-                      {/* True for Chrome and most phones: speech recognition runs on the browser maker's servers. */}
-                      <p className="mt-2 text-xs text-graphite">Your browser turns your voice into words; some browsers use their maker&apos;s servers for this. We only receive the words.</p>
-                    </fieldset>
-                  )}
                   <label className="block">
                     <span className="mb-2 flex items-center gap-2 text-sm text-graphite">
-                      {mode === "voice" && listening && <VoiceMeter active activity={activity} />}
-                      {mode === "photo"
-                        ? "Anything the photo won't show? (optional)"
-                        : mode === "voice"
-                          ? listening
-                            ? `Listening in ${spoken.name}… speak naturally`
-                            : "What you said"
-                          : "What did you eat?"}
+                      {mode === "photo" ? "Anything the photo won't show? (optional)" : mode === "voice" ? "What you said" : "What did you eat?"}
                     </span>
                     <textarea
                       ref={box}
                       value={text}
-                      onChange={(e) => {
-                        // Their typing wins: stop listening, and don't log by itself.
-                        if (listening) quiet();
-                        else drive({ type: "hold" });
-                        setText(e.target.value);
-                      }}
+                      onChange={(e) => setText(e.target.value)}
                       maxLength={MEAL_WORDS_MAX}
                       dir="auto"
-                      lang={mode === "voice" && voiceOk ? (spoken.translateFrom ?? undefined) : undefined}
+                      lang={mode === "voice" && heardIn ? (spokenById(heardIn).translateFrom ?? undefined) : undefined}
                       className="textarea"
                       placeholder={mode === "photo" ? "e.g. cooked in ghee, 2 rotis under the dal" : "e.g. 2 rotis, dal, bhindi sabzi and a katori of curd"}
                     />
                   </label>
                   {mode === "voice" && voiceOk && (
-                    <div className="flex flex-wrap gap-3">
-                      {autoView.kind === "counting" ? (
-                        // Here, not only on the Log button: on a phone that button is below the fold.
-                        <div className="w-full">
-                          <p className="text-sm font-semibold">Logging in {autoView.left}…</p>
-                          {/* With reduced motion the countdown is the words alone. */}
-                          {!reduced && (
-                            <span aria-hidden className="mt-2 block h-0.5 w-full bg-line">
-                              <span ref={drain} className="block h-full origin-left bg-paper" />
-                            </span>
-                          )}
-                          <div className="mt-3 flex gap-3">
-                            <button type="button" onClick={keepTalking} className="button-ghost h-11">
-                              Keep talking
-                            </button>
-                            <button type="button" onClick={editWords} className="button-ghost h-11">
-                              Edit
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button type="button" onClick={listening ? stop : () => listen(spoken)} className="button-ghost h-11">
-                          {listening ? "Stop listening" : "Talk again"}
-                        </button>
-                      )}
-                    </div>
+                    // Reopens the card; what it hears goes after these words.
+                    <button type="button" onClick={() => sayCard.current?.open()} className="button-ghost h-11">
+                      {SAY_COPY.talkAgain}
+                    </button>
                   )}
-                  <p role="status" className="sr-only">
-                    {counting ? `Logging this meal in ${COUNTDOWN_MS / 1000} seconds. Choose Keep talking or Edit to stop it.` : ""}
-                  </p>
                   <fieldset className="flex flex-wrap gap-2">
                     <legend className="mb-2 text-sm text-graphite">Which meal?</legend>
                     {MEALS.map((m) => (
@@ -735,20 +451,20 @@ export function FuelLogger({
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={submit}
+                      onClick={() => void submit()}
                       disabled={busy || (!text.trim() && !(mode === "photo" && photo))}
                       className="button-primary h-13 flex-1 sm:flex-none sm:px-10"
                     >
-                      {busy ? "Reading your meal…" : counting ? "Log now" : "Log this meal"}
+                      {busy ? "Reading your meal…" : "Log this meal"}
                     </button>
                     <button
                       type="button"
                       className="button-ghost h-13"
                       onClick={() => {
-                        quiet();
                         setMode(null);
                         setPhoto(null);
                         setText("");
+                        setHeardIn(null);
                       }}
                     >
                       Cancel

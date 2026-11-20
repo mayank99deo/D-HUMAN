@@ -1,20 +1,26 @@
 // When a spoken meal logs itself. Pure (no React, no timers), so the timing can be
-// tested in Node; FuelLogger feeds it the recogniser's events and a clock tick.
+// tested in Node; the Say card (SayCard.tsx) feeds it the recogniser's events and a clock tick.
 //
-// After at least one final result with words, a pause starts a short countdown:
-// about 2 s with no new words, or the recogniser saying speech ended, or stopping by
-// itself. When the countdown runs out the meal is logged. New words during the
-// countdown cancel it and listening carries on. Typing in the box, Edit, Stop,
-// Cancel, an error or leaving the page disarm it until the person talks again.
-// Once logging, nothing else can start a second log.
+// One countdown, two ways in (voice UX spec §5):
+// - A pause: after at least one final result with words, about 2 s with no new words, or
+//   the recogniser saying speech ended, or stopping by itself. The mic stays on, and new
+//   words during the countdown cancel it and listening carries on.
+// - A tap on the big control while listening ("I'm done"), with any words (interim
+//   counts). The mic is switched off (stop, so the last words still land); late words
+//   update what's logged but don't cancel the countdown, and neither does the end.
+// When the countdown runs out the meal is logged. Esc, Edit, Close, Cancel, an error or
+// leaving the page disarm it until the person talks again. Once logging, nothing else can
+// start a second log.
 
 export const PAUSE_MS = 2000;
-export const COUNTDOWN_MS = 2000;
+export const COUNTDOWN_MS = 3000;
+
+export type CountdownBy = "pause" | "tap";
 
 export type AutoLog =
   | { kind: "idle" }
   | { kind: "listening"; heard: boolean; lastAt: number; words: string }
-  | { kind: "counting"; endsAt: number; left: number; words: string }
+  | { kind: "counting"; by: CountdownBy; endsAt: number; left: number; words: string }
   | { kind: "logging" };
 
 export type AutoEvent =
@@ -25,8 +31,10 @@ export type AutoEvent =
   | { type: "speechend"; at: number }
   /** The recogniser stopped by itself (Chrome does after a silence). */
   | { type: "ended"; at: number }
+  /** A tap on the big control while listening: "I'm done". `words` is the whole box. */
+  | { type: "finish"; at: number; words: string }
   | { type: "tick"; at: number }
-  /** The person took over: typed, tapped Edit, Stop or Cancel; or an error, or the page was hidden. */
+  /** The person took over: Esc, Edit, Close or Cancel; or an error, or the page was hidden. */
   | { type: "hold" }
   /** A log started, by hand or by the countdown. */
   | { type: "submit" }
@@ -47,9 +55,17 @@ export const sameWords = (text: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const countdown = (by: CountdownBy, at: number, words: string): AutoLog => ({
+  kind: "counting",
+  by,
+  endsAt: at + COUNTDOWN_MS,
+  left: Math.ceil(COUNTDOWN_MS / 1000),
+  words,
+});
+
 function arm(s: Extract<AutoLog, { kind: "listening" }>, at: number, ctx: AutoContext): AutoLog | null {
   if (!ctx.allowed || !s.heard || !s.words) return null;
-  return { kind: "counting", endsAt: at + COUNTDOWN_MS, left: Math.ceil(COUNTDOWN_MS / 1000), words: s.words };
+  return countdown("pause", at, s.words);
 }
 
 export function stepAutoLog(s: AutoLog, e: AutoEvent, ctx: AutoContext): AutoLog {
@@ -62,12 +78,20 @@ export function stepAutoLog(s: AutoLog, e: AutoEvent, ctx: AutoContext): AutoLog
       return s.kind === "idle" ? s : IDLE;
     case "submit":
       return { kind: "logging" };
+    case "finish": {
+      // No words, or a meal can't log itself: the card shows what to do instead.
+      const words = sameWords(e.words);
+      if (s.kind !== "listening") return s;
+      return ctx.allowed && words ? countdown("tap", e.at, words) : IDLE;
+    }
     case "result": {
       const words = sameWords(e.words);
       if (s.kind === "listening") return { kind: "listening", heard: s.heard || (e.final && e.spoke), lastAt: e.at, words };
-      // More words during the countdown: they're still talking.
-      if (s.kind === "counting" && words !== s.words) return { kind: "listening", heard: true, lastAt: e.at, words };
-      return s;
+      if (s.kind !== "counting") return s;
+      // After a tap the mic is off: the last words land, and the countdown carries on.
+      if (s.by === "tap") return words && words !== s.words ? { ...s, words } : s;
+      // More words during a pause's countdown: they're still talking.
+      return words !== s.words ? { kind: "listening", heard: true, lastAt: e.at, words } : s;
     }
     case "speechend":
       return s.kind === "listening" ? (arm(s, e.at, ctx) ?? s) : s;

@@ -9,7 +9,9 @@ import { jumpTargets } from "./ask-jump";
 import type { OpenRequest } from "./ask-open";
 import { askReducer, canSend, charCount, initialAskState, keyFor, newKey, refetchAfter, type AskState, type Question } from "./ask-state";
 import { isReadLanguage, pickStarters, starterText, type AboutChip, type Starter } from "./ask-starters";
+import { AskMicButton, AskMicLineView, useAskMic } from "./AskMic";
 import { AboutChipView, ConsentNotice, Disclosure, EmptyState, ErrorLine, JumpRow, PendingTurn, PinnedLines, TurnView } from "./AskParts";
+import { lockPage } from "./lock-page";
 
 export type SheetProps = {
   open: boolean;
@@ -62,19 +64,6 @@ function saveDraft(who: string, draft: AskState["draft"]) {
 
 const coarse = () => window.matchMedia("(pointer: coarse)").matches;
 const calm = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** The page behind stops scrolling while Ask is open: the touch frame and, on laptops, the page itself. */
-function lockPage() {
-  const shell = document.getElementById("app-shell");
-  const root = document.documentElement;
-  const before = { shell: shell?.style.overflow ?? "", root: root.style.overflow };
-  if (shell) shell.style.overflow = "hidden";
-  root.style.overflow = "hidden";
-  return () => {
-    if (shell) shell.style.overflow = before.shell;
-    root.style.overflow = before.root;
-  };
-}
 
 /**
  * Ask: short answers on food, training, health and the app, as a native modal <dialog>.
@@ -233,6 +222,15 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
 
   useEffect(() => saveDraft(who, s.draft), [who, s.draft]);
 
+  // The mic beside the box: it fills the box in the "Speaking in" language and never sends.
+  const mic = useAskMic({
+    draft: s.draft.text,
+    onWords: (text) => dispatch({ type: "type", text }),
+    readLanguage: lang,
+    max: ASK_LIMITS.questionMaxChars,
+    onStopped: () => focusFor(true),
+  });
+
   // The box grows from one line to four, then scrolls. Measured again whenever its width
   // changes too ("Asking…" widens the button, and the placeholder can wrap). That second
   // measure waits for the next frame: resizing the box inside its own observer's callback
@@ -261,6 +259,7 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
   }, [s.draft.text, open, s.consentNeeded, s.left]);
 
   function onDialogClose() {
+    mic.quiet();
     unlock.current?.();
     unlock.current = null;
     onClose();
@@ -275,6 +274,7 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
   function go(e: MouseEvent<HTMLAnchorElement> | null, href: string) {
     if (e && (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
     e?.preventDefault();
+    mic.quiet();
     unlock.current?.();
     unlock.current = null;
     close();
@@ -292,6 +292,7 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
     if (!retry && !anyway && !canSend(st)) return;
     const q: Question = retry ?? { clientKey: keyFor(st.draft, st.handedBack, newKey), question: st.draft.text.trim(), about: st.draft.about };
     if (charCount(q.question) < ASK_LIMITS.questionMinChars) return;
+    mic.quiet();
     dispatch({ type: "send", question: q, at: Date.now() });
     const outcome = await askQuestion({ clientKey: q.clientKey, question: q.question, ...(q.about ? { about: q.about.request } : {}) });
     dispatch({ type: "settled", question: q, outcome });
@@ -302,6 +303,11 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
   const jumps: AskLink[] = jumpTargets(s.draft.text).map((id) => ({ id, href: askLinkOf(id).path }));
 
   function onBoxKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // Their typing wins over the mic. Enter while it listens only stops it: a half-heard question would count.
+    if (mic.busy) {
+      mic.quiet();
+      if (e.key === "Enter") return void e.preventDefault();
+    }
     // Indian-language keyboards use Enter to pick a word: never send while composing.
     if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
     e.preventDefault();
@@ -343,6 +349,7 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
   const polite = s.sending ? ASK_COPY.announceWorking : landedTurn && !loud ? announceAnswer(landedTurn, s.left) : "";
   const assertive = landedTurn && loud ? announceAnswer(landedTurn, s.left) : "";
   const tooLong = charCount(s.draft.text) >= ASK_LIMITS.questionMaxChars;
+  const micShown = mic.supported && !service;
 
   return (
     <dialog
@@ -446,6 +453,7 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
                 )}
                 <JumpRow links={jumps} onGo={go} />
                 {tooLong && <p className="error-mark mb-2 text-sm">{ASK_COPY.tooLong}</p>}
+                {micShown && <AskMicLineView mic={mic} limit={limit} />}
                 <form
                   className="flex items-end gap-2"
                   onSubmit={(e) => {
@@ -457,7 +465,11 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
                     ref={box}
                     rows={1}
                     value={s.draft.text}
-                    onChange={(e) => dispatch({ type: "type", text: e.target.value })}
+                    onChange={(e) => {
+                      mic.quiet();
+                      dispatch({ type: "type", text: e.target.value });
+                    }}
+                    onCompositionStart={() => mic.quiet()}
                     onKeyDown={onBoxKey}
                     enterKeyHint={limit ? "go" : "send"}
                     dir="auto"
@@ -466,8 +478,10 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
                     placeholder={limit ? ASK_COPY.placeholderLimit : ASK_COPY.placeholder}
                     className="field min-h-11 resize-none py-2.5 leading-6"
                   />
+                  {micShown && <AskMicButton mic={mic} />}
                   {!limit && (
-                    <button ref={askButton} type="submit" disabled={!canSend(s)} className="button-primary h-11 shrink-0 px-5">
+                    // While the mic listens a half-heard question would use one of today's questions.
+                    <button ref={askButton} type="submit" disabled={!canSend(s) || mic.busy} className="button-primary h-11 shrink-0 px-5">
                       {s.sending ? ASK_COPY.sending : ASK_COPY.send}
                     </button>
                   )}
