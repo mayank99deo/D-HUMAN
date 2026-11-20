@@ -60,3 +60,17 @@ export function pollAnswer(httpStatus: number | null, body: unknown): PollAnswer
   if (status === "building") return "building";
   return typeof status === "string" ? "done" : "unknown";
 }
+
+/** Notes longer than this show their first sentence, with the rest behind "More". */
+export const NOTE_SHORT = 140;
+
+/**
+ * A food-gap note's first sentence, and the rest (null when the note is short or a single
+ * sentence). Splits on ". ", "? ", "! " or "। ", so saved English, Hindi and Hinglish notes
+ * all work (Mayank, 2026-11-20: vitamin D's full paragraph crowded the Stack screen).
+ */
+export function splitNote(note: string): [string, string | null] {
+  if (note.length <= NOTE_SHORT) return [note, null];
+  const m = note.match(/^([\s\S]{20,}?[.!?।])\s+(\S[\s\S]*)$/u);
+  return m ? [m[1], m[2]] : [note, null];
+}

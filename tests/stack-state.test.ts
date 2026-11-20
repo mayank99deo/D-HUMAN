@@ -4,7 +4,7 @@
 // the data it had before the tap.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { REFRESH_LOST_AFTER_MS, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "../components/platform/stack-state.ts";
+import { REFRESH_LOST_AFTER_MS, STALL_AFTER_DONE, onDone, pollAnswer, splitNote, watchedBuild } from "../components/platform/stack-state.ts";
 
 const building = (id: string) => ({ id, status: "building" });
 const ready = (id: string) => ({ id, status: "ready" });
@@ -98,5 +98,26 @@ describe("a check that finds the stack done before the page shows it", () => {
 
   it("never stalls while a refresh is still loading", () => {
     assert.equal(onDone(STALL_AFTER_DONE - 1, t, t + 1000).next, "wait");
+  });
+});
+
+describe("food-gap notes read as one line", () => {
+  it("keeps short notes whole", () => {
+    assert.deepEqual(splitNote("Amla, guava, or lemon on your dal."), ["Amla, guava, or lemon on your dal.", null]);
+  });
+  it("splits vitamin D's long note after its first sentence, keeping the dose warning in the rest", () => {
+    const note =
+      "Food gives little vitamin D, so only a blood test shows if you're low. Most of it comes from sun on your skin. If you already take it, stay under 4,000 IU a day unless your doctor set the dose; one 60,000 IU sachet a week is about twice that.";
+    const [first, rest] = splitNote(note);
+    assert.equal(first, "Food gives little vitamin D, so only a blood test shows if you're low.");
+    assert.match(rest ?? "", /4,000 IU/);
+  });
+  it("splits a saved Hinglish note and a Hindi one on ।", () => {
+    const hinglish =
+      "Khane se vitamin D bahut kam milta hai; zyadatar dhoop se skin par banta hai, isliye aapke meals se pata nahi chalega ki kami hai ya nahi. Blood test se pata chalega. Agar aap pehle se le rahe hain, to roz 4,000 IU se kam hi rakhein.";
+    assert.match(splitNote(hinglish)[0], /ya nahi\.$/);
+    const hindi = "खाने से विटामिन डी बहुत कम मिलता है, इसलिए सिर्फ़ ब्लड टेस्ट से पता चलता है कि कमी है या नहीं। ज़्यादातर यह धूप से बनता है। अगर आप पहले से ले रहे हैं, तो रोज़ 4,000 IU से कम रखें, जब तक डॉक्टर ने खुराक तय न की हो।";
+    assert.match(splitNote(hindi)[0], /नहीं।$/);
+    assert.ok(splitNote(hindi)[1]);
   });
 });

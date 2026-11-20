@@ -449,7 +449,7 @@ const resultFor = (ctx: RuleContext, key: Gap["key"]) => {
 const resultLow = (m: RuleMarker | undefined) => (m?.status === "edge_low" ? "Your result is at the bottom of its range" : "Your result is low");
 
 export const VITAMIN_D_TEST =
-  "Food gives little vitamin D; most comes from sun on your skin, so your meals can't show if you're low. A blood test can. If you already take it, stay under 4,000 IU a day unless your doctor set the dose. One 60,000 IU sachet a week is about twice that.";
+  "Food gives little vitamin D, so only a blood test shows if you're low. Most of it comes from sun on your skin. If you already take it, stay under 4,000 IU a day unless your doctor set the dose; one 60,000 IU sachet a week is about twice that.";
 
 type Notes = {
   /** Food first, with no result for it, or one that doesn't settle it. */

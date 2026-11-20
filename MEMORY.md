@@ -293,6 +293,27 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-20
+- **Stack: vitamin D's food-gap note reads as one line (Mayank, from a meals-only stack in Hinglish):** the full paragraph, with the sachet warning, crowded "What your food is short of".
+  - **The display:** `GapNote` in `components/platform/Stack.tsx` shows a long note's first sentence and keeps the rest behind More / Less (`<details>`, 44 × 44 px). `splitNote` in `components/platform/stack-state.ts` splits on ". " or "। ", so stacks already saved in Hindi or Hinglish work too.
+  - **The words:** `VITAMIN_D_TEST` now leads with its summary ("Food gives little vitamin D, so only a blood test shows if you're low."). The 4,000 IU / 60,000 IU sachet warning is kept, behind More, which updates the 2026-11-17 decision.
+  - **Checked:** 3 new tests and 1,197 in all, plus the build. At 390 px on a database copy, demo Priya with her reports deleted and a usual day: the one-line vitamin D, More opens the warning, no sideways scroll.
+- **Voice and the second post (Mayank, after testing Ask live):**
+  - **His asks:**
+    - Dictation in Ask: a visible mic.
+    - Fuel's Say as a big, centred listening card that moves with the voice, since users don't know when to speak.
+    - A tap on the mic while speaking means done and starts a 3…2…1 countdown; a long pause still auto-logs.
+    - A bug: after Bangla or Tamil says the browser can't transcribe, English, Hindi and Hinglish don't respond until Fuel is reopened.
+    - Blog post 2: how many Indians track meals, by age (20–29 through 60+), low insurance and late care, wrong eating, and how D-Human helps (local languages, fun, small food additions).
+  - **The orchestrator's defaults:**
+    - Ask dictation fills the box and never auto-sends, because questions count.
+    - No invented percentages: if no national data on meal tracking by age exists, the post says so and uses real age-wise data, such as diabetes, weight and insurance.
+  - **Crew running:**
+    - The staff engineer, in a worktree: the bug root cause, a shared voice hook, the Say card and Ask's mic.
+    - The UX and retention designer: `docs/team/specs/2026-11-20-voice-ux.md`.
+    - The SEO lead: `docs/team/blog/drafts/2026-11-20-meal-tracking-india.md`.
+    - A fact-check and a cover follow the draft.
+
 ### 2026-11-19
 - **First blog post live (Mayank and his co-founder):** https://www.d-human.fit/blog/preventive-health-checkup-india. Checked live by the orchestrator:
   - **Page:** 200 with index and follow, the search title "Preventive health checkups in India: the numbers | D-Human", the canonical address, one H1, and JSON-LD for WebPage, ImageObject, BlogPosting and BreadcrumbList.
@@ -379,6 +400,7 @@ Newest first. One entry per change; pushes carry their commit hash.
         - The sheet jumped 272–383 px when a notice landed, because the hidden status words escaped the scroller (the same trap as scrolling chip rows). The scroller is now `relative`.
         - WebKit's ResizeObserver loop warning: the resize now runs in `requestAnimationFrame`.
     - **Shipped founders-only:** typecheck, lint, 1,194 tests and the build passed before the push.
+    - **Push `06ecf7c`** (`8c6923f` through `06ecf7c`, 11 commits): Vercel says "Deployment has completed", so Supabase took migration `0011_ask`. Checked live: GET, POST and DELETE `/api/ask` and POST `/api/ask/consent` give 401 signed out, with `no-store` from `bom1::bom1`. The landing, sign-in and sitemap are fine.
   - **For Mayank before `ASK_OPEN=all`:**
     - Reviews: a doctor, a mental-health professional, native speakers.
     - A calorie floor per sex.

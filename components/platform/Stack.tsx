@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { type ReactNode, useEffect, useMemo, useState, useTransition } from "react";
 import type { StackPlan } from "@/lib/ai/schemas";
 import { BUDGETS, budgetOf, fitBudget, rupees, typicalFor } from "@/lib/domain/budget";
 import { SHORT_OF_NEED } from "@/lib/domain/nutrition";
@@ -11,7 +11,7 @@ import { stackItemPrefill } from "./ask-starters";
 import { AskAbout } from "./AskAbout";
 import { OFFLINE, send } from "./net";
 import { StallNotice } from "./Stall";
-import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, onDone, pollAnswer, watchedBuild } from "./stack-state";
+import { POLL_EVERY_MS, POLL_LIMIT, STALL_AFTER_DONE, onDone, pollAnswer, splitNote, watchedBuild } from "./stack-state";
 
 type StackState = { id: string; status: string; error: string | null; plan: StackPlan | null; demo: boolean; made: string };
 type Item = StackPlan["items"][number];
@@ -540,16 +540,15 @@ function FoodGaps({ gaps, basis, later }: { gaps: Gap[]; basis: StackPlan["gaps_
                   <div className="h-1 bg-paper" style={{ width: `${Math.min(100, g.pct)}%` }} />
                 </div>
               )}
-              <p className="mt-2 text-[0.9375rem]">
+              <GapNote note={g.note}>
                 {g.outcome === "stack" && g.rule ? (
                   <a href={`#stack-${g.rule}`} className="font-semibold underline decoration-1 underline-offset-4">
                     {tag}
                   </a>
                 ) : (
                   <span className="font-semibold">{tag}</span>
-                )}{" "}
-                <span className="text-graphite">{g.note}</span>
-              </p>
+                )}
+              </GapNote>
             </li>
           );
         })}
@@ -560,6 +559,29 @@ function FoodGaps({ gaps, basis, later }: { gaps: Gap[]; basis: StackPlan["gaps_
         </Link>
       )}
     </section>
+  );
+}
+
+// Each gap reads as one line, like its neighbours: a long note (vitamin D's, with the
+// sachet warning) shows its first sentence and keeps the rest one tap away (Mayank,
+// 2026-11-20: the full paragraph crowded the screen). Works on saved and translated notes.
+function GapNote({ note, children }: { note: string; children: ReactNode }) {
+  const [first, rest] = splitNote(note);
+  return (
+    <>
+      <p className="mt-2 text-[0.9375rem]">
+        {children} <span className="text-graphite">{first}</span>
+      </p>
+      {rest && (
+        <details className="group text-[0.9375rem] text-graphite">
+          <summary className="link-quiet inline-flex min-h-11 min-w-11 cursor-pointer list-none items-center text-sm text-paper [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">More</span>
+            <span className="hidden group-open:inline">Less</span>
+          </summary>
+          <p>{rest}</p>
+        </details>
+      )}
+    </>
   );
 }
 
