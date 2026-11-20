@@ -298,6 +298,7 @@ Newest first. One entry per change; pushes carry their commit hash.
   - **The display:** `GapNote` in `components/platform/Stack.tsx` shows a long note's first sentence and keeps the rest behind More / Less (`<details>`, 44 × 44 px). `splitNote` in `components/platform/stack-state.ts` splits on ". " or "। ", so stacks already saved in Hindi or Hinglish work too.
   - **The words:** `VITAMIN_D_TEST` now leads with its summary ("Food gives little vitamin D, so only a blood test shows if you're low."). The 4,000 IU / 60,000 IU sachet warning is kept, behind More, which updates the 2026-11-17 decision.
   - **Checked:** 3 new tests and 1,197 in all, plus the build. At 390 px on a database copy, demo Priya with her reports deleted and a usual day: the one-line vitamin D, More opens the warning, no sideways scroll.
+  - **Push `dac4222`:** with the voice UX spec. Vercel says "Deployment has completed"; signed out, /stack still 307s to /signin.
 - **Voice and the second post (Mayank, after testing Ask live):**
   - **His asks:**
     - Dictation in Ask: a visible mic.
@@ -313,6 +314,36 @@ Newest first. One entry per change; pushes carry their commit hash.
     - The UX and retention designer: `docs/team/specs/2026-11-20-voice-ux.md`.
     - The SEO lead: `docs/team/blog/drafts/2026-11-20-meal-tracking-india.md`.
     - A fact-check and a cover follow the draft.
+  - **Post 2 drafted (SEO lead):** "Meal tracking in India: who does it, and why it matters", slug `meal-tracking-india`, topic `calories`, about 1,550 words. Files: `docs/team/blog/drafts/2026-11-20-meal-tracking-india.md` and `~/Downloads/D-Human-blog-meal-tracking-india.html`.
+    - **What doesn't exist:** no national survey measures meal tracking in India, and none splits it by age. The post opens on that gap.
+    - **Its numbers:**
+      - Tracking: PwC Voice of the Consumer 2026, an urban self-reported survey of 1,005 adults (49% calories, 53% protein).
+      - Diet: ICMR-INDIAB (Nature Medicine 2025): 62.3% of energy from carbohydrates, 12% from protein.
+      - Age brackets: NFHS-5 Tables 12.3 and 12.5, measured blood pressure and blood sugar by age.
+      - Late care: NFHS-5 Table 12.2 (blood pressure ever measured) and NSS 75th round Table A54 (73.5% of untreated ailments "not serious enough").
+      - Who pays: NITI Aayog 2021 (at least 30% unprotected) and NHA 42.7%.
+    - **Mayank's premise corrected:** the provisional NFHS-6 fact sheet shows 60.2% of households with a member covered, not "very few"; the post explains why that still falls short.
+    - **Running:** an independent fact-check, and the cover (the graphic designer, from the women's blood pressure ladder 12.9% → 25.0% → 48.7%, `docs/team/blog/covers/2026-11-20-meal-tracking/`).
+    - **Cover done:** a gauge with three rising marks, a sibling of post 1's "Soundings" at the same scale. Master `~/Downloads/D-Human-blog-cover-meal-tracking.png`; source and a self-checking `render.sh` in `docs/team/blog/covers/2026-11-20-meal-tracking/`.
+    - **Independent fact-check:**
+      - **Passed:** every statistic matches its primary source:
+        - NFHS-5 Tables 10.25, 12.2, 12.3.1–2 and 12.5.1–2, cell by cell;
+        - NFHS-6 indicators 7, 80 and 83 (provisional, May 2026), via Wayback and PIB;
+        - NSS Table A54 (735 per 1,000);
+        - NITI 2021;
+        - NHA 42.7%;
+        - ICMR-INDIAB (Nature Medicine 2025);
+        - Burke 2011.
+      - **Couldn't verify:** PwC, because pwc.in refuses scripts. The drafter's quote reads "53% regularly track their protein intake (35% globally)… 49% track calories (33%)". Mayank to open it in a browser.
+      - **Fixed, in both copies:**
+        - The dead rchiips link is now PIB's release.
+        - "No English needed" is gone: the app's screens are English.
+        - The reply-language line no longer promises typed replies in every language.
+        - The targets line had claimed ICMR-NIN 2020 for everything. Fibre is a flat 30 g, goals count, and B12 and zinc differ from the NIN note. The now-unused NIN source was dropped.
+        - The Burke wording: 22 self-monitoring studies, 15 on food.
+        - "How often" replaces "what people eat", since NFHS records frequency.
+        - NSS's term is "medical advice".
+        - The NHA link now goes to the PDF.
 
 ### 2026-11-19
 - **First blog post live (Mayank and his co-founder):** https://www.d-human.fit/blog/preventive-health-checkup-india. Checked live by the orchestrator:
