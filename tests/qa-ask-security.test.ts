@@ -221,3 +221,16 @@ describe("QA: the crisis list", () => {
     assert.ok(reply.notice!.calls.includes("14416"));
   });
 });
+
+describe("doses typed in the question are never allowed back (Mayank's default, 2026-11-20)", () => {
+  it("an answer repeating the question's own dose is removed, even as a refusal", () => {
+    for (const [question, answer] of [
+      ["Can I take 60000 IU vitamin D daily?", "Please don't take 60,000 IU of vitamin D a day."],
+      ["Is 50 mg zinc ok?", "Taking 50 mg of zinc daily is too much for most adults."],
+    ] as const) {
+      const r = check(answer, RIYA, { question });
+      assert.equal(r.answer, null, `"${answer}" got through`);
+      assert.equal(r.filter, "dose");
+    }
+  });
+});

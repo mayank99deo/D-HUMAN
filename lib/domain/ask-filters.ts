@@ -318,11 +318,12 @@ const MICRO_UNIT = (k: string) => (k.endsWith("_mg") ? "mg" : k.endsWith("_ug") 
 
 /**
  * Doses an answer may state, as "number|unit", or "number|*" for any unit: their stack's
- * doses and their targets and intakes in their own units; their marker values and ranges,
- * and the numbers in their question, in any unit.
+ * doses and their targets and intakes in their own units, and their marker values in their own
+ * units. Never a number from the question: safety there rested on the model refusing (QA,
+ * 2026-11-20), so an answer that repeats "60,000 IU" is replaced even when it says no.
  */
-export function allowedDoseNumbers(data: AskData, question: string): Set<string> {
-  const allowed = new Set<string>([...doseNumbers(question), ...numbersIn(question).map((n) => `${n}|*`)]);
+export function allowedDoseNumbers(data: AskData): Set<string> {
+  const allowed = new Set<string>();
   const add = (n: number | null | undefined, unit: string) => {
     if (n == null || !Number.isFinite(n)) return;
     for (const v of [n, Math.round(n), Math.round(n * 10) / 10]) allowed.add(`${key(v)}|${unit}`);
@@ -406,7 +407,7 @@ export function filterAnswer(raw: string, o: { data: AskData; question: string; 
     tripped.push("dose");
     parts.push("dose");
   } else if (doses.length) {
-    const allowed = noDosesAtAll(o.data) ? new Set<string>() : allowedDoseNumbers(o.data, o.question);
+    const allowed = noDosesAtAll(o.data) ? new Set<string>() : allowedDoseNumbers(o.data);
     if (doses.some((d) => !doseAllowed(d, allowed))) {
       tripped.push("dose");
       parts.push("dose");
