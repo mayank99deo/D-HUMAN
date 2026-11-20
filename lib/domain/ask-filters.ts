@@ -80,6 +80,10 @@ const DOMAIN_WITH_PATH = /\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\/\S
 // "60,000"; dates (2026-11-02) are matched first and kept.
 const PHONE = /\b\d{4}-\d{2}-\d{2}\b|(?<!\d|\d[.,])(?:\+\s?\d{1,3}[\s.-]?)?(?:\d[\s.-]?){5,}\d(?!\d|[.,]\d)/g;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// A 6+ digit number followed by a blood-count unit is a reading, not a phone number: "platelets
+// 250000 /cumm" (QA, 2026-11-20: platelet counts lost their number). Only count units, so a
+// second phone number after a bare "/" or "per" is still removed.
+const UNIT_AFTER = /^\s*(?:\/\s*(?:cumm|cu\.?\s?mm|mm3|[µu]l|mcl)\b|per\s+(?:cumm|cu\.?\s?mm|mm3|[µu]l|mcl|micro\s?lit)|cells?\b|cumm\b|lakh\b)/iu;
 
 /** URLs, bare domains, emails, wa.me links and phone numbers of 6+ digits out of the text. Our own call buttons are code, not text, so they're untouched. */
 export function stripContacts(s: string): string {
@@ -89,7 +93,7 @@ export function stripContacts(s: string): string {
     .replace(EMAIL, "")
     .replace(DOMAIN_WITH_PATH, "")
     .replace(DOMAIN, "")
-    .replace(PHONE, (m) => (ISO_DATE.test(m.trim()) ? m : ""))
+    .replace(PHONE, (m: string, at: number, all: string) => (ISO_DATE.test(m.trim()) || UNIT_AFTER.test(all.slice(at + m.length)) ? m : ""))
     .replace(/\(\s*\)/g, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/ ([.,;:!?।])/g, "$1")

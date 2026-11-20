@@ -234,3 +234,12 @@ describe("doses typed in the question are never allowed back (Mayank's default, 
     }
   });
 });
+
+describe("long numbers: blood counts stay, phone numbers go", () => {
+  it("keeps a platelet count with its unit and strips phone numbers next to it", () => {
+    assert.match(stripContacts("Your platelet count of 250000 /cumm is in range."), /250000 \/cumm/);
+    assert.match(stripContacts("Platelets 250000 cells/mcL."), /250000 cells/);
+    assert.equal(/\d{6,}/.test(stripContacts("Call 9876543210 / 9123456789 now.")), false);
+    assert.equal(/\d{6,}/.test(stripContacts("Ring 98765 43210 per day.")), false);
+  });
+});
