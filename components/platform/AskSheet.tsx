@@ -234,7 +234,9 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
   useEffect(() => saveDraft(who, s.draft), [who, s.draft]);
 
   // The box grows from one line to four, then scrolls. Measured again whenever its width
-  // changes too ("Asking…" widens the button, and the placeholder can wrap).
+  // changes too ("Asking…" widens the button, and the placeholder can wrap). That second
+  // measure waits for the next frame: resizing the box inside its own observer's callback
+  // makes Safari report "ResizeObserver loop completed with undelivered notifications".
   useLayoutEffect(() => {
     const b = box.current;
     if (!b) return;
@@ -244,13 +246,18 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
     };
     fit();
     let width = b.clientWidth;
+    let frame = 0;
     const ro = new ResizeObserver(() => {
       if (b.clientWidth === width) return;
       width = b.clientWidth;
-      fit();
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
     });
     ro.observe(b);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [s.draft.text, open, s.consentNeeded, s.left]);
 
   function onDialogClose() {
@@ -369,7 +376,10 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
           </div>
         )}
 
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {/* relative: hidden labels in the thread (a marker's "Below range:") are absolutely placed;
+            without it they escape this scroller, stretch the dialog, and scrolling an answer into
+            view then moves the whole sheet up. */}
+        <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-xl px-4 pb-4 lg:max-w-none">
             {!facts && s.load !== "failed" && !s.turns.length && !busyTurn && (
               <p role="status" className="py-5 text-sm text-graphite">

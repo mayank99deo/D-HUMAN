@@ -293,6 +293,23 @@ describe("static checks on Ask's browser files", () => {
     }
   });
 
+  it("never resizes the box inside its own ResizeObserver callback (Safari reports a loop error)", () => {
+    const src = readFileSync(path.join(root, "components/platform/AskSheet.tsx"), "utf8");
+    const callback = src.slice(src.indexOf("new ResizeObserver("), src.indexOf("ro.observe("));
+    assert.ok(callback.length > 0, "the box's observer is there");
+    assert.match(callback, /requestAnimationFrame\(fit\)/, "the resize waits for the next frame");
+    assert.doesNotMatch(callback, /\bfit\(\)/, "no resize inside the callback");
+  });
+
+  it("keeps hidden labels inside the thread's scroller, so landing an answer never moves the sheet", () => {
+    // Notice lines carry sr-only (absolutely placed) status words; the scroller must contain them.
+    assert.match(renderToStaticMarkup(createElement(P.NoticeBlock, { notice: doctorNotice })), /class="sr-only"/);
+    const src = readFileSync(path.join(root, "components/platform/AskSheet.tsx"), "utf8");
+    const scroller = src.match(/<div ref=\{scroller\} className="([^"]*)"/)?.[1] ?? "";
+    assert.match(scroller, /\boverflow-y-auto\b/);
+    assert.match(scroller, /\brelative\b/, "the scroller is their containing block");
+  });
+
   it("every #anchor link has its target on the page", () => {
     const settings = ["components/platform/Settings.tsx", "components/platform/Paywall.tsx", "components/platform/EmailSettings.tsx"].map((f) => readFileSync(path.join(root, f), "utf8")).join("\n");
     assert.match(settings, /id="plan"/);
