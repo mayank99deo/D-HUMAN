@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import { allowAppImports, tempDatabase } from "./support/app.ts";
 
-type Input = { question: string; about: unknown; earlier: { question: string; answer: string }[]; data: Record<string, unknown> & { report: { id: string } | null; asksLeft: number } };
+type Input = { question: string; about: unknown; earlier: { question: string; answer: string }[]; data: Record<string, unknown> & { report: { id: string } | null; asksLeft: number }; spoken?: string | null };
 type Globals = {
   __testUser?: { id: string; email: string } | null;
   __after: (() => unknown)[];
@@ -252,6 +252,19 @@ describe("POST: the checks, in order", () => {
     const long = await ask(me, "a".repeat(301));
     assert.deepEqual([long.status, long.body.error], [400, "too_long"]);
     assert.equal(g.__ask.calls.length, 0);
+  });
+});
+
+describe("POST: the Speaking in pick", () => {
+  it("passes a pick from the mic to the AI, null when typed, and refuses one off the list", async () => {
+    const me = await person();
+    assert.equal((await ask(me, "मुझे कितना प्रोटीन चाहिए", { spoken: "hinglish" })).status, 200);
+    assert.equal(g.__ask.calls[0].spoken, "hinglish");
+    assert.equal((await ask(me, "मुझे कितना प्रोटीन चाहिए")).status, 200);
+    assert.equal(g.__ask.calls[1].spoken, null);
+    const bad = await ask(me, "मुझे कितना प्रोटीन चाहिए", { spoken: "klingon" });
+    assert.deepEqual([bad.status, bad.body.error], [400, "invalid"]);
+    assert.equal(g.__ask.calls.length, 2);
   });
 });
 

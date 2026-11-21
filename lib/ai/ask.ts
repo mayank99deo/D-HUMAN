@@ -3,9 +3,9 @@ import { APIConnectionTimeoutError, APIError, APIUserAbortError } from "@anthrop
 import type { BetaMessage, BetaMessageStreamParams } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { ASK_LIMITS, ASK_LINK_IDS, ASK_TURN_KINDS, isAskLinkId, type AskAboutResolved, type AskAnswer, type AskData, type AskInput, type AskReply, type AskTurnKind, type AskUsage } from "@/lib/ask/types";
 import { APP_MAP } from "@/lib/domain/ask-app";
-import { packText, safetyFacts, userTurn } from "@/lib/domain/ask-context";
+import { packText, retryLanguageLine, safetyFacts, userTurn } from "@/lib/domain/ask-context";
 import { ASK_TOPICS, finishReply, preCheck, type AskModelOut, type AskTopic } from "@/lib/domain/ask-floor";
-import { questionLanguage, scriptMismatch } from "@/lib/domain/ask-language";
+import { questionLanguage, wrongLanguage } from "@/lib/domain/ask-language";
 import { SPOKEN_IDS, spokenOf, type SpokenId } from "@/lib/domain/speech";
 import { MODELS, aiMode, anthropic, costOf, fallbackFor, logUsage, textOf } from "./client";
 import { MOCK_MODEL, mockAsk } from "./mock";
@@ -38,7 +38,9 @@ How to answer:
 - Hard limit: 45 words, at most 3 short sentences. Answer the question in the first sentence. Warm, direct, "you". No lists, headings or markdown.
 - Use their data when it helps, and only the numbers in it. If something isn't in their data, say so and say where it would come from. Describe only app features in the map below.
 - Bring up a flagged or out-of-range marker only when the question is about it or about something it directly affects; the app already shows their flagged markers on screen.
-- Write in the language and script of their question: Hindi in Devanagari gets Devanagari; Hindi in Latin letters gets Hinglish; Tamil gets Tamil; and so on. Devanagari can be Marathi: words like आहे, काय, आणि, नाही, खावे, करू mean Marathi, so answer in Marathi. Keep marker names, units and numbers as in their data.
+- Write in the language and script of their question: Hindi in Devanagari gets Hindi in Devanagari; Hindi in Latin letters gets Hinglish; Tamil gets Tamil; and so on. Devanagari is Hindi, even with a word or two that looks Marathi; write Marathi only when the user turn says their question looks like Marathi or that they spoke in Marathi.
+- When the user turn says what they spoke in, that decides, whatever script their words came out in: Hindi gets Hindi in Devanagari; Hinglish gets Hindi in Latin letters, never Devanagari; Marathi gets Marathi; English gets Latin letters (Hinglish if their words are Hindi); any other language gets that language in its own script.
+- Keep marker names, units and numbers as in their data.
 
 Health rules you never break:
 - You are an AI, not a doctor. Never diagnose or say they "have" a condition. Talk about markers, ranges, risk and "worth showing a doctor".
@@ -127,8 +129,13 @@ export function parseAsk(text: string, fallbackLang: SpokenId): AskModelOut | nu
   };
 }
 
-/** The request, as sent. Exported for tests: it must carry the schema, the cache mark, thinking off and the facts after the user turn. */
-export function askParams(input: AskInput): BetaMessageStreamParams {
+/**
+ * The request, as sent. Exported for tests: it must carry the schema, the cache mark, thinking
+ * off and the facts after the user turn. `retryIn` is the language retry's: code's facts then
+ * also say which language the answer must be in, since the same request gave the wrong one.
+ */
+export function askParams(input: AskInput, retryIn?: SpokenId): BetaMessageStreamParams {
+  const facts = safetyFacts(input.data);
   const model = MODELS.ask;
   const haiku = model.startsWith("claude-haiku");
   return {
@@ -141,9 +148,9 @@ export function askParams(input: AskInput): BetaMessageStreamParams {
     output_config: { effort: "low", format: { type: "json_schema", schema: ASK_JSON_SCHEMA } },
     system: [{ type: "text", text: ASK_SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [
-      { role: "user", content: userTurn({ pack: packText(input.data), question: input.question, earlier: input.earlier, about: input.about }) },
+      { role: "user", content: userTurn({ pack: packText(input.data), question: input.question, earlier: input.earlier, about: input.about, spoken: input.spoken }) },
       // Code's facts: the channel user text can't forge (threats spec D5).
-      { role: "system", content: safetyFacts(input.data) },
+      { role: "system", content: retryIn ? `${facts}\n${retryLanguageLine(retryIn)}` : facts },
     ],
   };
 }
@@ -170,7 +177,7 @@ export async function runAsk(input: AskInput, opts: { signal: AbortSignal; call:
   const t0 = Date.now();
   const left = () => ASK_LIMITS.aiDeadlineMs - (Date.now() - t0);
   const mock = opts.call === "mock";
-  const fallbackLang = questionLanguage(input.question);
+  const fallbackLang = questionLanguage(input.question, input.spoken);
   const params = mock ? null : askParams(input);
   const usage: AskUsage = { model: mock ? MOCK_MODEL : MODELS.ask, inputTokens: 0, outputTokens: 0, costMicros: 0, ms: 0 };
   const outs: AskModelOut[] = [];
@@ -179,7 +186,7 @@ export async function runAsk(input: AskInput, opts: { signal: AbortSignal; call:
   let used: AskModelOut | null = null;
   const done = (answer: AskAnswer): AskTrace => ({ answer, outs, used, messages, retried });
 
-  const once = async (): Promise<Attempt> => {
+  const once = async (request = params): Promise<Attempt> => {
     if (opts.signal.aborted) return { ok: false, error: "timeout", retry: false };
     try {
       let text: string;
@@ -189,7 +196,7 @@ export async function runAsk(input: AskInput, opts: { signal: AbortSignal; call:
         text = m.text;
       } else {
         const t = Date.now();
-        const message = await opts.call(params!, { timeout: Math.max(1_000, Math.min(TRY_MS, left())), maxRetries: 1, signal: opts.signal });
+        const message = await opts.call(request!, { timeout: Math.max(1_000, Math.min(TRY_MS, left())), maxRetries: 1, signal: opts.signal });
         messages.push(message);
         logUsage("ask", message, t);
         const u = message.usage;
@@ -227,12 +234,14 @@ export async function runAsk(input: AskInput, opts: { signal: AbortSignal; call:
   if (!reply) return done({ ok: false, error: "failed" });
   used = attempt.out;
 
-  // An answer in the wrong script (an English answer to a Telugu question): one more try, live
-  // only, when there's time. The retry's answer is used only when its script is right.
-  if (!mock && !retried && reply.answer && scriptMismatch(input.question, attempt.out.answer) && left() >= LANGUAGE_RETRY_MIN_MS) {
+  // An answer in the wrong language (English for a Telugu question, Devanagari for a Hinglish
+  // pick, Marathi for Hindi): one more try, live only, when there's time, with code's facts
+  // naming the language. The retry's answer is used only when its language is right.
+  const wrong = (answer: string) => wrongLanguage(input.question, answer, input.spoken);
+  if (!mock && !retried && reply.answer && wrong(attempt.out.answer) && left() >= LANGUAGE_RETRY_MIN_MS) {
     retried = "language";
-    const second = await once();
-    const again = second.ok && !scriptMismatch(input.question, second.out.answer) ? finishReply(second.out, input) : null;
+    const second = await once(askParams(input, fallbackLang));
+    const again = second.ok && !wrong(second.out.answer) ? finishReply(second.out, input) : null;
     if (again && second.ok) {
       reply = again;
       used = second.out;

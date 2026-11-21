@@ -290,11 +290,14 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
     const st = latest.current;
     if (st.sending || st.consentNeeded) return;
     if (!retry && !anyway && !canSend(st)) return;
-    const q: Question = retry ?? { clientKey: keyFor(st.draft, st.handedBack, newKey), question: st.draft.text.trim(), about: st.draft.about };
+    // Words the mic wrote carry the "Speaking in" pick: it decides the answer's language
+    // (हिंदी gets Devanagari, Hinglish Latin letters), whatever script the browser wrote them in.
+    const spoken = mic.spokenFor();
+    const q: Question = retry ?? { clientKey: keyFor(st.draft, st.handedBack, newKey), question: st.draft.text.trim(), about: st.draft.about, ...(spoken ? { spoken } : {}) };
     if (charCount(q.question) < ASK_LIMITS.questionMinChars) return;
     mic.quiet();
     dispatch({ type: "send", question: q, at: Date.now() });
-    const outcome = await askQuestion({ clientKey: q.clientKey, question: q.question, ...(q.about ? { about: q.about.request } : {}) });
+    const outcome = await askQuestion({ clientKey: q.clientKey, question: q.question, ...(q.about ? { about: q.about.request } : {}), ...(q.spoken ? { spoken: q.spoken } : {}) });
     dispatch({ type: "settled", question: q, outcome });
     if (outcome.type === "error" && refetchAfter(outcome.error)) void load();
   }

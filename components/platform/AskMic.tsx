@@ -4,7 +4,7 @@
 // never sends, because questions count against the day. It stops after 3 s of silence
 // once there are words, or on a tap, and leaves the words to check, edit or send. Same
 // recogniser as Fuel's Say card (useRecognizer.ts).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { spokenById, spokenForAppLanguage, type SpokenId } from "@/lib/domain/speech";
 import { askMicLine, type AskMicNote } from "./ask-mic";
 import { heardText, joinWords, micBusy, REPEAT_TAP_MS } from "./listen-state";
@@ -53,8 +53,12 @@ export function useAskMic(o: AskMicOptions) {
   const dropping = useRef(false);
   const lastTap = useRef(0);
   const sessionLang = useRef(spoken);
+  /** The language the box's words were heard in, while the mic has written any of them. */
+  const heardIn = useRef<SpokenId | null>(null);
   useEffect(() => {
     opts.current = o;
+    // An empty box (sent, cleared, or typed away) holds nothing the mic heard.
+    if (!o.draft.trim()) heardIn.current = null;
   });
 
   const rec = useRecognizer(
@@ -65,6 +69,7 @@ export function useAskMic(o: AskMicOptions) {
         const { text, full } = joinWords(base.current, said, opts.current.max);
         if (said) {
           heard.current = true;
+          heardIn.current = sessionLang.current.id;
           rememberSpoken(sessionLang.current.id);
         }
         opts.current.onWords(text);
@@ -137,7 +142,11 @@ export function useAskMic(o: AskMicOptions) {
     return () => document.removeEventListener("visibilitychange", onHide);
   }, [busy, rec]);
 
+  /** For sending: the "Speaking in" language the box's words were heard in, or null when the mic wrote none of them. */
+  const spokenFor = useCallback(() => heardIn.current, []);
+
   return {
+    spokenFor,
     supported: rec.supported,
     mic: rec.mic,
     busy,

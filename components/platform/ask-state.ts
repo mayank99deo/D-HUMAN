@@ -2,12 +2,13 @@
 // can be tested without a browser: sending, answers, the limit, the timeout check, a retry
 // that keeps its key, a new day, clearing, consent, paused and off.
 import { ASK_LIMITS, type AskErrorCode, type AskThread, type AskTurn } from "@/lib/ask/types";
+import type { SpokenId } from "@/lib/domain/speech";
 import type { AskOutcome } from "./ask-api";
 import { RETRYABLE } from "./ask-copy";
 import type { AboutChip } from "./ask-starters";
 
-/** A question as sent: the key goes with it on every "Try again". */
-export type Question = { clientKey: string; question: string; about: AboutChip | null };
+/** A question as sent: the key (and the "Speaking in" pick, when the mic wrote it) go with it on every "Try again". */
+export type Question = { clientKey: string; question: string; about: AboutChip | null; spoken?: SpokenId };
 
 /** What GET says beyond the turns and the day. */
 export type Facts = Omit<AskThread, "turns" | "pending" | "left" | "day" | "resetsAt" | "consentNeeded">;

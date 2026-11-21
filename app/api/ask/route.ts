@@ -6,6 +6,7 @@ import { ASK_LIMITS, ASK_TURN_KINDS, countsAgainstDay, type AskClearOk, type Ask
 import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import type { PlanView } from "@/lib/domain/plan";
+import { SPOKEN_IDS } from "@/lib/domain/speech";
 import {
   alertLine,
   askAlert,
@@ -58,6 +59,8 @@ const askRequest = z.strictObject({
       z.strictObject({ type: z.literal("gaps") }),
     ])
     .optional(),
+  // The "Speaking in" pick, sent only when the mic wrote words of the question. It decides the answer's language.
+  spoken: z.enum(SPOKEN_IDS).optional(),
 });
 
 const isJson = (request: Request) => (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase() === "application/json";
@@ -184,7 +187,7 @@ export async function POST(request: Request) {
     let saved = false;
     try {
       const result = await answerAsk(
-        { question, about: load.about, earlier: earlierTurns(load), data: { ...data, asksLeft: leftOf(claim) } },
+        { question, about: load.about, earlier: earlierTurns(load), data: { ...data, asksLeft: leftOf(claim) }, spoken: parsed.data.spoken ?? null },
         { signal: AbortSignal.timeout(ASK_LIMITS.aiDeadlineMs) },
       );
       if (!result.ok) {

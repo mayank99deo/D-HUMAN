@@ -123,6 +123,46 @@ describe("ask: the call", () => {
     assert.equal(call.calls.length, 1);
   });
 
+  it("asks again when a Hindi question gets a Marathi answer, never the other way for Hindi", async () => {
+    const marathi = json({ lang: "mr", answer: "तुमचे फेरिटिन कमी आहे, आणि डॉक्टरांना दाखवा." });
+    const hindi = json({ lang: "hi", answer: "आपका फेरिटिन कम है, डॉक्टर को दिखाएं और पालक खाएं।" });
+    const fixed = await runAsk(input("मैं क्या करू"), { signal: signal(), call: queue(marathi, hindi) });
+    assert.equal(fixed.retried, "language");
+    assert.ok(fixed.answer.ok && fixed.answer.reply.answer?.startsWith("आपका"));
+    const fine = queue(hindi);
+    await runAsk(input("मैं क्या करू"), { signal: signal(), call: fine });
+    assert.equal(fine.calls.length, 1);
+  });
+
+  it("follows the Speaking in pick: Hinglish wants Latin letters for a Devanagari question, with no retry loop", async () => {
+    const q = "मुझे रोज कितना प्रोटीन चाहिए";
+    const spoken = { ...input(q, ARJUN), spoken: "hinglish" as const };
+    // The request says what they spoke in.
+    const turn = String(askParams(spoken).messages[0].content);
+    assert.ok(turn.includes(`They spoke this question with "Speaking in" set to Hinglish (Hindi in Latin letters).`));
+    assert.ok(!String(askParams(input(q, ARJUN)).messages[0].content).includes("Speaking in"), "typed questions carry no pick");
+    // A Latin answer is right: one call.
+    const latin = queue(json({ lang: "hinglish", answer: "Aapko roz 134 g protein chahiye." }));
+    const ok = await runAsk(spoken, { signal: signal(), call: latin });
+    assert.equal(latin.calls.length, 1);
+    assert.ok(ok.answer.ok && ok.answer.reply.answer === "Aapko roz 134 g protein chahiye.");
+    // A Devanagari answer is wrong: one retry, used only when it's in Latin letters.
+    const devanagari = json({ lang: "hi", answer: "आपको रोज़ 134 ग्राम प्रोटीन चाहिए।" });
+    const retry = queue(devanagari, json({ lang: "hinglish", answer: "Roz 134 g protein lo." }));
+    const fixed = await runAsk(spoken, { signal: signal(), call: retry });
+    assert.equal(fixed.retried, "language");
+    assert.ok(fixed.answer.ok && fixed.answer.reply.answer === "Roz 134 g protein lo.");
+    // The retry's facts name the language; the first try's don't.
+    const factsOf = (i: number) => String((retry.calls[i] as { messages: { content: unknown }[] }).messages[1].content);
+    assert.ok(!factsOf(0).includes("wrong language"));
+    assert.ok(factsOf(1).endsWith("Write the answer in Hinglish: Hindi in Latin letters, no Devanagari."));
+    assert.match(factsOf(1), /^Safety facts from the D-Human app/);
+    const twice = queue(devanagari, devanagari);
+    const kept = await runAsk(spoken, { signal: signal(), call: twice });
+    assert.equal(twice.calls.length, 2, "one retry, never a loop");
+    assert.ok(kept.answer.ok);
+  });
+
   it("maps a refusal to refused, a timeout to timeout, and an API error to failed, without throwing", async () => {
     const refusal = queue(["", "refusal"]);
     assert.deepEqual((await runAsk(input("x?"), { signal: signal(), call: refusal })).answer, { ok: false, error: "refused" });

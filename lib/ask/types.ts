@@ -16,6 +16,7 @@ import type { MarkerStatus } from "../domain/markers.ts";
 import type { Targets } from "../domain/nutrition.ts";
 import type { PlanView } from "../domain/plan.ts";
 import type { Flag, Level } from "../domain/safety.ts";
+import type { SpokenId } from "../domain/speech.ts";
 import type { DietPicture, MealKind, Totals } from "../platform/food.ts";
 
 // ── Limits ──────────────────────────────────────────────────────────────────
@@ -170,6 +171,8 @@ export type AskRequest = {
   clientKey: string;
   question: string;
   about?: AskAboutRequest;
+  /** The "Speaking in" pick, when the mic wrote words of the question. It decides the answer's language. */
+  spoken?: SpokenId;
 };
 
 // ── Responses ───────────────────────────────────────────────────────────────
@@ -431,6 +434,8 @@ export type AskInput = {
   /** At most ASK_LIMITS.earlierTurns, oldest first; only turns with an answer that wasn't removed. */
   earlier: AskEarlier[];
   data: AskData;
+  /** The "Speaking in" pick for a question from the mic; null or absent when typed. */
+  spoken?: SpokenId | null;
 };
 
 type ReplyCommon = {
