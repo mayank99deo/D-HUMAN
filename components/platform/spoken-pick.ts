@@ -13,6 +13,7 @@
 //   mic that stopped responding until the page was reopened.
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { SPOKEN_IDS, spokenById, spokenOf, type Spoken, type SpokenId } from "@/lib/domain/speech";
+import { ruledOut, sameEngine } from "./listen-state";
 
 const SPOKEN_KEY = "dh-spoken";
 const VOICE_KEY = "dh-voice";
@@ -89,11 +90,11 @@ function saveRecord(next: VoiceRecord) {
   notify();
 }
 
-/** The recogniser started listening in this language. */
+/** The recogniser started listening in this language, so every pick sharing its engine can listen too. */
 export function noteListened(id: SpokenId) {
   const r = voiceRecord();
-  if (r.ok.includes(id) && !r.off.includes(id)) return;
-  saveRecord({ ok: [...r.ok.filter((x) => x !== id), id], off: r.off.filter((x) => x !== id) });
+  if (r.ok.includes(id) && !ruledOut(id, r.off)) return;
+  saveRecord({ ok: [...r.ok.filter((x) => x !== id), id], off: r.off.filter((x) => !sameEngine(x, id)) });
 }
 
 /** The browser said it can't listen in this language. */

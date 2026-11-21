@@ -13,8 +13,12 @@
 //   "a" ("mitra", "satya").
 // - Long vowels the common way: "aa" only to start a word ("aaj"), "ee" and "oo" inside
 //   a word ("paneer", "doodh") but "i" and "u" at its end ("roti", "kaju").
-// - A short list of common food, portion and health words, many of them English said in
-//   Hindi ("चिकन", "प्रोटीन"), is spelt the way people write them.
+// - A list of common words is spelt the way people write them: everyday words the rules
+//   get wrong ("raat", not "rat"), and food, portion and health words, many of them
+//   English said in Hindi ("चिकन", "प्रोटीन"), including marker names, so Ask can still
+//   tell which marker a romanized question is about ("विटामिन डी" is "vitamin D").
+// - A few two-word phrases go first, where a word means something else alone: वे is "they"
+//   but "वे प्रोटीन" is whey protein; बार is "baar" (times) but "प्रोटीन बार" a protein bar.
 // Pure: used by the browser, the server and tests.
 
 const VIRAMA = "्";
@@ -182,15 +186,42 @@ function spellVowel(v: Vowel, at: { first: boolean; last: boolean; beforeY: bool
 }
 
 // Spelt the way people write them. Keys have no nukta and use ं for ँ, as lookups do.
+// Output is lowercase except letter names and short forms ("D", "B12", "HDL").
 const WORDS: Record<string, string> = {
   // Hindi words the rules would spell oddly.
   आलू: "aloo", घी: "ghee", में: "mein", हां: "haan", नहीं: "nahi", हूं: "hoon", मां: "maa",
   नान: "naan", चाट: "chaat", साग: "saag", चाय: "chai", पुलाव: "pulao", कचौरी: "kachori",
   पकौडा: "pakoda", पकोडा: "pakoda", पकौडे: "pakode", पकोडे: "pakode", मूंगफली: "moongfali",
   वाला: "wala", वाली: "wali", वाले: "wale",
+  // Short words with a long "a" that people text as "aa" ("raat", not "rat"). Food names
+  // keep one "a" ("dal", "pav"), as the rules write them.
+  रात: "raat", बाद: "baad", बार: "baar", बारे: "baare", साथ: "saath", हाथ: "haath", जान: "jaan", बात: "baat",
+  काम: "kaam", नाम: "naam", शाम: "shaam", साल: "saal", पास: "paas", चार: "chaar",
+  पांच: "paanch", सात: "saat", गांव: "gaon",
+  // Words people text with a vowel the rules drop, or a letter they write differently.
+  दोपहर: "dopahar", खत्म: "khatam", जिंदगी: "zindagi", जिन्दगी: "zindagi", उडद: "urad",
+  // Marker and health words said in Hindi, spelt as the report spells them, so Ask still
+  // finds the marker a romanized question names ("बी12" is "B12": the digits stay apart).
+  डी: "D", बी: "B", हीमोग्लोबिन: "hemoglobin", हिमोग्लोबिन: "hemoglobin", फेरिटिन: "ferritin",
+  किडनी: "kidney", लिवर: "liver", लीवर: "liver", थायराइड: "thyroid", थायरॉइड: "thyroid",
+  थाइरॉइड: "thyroid", थायरॉयड: "thyroid", थायरायड: "thyroid", कोलेस्ट्रॉल: "cholesterol",
+  कोलेस्ट्रोल: "cholesterol", कोलेस्ट्राल: "cholesterol", मैग्नीशियम: "magnesium",
+  मैग्नेशियम: "magnesium", सोडियम: "sodium", पोटैशियम: "potassium", पोटेशियम: "potassium",
+  जिंक: "zinc", यूरिक: "uric", एसिड: "acid", फोलिक: "folic", फोलेट: "folate", यूरिया: "urea",
+  क्रिएटिनिन: "creatinine", ग्लूकोज: "glucose", प्लेटलेट: "platelet", प्लेटलेट्स: "platelets",
+  ट्राइग्लिसराइड: "triglyceride", ट्राइग्लिसराइड्स: "triglycerides", टेस्टोस्टेरोन: "testosterone",
+  एनीमिया: "anemia", डायबिटीज: "diabetes", एचडीएल: "HDL", एलडीएल: "LDL", टीएसएच: "TSH", बीपी: "BP",
+  लेवल: "level", लेवल्स: "levels", मल्टीविटामिन: "multivitamin", मल्टी: "multi",
+  टैबलेट: "tablet", टेबलेट: "tablet", टैबलेट्स: "tablets", टेबलेट्स: "tablets",
+  सप्लीमेंट: "supplement", सप्लीमेंट्स: "supplements", कैप्सूल: "capsule", डोज: "dose",
+  कॉम्प्लेक्स: "complex", मिनरल्स: "minerals", फैट: "fat", कार्ब्स: "carbs", फाइबर: "fibre", गैस: "gas",
   // English said in Hindi, as hi-IN speech recognition writes it.
   चिकन: "chicken", मटन: "mutton", एग: "egg", एग्स: "eggs", ऑमलेट: "omelette", आमलेट: "omelette",
-  प्रोटीन: "protein", व्हे: "whey", व्हेय: "whey", शेक: "shake", राइस: "rice", ब्रेड: "bread",
+  प्रोटीन: "protein", व्हे: "whey", व्हेय: "whey", वेय: "whey", शेक: "shake", मिल्कशेक: "milkshake",
+  राइस: "rice", ब्राउन: "brown", ब्रेस्ट: "breast", ब्रेड: "bread", कोल्ड: "cold", कोल्डड्रिंक: "cold drink",
+  एनर्जी: "energy", फिल्टर: "filter", पाउडर: "powder", फ्रूट: "fruit", फ्रूट्स: "fruits",
+  योगर्ट: "yogurt", मल्टीग्रेन: "multigrain", ब्लैक: "black", फ्री: "free", ग्रेनोला: "granola",
+  मैकरोनी: "macaroni", फ्लैक्स: "flax", चिया: "chia",
   बटर: "butter", ओट्स: "oats", जूस: "juice", सूप: "soup", कॉफी: "coffee", टी: "tea",
   बिस्कुट: "biscuit", बिस्किट: "biscuit", केक: "cake", बर्गर: "burger", पिज्जा: "pizza",
   नूडल्स: "noodles", सैंडविच: "sandwich", फ्राइड: "fried", फ्राई: "fry", मैगी: "maggi",
@@ -200,6 +231,27 @@ const WORDS: Record<string, string> = {
   शुगर: "sugar", डॉक्टर: "doctor", ब्लड: "blood", रिपोर्ट: "report", जिम: "gym", डाइट: "diet",
 };
 
+// Two words read together, where one of them means something else alone (वे is "they", सी
+// "like", बार "times"). Written as they come, with one space; none has a nukta or ँ.
+const PHRASES: Record<string, string> = {
+  "वे प्रोटीन": "whey protein",
+  "प्रोटीन बार": "protein bar",
+  "ग्रेनोला बार": "granola bar",
+  "चॉकलेट बार": "chocolate bar",
+  "विटामिन ए": "vitamin A",
+  "विटामिन सी": "vitamin C",
+  "विटामिन ई": "vitamin E",
+};
+
+// A Devanagari word: letters and signs, and joiners inside them, but not dandas or digits.
+const LETTERS = "ऀ-ॣॱ-ॿ‌‍";
+const WORD = new RegExp(`[${LETTERS}]+`, "g");
+// Any of the phrases as whole words, with any spacing between them.
+const PHRASE = new RegExp(
+  `(?<![${LETTERS}])(?:${Object.keys(PHRASES).map((p) => p.split(" ").join("\\s+")).join("|")})(?![${LETTERS}])`,
+  "g",
+);
+
 const lookupKey = (word: string) => word.replaceAll(CHANDRABINDU, ANUSVARA).replaceAll(NUKTA, "").replace(/[‌‍]/g, "");
 
 /** True when the text has any Devanagari in it. */
@@ -207,7 +259,8 @@ export const hasDevanagari = (text: string) => /[ऀ-ॿ]/.test(text);
 
 /**
  * Devanagari in Latin letters, the way people text Hindi; everything else is left as it
- * is. Lowercase: callers that want a capital (a title) add it.
+ * is. Lowercase, except letter names and short forms ("vitamin D", "HDL"): callers that
+ * want a capital (a title) add it.
  */
 export function romanize(text: string): string {
   if (!hasDevanagari(text)) return text;
@@ -215,7 +268,8 @@ export function romanize(text: string): string {
     text
       // NFC splits क़, ज़, फ़ (and the rest of U+0958–U+095F) into a letter and a nukta.
       .normalize("NFC")
-      .replace(/[ऀ-ॣॱ-ॿ‌‍]+/g, (word) => WORDS[lookupKey(word)] ?? spellWord(word))
+      .replace(PHRASE, (phrase) => PHRASES[phrase.replace(/\s+/g, " ")])
+      .replace(WORD, (word) => WORDS[lookupKey(word)] ?? spellWord(word))
       .replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x0966))
       .replace(/\s*[।॥]+/g, ".")
       .replace(/॰/g, ".")

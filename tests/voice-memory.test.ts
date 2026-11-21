@@ -66,6 +66,15 @@ describe("voice memory", () => {
     assert.deepEqual(P.voiceRecord(), { ok: ["en", "bn"], off: [] });
   });
 
+  it("a pick that listens clears every pick sharing its engine from the can't list", () => {
+    P.noteCantListen("hinglish");
+    P.noteCantListen("ta");
+    P.noteListened("en");
+    assert.deepEqual(P.voiceRecord(), { ok: ["en"], off: ["ta"] }, "Hinglish and English both listen in en-IN");
+    P.noteListened("en");
+    assert.deepEqual(P.voiceRecord(), { ok: ["en"], off: ["ta"] });
+  });
+
   it("survives broken storage", () => {
     session.setItem("dh-voice", "{not json");
     assert.deepEqual(P.voiceRecord(), { ok: [], off: [] });

@@ -2,7 +2,7 @@
 // English, like every button in the app for now; language names show in their own script.
 // Pure, so the copy can be tested without a browser.
 import { spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
-import { LISTENS_WIDELY, sameEngine } from "./listen-state";
+import { LISTENS_WIDELY, ruledOut, sameEngine } from "./listen-state";
 
 export const SAY_COPY = {
   title: "Say what you ate",
@@ -90,7 +90,7 @@ export const cantListenIn = (s: Spoken) => `This browser can't listen in ${s.lab
  * failing rules out both), and none this browser already said it can't do.
  */
 export function listenInstead(failed: SpokenId, off: readonly SpokenId[] = []): SpokenId[] {
-  return (["en", "hi"] as const).filter((id) => !sameEngine(id, failed) && !off.includes(id));
+  return (["en", "hi"] as const).filter((id) => !sameEngine(id, failed) && !ruledOut(id, off));
 }
 
 /** "Speak in English or Hindi instead, or type in Tamil. Replies come back in the language you type." */

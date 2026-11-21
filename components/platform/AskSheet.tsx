@@ -7,7 +7,7 @@ import { WAIT_FOR_LANDING_MS, acceptConsent, askQuestion, clearThread, getThread
 import { ASK_COPY, ASK_ERROR_WORDS, announceAnswer, counterText, limitLine } from "./ask-copy";
 import { jumpTargets } from "./ask-jump";
 import type { OpenRequest } from "./ask-open";
-import { askReducer, canSend, charCount, initialAskState, keyFor, newKey, refetchAfter, type AskState, type Question } from "./ask-state";
+import { askReducer, canSend, charCount, initialAskState, newKey, questionFor, refetchAfter, type AskState, type Question } from "./ask-state";
 import { isReadLanguage, pickStarters, starterText, type AboutChip, type Starter } from "./ask-starters";
 import { AskMicButton, AskMicLineView, useAskMic } from "./AskMic";
 import { AboutChipView, ConsentNotice, Disclosure, EmptyState, ErrorLine, JumpRow, PendingTurn, PinnedLines, TurnView } from "./AskParts";
@@ -292,8 +292,8 @@ export function AskSheet({ open, request, onClose, who, region: regionHint, read
     if (!retry && !anyway && !canSend(st)) return;
     // Words the mic wrote carry the "Speaking in" pick: it decides the answer's language
     // (हिंदी gets Devanagari, Hinglish Latin letters), whatever script the browser wrote them in.
-    const spoken = mic.spokenFor();
-    const q: Question = retry ?? { clientKey: keyFor(st.draft, st.handedBack, newKey), question: st.draft.text.trim(), about: st.draft.about, ...(spoken ? { spoken } : {}) };
+    // Words handed back by a failed send go again with that send's key and pick.
+    const q: Question = retry ?? questionFor(st.draft, st.handedBack, mic.spokenFor(), newKey);
     if (charCount(q.question) < ASK_LIMITS.questionMinChars) return;
     mic.quiet();
     dispatch({ type: "send", question: q, at: Date.now() });

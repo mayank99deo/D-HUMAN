@@ -165,6 +165,9 @@ export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: rea
  */
 export const sameEngine = (a: SpokenId, b: SpokenId) => a === b || spokenById(a).speech === spokenById(b).speech;
 
+/** Whether this browser already said it can't listen the way `id` does: it, or a pick sharing its engine, is on the "can't" list. */
+export const ruledOut = (id: SpokenId, off: readonly SpokenId[]) => off.some((o) => sameEngine(o, id));
+
 /** A problem that says something about the language rather than the device or the moment. */
 export const languageProblem = (p: MicProblem | null) => p === "language";
 

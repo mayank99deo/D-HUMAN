@@ -80,9 +80,17 @@ export type AskAction =
 
 const sameAbout = (a: AboutChip | null, b: AboutChip | null) => JSON.stringify(a?.request ?? null) === JSON.stringify(b?.request ?? null);
 
-/** The key for what's in the box: the handed-back question's key when it's the same question, else a new one. */
-export function keyFor(draft: AskState["draft"], handedBack: Question | null, makeKey: () => string) {
-  return handedBack && handedBack.question === draft.text.trim() && sameAbout(handedBack.about, draft.about) ? handedBack.clientKey : makeKey();
+/**
+ * The question to send from the box.
+ * - The same words a failed send handed back go again as that send: its key, and its
+ *   "Speaking in" pick. The mic forgot the pick when the box emptied on the first send, and
+ *   the same key must carry the same request.
+ * - Anything else is a new question with a new key, and the pick the mic heard it in, if any.
+ */
+export function questionFor(draft: AskState["draft"], handedBack: Question | null, spoken: SpokenId | null, makeKey: () => string): Question {
+  const question = draft.text.trim();
+  if (handedBack && handedBack.question === question && sameAbout(handedBack.about, draft.about)) return handedBack;
+  return { clientKey: makeKey(), question, about: draft.about, ...(spoken ? { spoken } : {}) };
 }
 
 /** A new question's key: a v4 UUID, also on plain-http pages where randomUUID is missing. */

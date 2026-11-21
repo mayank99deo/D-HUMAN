@@ -124,8 +124,8 @@ describe("failures hand the question back, and retries keep their key", () => {
     assert.equal(s.error?.retry?.clientKey, KEY_A);
     assert.equal(s.left, 5, "a failure never lowers the count");
     // Sending the same words from the box reuses the key; new words get a new one.
-    assert.equal(St.keyFor(s.draft, s.handedBack, () => KEY_B), KEY_A);
-    assert.equal(St.keyFor({ text: "something else", about: null }, s.handedBack, () => KEY_B), KEY_B);
+    assert.equal(St.questionFor(s.draft, s.handedBack, null, () => KEY_B).clientKey, KEY_A);
+    assert.equal(St.questionFor({ text: "something else", about: null }, s.handedBack, null, () => KEY_B).clientKey, KEY_B);
   });
 
   it("offline: back in the box, no Try again button, and the box's own Ask reuses the key", () => {
@@ -133,7 +133,26 @@ describe("failures hand the question back, and retries keep their key", () => {
     s = run(s, { type: "settled", question: q("x y"), outcome: { type: "offline" } });
     assert.equal(s.error?.code, "offline");
     assert.equal(s.error?.retry, null);
-    assert.equal(St.keyFor(s.draft, s.handedBack, () => KEY_B), KEY_A);
+    assert.equal(St.questionFor(s.draft, s.handedBack, null, () => KEY_B).clientKey, KEY_A);
+  });
+
+  it("dictated in हिंदी, sent offline, sent again from the box: the same key and the same pick (QA, 2026-11-22)", () => {
+    // The mic heard the words in हिंदी; the box emptied on send, so the mic now says nothing.
+    const sent = St.questionFor({ text: "x y", about: null }, null, "hi", () => KEY_A);
+    assert.deepEqual(sent, { clientKey: KEY_A, question: "x y", about: null, spoken: "hi" });
+    let s = run(typed(loaded(), "x y"), { type: "send", question: sent, at: 1 });
+    s = run(s, { type: "settled", question: sent, outcome: { type: "offline" } });
+    assert.equal(s.draft.text, "x y");
+    assert.deepEqual(St.questionFor(s.draft, s.handedBack, null, () => KEY_B), sent);
+    // Edited words are a new question, with whatever the mic heard them in.
+    assert.deepEqual(St.questionFor({ text: "x y z", about: null }, s.handedBack, null, () => KEY_B), { clientKey: KEY_B, question: "x y z", about: null });
+    assert.deepEqual(St.questionFor({ text: "x y z", about: null }, s.handedBack, "hinglish", () => KEY_B), { clientKey: KEY_B, question: "x y z", about: null, spoken: "hinglish" });
+  });
+
+  it("typed and handed back: sent again with no pick", () => {
+    let s = run(typed(loaded(), "x y"), { type: "send", question: q("x y"), at: 1 });
+    s = run(s, { type: "settled", question: q("x y"), outcome: { type: "offline" } });
+    assert.equal("spoken" in St.questionFor(s.draft, s.handedBack, null, () => KEY_B), false);
   });
 
   it("a timeout offers Try again on the same key", () => {

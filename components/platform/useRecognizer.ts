@@ -6,7 +6,7 @@
 // write: one replaced, stopped or dropped stays quiet.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Spoken } from "@/lib/domain/speech";
-import { MIC_OFF, heardOf, micEffect, micProblemOf, micStep, type Heard, type Mic, type MicEvent, type MicOptions, type MicProblem } from "./listen-state";
+import { MIC_OFF, heardOf, micEffect, micProblemOf, micStep, ruledOut, type Heard, type Mic, type MicEvent, type MicOptions, type MicProblem } from "./listen-state";
 import { noteCantListen, noteListened, voiceRecord } from "./spoken-pick";
 import { VoiceActivity } from "./VoiceMeter";
 
@@ -131,7 +131,8 @@ export function useRecognizer(events: RecognizerEvents, opts: MicOptions = {}) {
       step({ type: "begin", at: clock() });
       // Known not to work here this visit, or no connection: say so without asking the engine.
       // An iPhone handed a language it can't transcribe has been seen to stop answering.
-      if (voiceRecord().off.includes(spoken.id)) return void step({ type: "error", problem: "language" });
+      // Hinglish failing rules out English too: both listen in en-IN.
+      if (ruledOut(spoken.id, voiceRecord().off)) return void step({ type: "error", problem: "language" });
       if (!navigator.onLine) return void step({ type: "error", problem: "offline" });
       if (!Ctor) return void step({ type: "error", problem: "stopped" });
 

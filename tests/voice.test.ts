@@ -116,6 +116,13 @@ describe("what an error means", () => {
     assert.equal(L.sameEngine("hinglish", "hi"), false);
     assert.equal(L.sameEngine("hi", "mr"), false);
   });
+  it("a pick is ruled out when it, or a pick sharing its engine, couldn't listen (QA, 2026-11-22)", () => {
+    assert.ok(L.ruledOut("en", ["hinglish"]), "Hinglish failing rules out English: both en-IN");
+    assert.ok(L.ruledOut("hinglish", ["en"]));
+    assert.ok(L.ruledOut("ta", ["ta"]));
+    assert.equal(L.ruledOut("hi", ["hinglish"]), false, "हिंदी listens in hi-IN");
+    assert.equal(L.ruledOut("en", []), false);
+  });
   it("maps every other code", () => {
     assert.equal(L.micProblemOf("language-not-supported", ctx("en")), "language");
     assert.equal(L.micProblemOf("not-allowed", ctx("en")), "blocked");
@@ -291,6 +298,8 @@ describe("voice words", () => {
     assert.equal(V.languageLine(ta), "Speak in English or Hindi instead, or type in Tamil. Replies come back in the language you type.");
     assert.equal(V.languageLine(hi), "Speak in English instead, or type in Hindi. Replies come back in the language you type.");
     assert.equal(V.languageLine(ta, ["en", "hi"]), "Type in Tamil instead. Replies come back in the language you type.");
+    // Hinglish couldn't listen earlier this visit, so English (the same en-IN engine) isn't offered.
+    assert.equal(V.languageLine(ta, ["hinglish"]), "Speak in Hindi instead, or type in Tamil. Replies come back in the language you type.");
     assert.equal(V.mayNotListen(en), null);
   });
   it("never claim accuracy, and keep the voice privacy line", () => {

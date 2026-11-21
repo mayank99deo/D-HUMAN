@@ -63,7 +63,7 @@ describe("romanize leaves marker names, units and numbers alone", () => {
   it("Latin inside mixed text is untouched; Devanagari digits become digits", () => {
     assert.equal(romanize("HbA1c 6.1% है"), "HbA1c 6.1% hai");
     assert.equal(romanize("TSH 4.5 mIU/L"), "TSH 4.5 mIU/L");
-    assert.equal(romanize("Vitamin D3 60000 IU सप्ताह में एक बार"), "Vitamin D3 60000 IU saptah mein ek bar");
+    assert.equal(romanize("Vitamin D3 60000 IU सप्ताह में एक बार"), "Vitamin D3 60000 IU saptah mein ek baar");
     assert.equal(romanize("B12 200 pg/mL है"), "B12 200 pg/mL hai");
     assert.equal(romanize("२ रोटी, १ कटोरी दाल (१५० ग्राम)"), "2 roti, 1 katori dal (150 gram)");
     assert.equal(romanize("१२.५ ग्राम"), "12.5 gram");
@@ -146,7 +146,7 @@ describe("QA: Ask's crisis net after romanizing (todo until fixed)", () => {
     assert.equal(asksVeryLittleFood(romanize(q)), true, romanize(q));
   });
 
-  it("a flagged marker named in Hindi is still found after romanizing", { todo: "romanize writes 'vitamin di', 'bi12', 'heemoglobin', 'feritin', 'kidni': none matches a marker name or RELATED word" }, () => {
+  it("a flagged marker named in Hindi is still found after romanizing", () => {
     const flagged = [
       { key: "vitamin_d", name: "Vitamin D", status: "low" as const, flag: "doctor" as const },
       { key: "b12", name: "Vitamin B12", status: "low" as const, flag: "doctor" as const },

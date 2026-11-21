@@ -80,6 +80,99 @@ describe("Devanagari in Latin letters", () => {
     ]);
   });
 
+  it("writes short everyday words with the long 'a' people text", () => {
+    check([
+      ["रात को दाल चावल", "raat ko dal chawal"],
+      ["खाने के बाद", "khane ke baad"],
+      ["दिन में दो बार", "din mein do baar"],
+      ["इसके बारे में", "iske baare mein"],
+      ["दूध के साथ", "doodh ke saath"],
+      ["हाथ से खाया", "haath se khaya"],
+      ["जान", "jaan"],
+      ["बात", "baat"],
+      ["काम के बाद", "kaam ke baad"],
+      ["नाम", "naam"],
+      ["शाम की चाय", "shaam ki chai"],
+      ["एक साल", "ek saal"],
+      ["पास", "paas"],
+      ["चार रोटी, पांच बादाम, सात काजू", "chaar roti, paanch badam, saat kaju"],
+      ["पाँच", "paanch"],
+      ["गांव का खाना", "gaon ka khana"],
+      ["गाँव", "gaon"],
+    ]);
+  });
+
+  it("writes words people text with a vowel the rules would drop", () => {
+    check([
+      ["दोपहर का खाना", "dopahar ka khana"],
+      ["खत्म", "khatam"],
+      ["ख़त्म", "khatam"],
+      ["खतम", "khatam"],
+      ["ज़िंदगी", "zindagi"],
+      ["जिंदगी", "zindagi"],
+      ["जिन्दगी", "zindagi"],
+      ["उड़द की दाल", "urad ki dal"],
+    ]);
+  });
+
+  it("spells marker names said in Hindi as reports do, in a sentence", () => {
+    check([
+      ["मेरा विटामिन डी कम है", "mera vitamin D kam hai"],
+      ["विटामिन डी3", "vitamin D3"],
+      ["बी12 कम है क्या करूं", "B12 kam hai kya karun"],
+      ["विटामिन बी12", "vitamin B12"],
+      ["बी कॉम्प्लेक्स", "B complex"],
+      ["मेरा हीमोग्लोबिन कम है", "mera hemoglobin kam hai"],
+      ["हिमोग्लोबिन", "hemoglobin"],
+      ["फेरिटिन कम है", "ferritin kam hai"],
+      ["किडनी के लिए क्या खाऊं", "kidney ke liye kya khaun"],
+      ["लिवर", "liver"],
+      ["थायराइड की दवा", "thyroid ki dawa"],
+      ["थायरॉइड", "thyroid"],
+      ["कोलेस्ट्रॉल बढ़ा है", "cholesterol badha hai"],
+      ["कोलेस्ट्रोल", "cholesterol"],
+      ["शुगर लेवल", "sugar level"],
+      ["यूरिक एसिड", "uric acid"],
+      ["मैग्नीशियम और जिंक", "magnesium aur zinc"],
+      ["एचडीएल कम, एलडीएल ज्यादा", "HDL kam, LDL jyada"],
+      ["टीएसएच", "TSH"],
+    ]);
+  });
+
+  it("spells English said in Hindi as English, in a sentence", () => {
+    check([
+      ["मल्टीविटामिन टैबलेट", "multivitamin tablet"],
+      ["दो टेबलेट्स", "do tablets"],
+      ["ब्राउन राइस", "brown rice"],
+      ["चिकन ब्रेस्ट", "chicken breast"],
+      ["गरम मसाला", "garam masala"],
+      ["मसाले", "masale"],
+      ["गैस बनती है", "gas banti hai"],
+      ["कोल्ड ड्रिंक", "cold drink"],
+      ["एनर्जी ड्रिंक", "energy drink"],
+      ["फ़िल्टर कॉफी", "filter coffee"],
+      ["व्हे प्रोटीन", "whey protein"],
+      ["मिल्क", "milk"],
+      ["मिल्कशेक", "milkshake"],
+      ["प्रोटीन पाउडर", "protein powder"],
+    ]);
+  });
+
+  it("reads two-word phrases together, and their words alone as Hindi", () => {
+    check([
+      ["वे प्रोटीन शेक", "whey protein shake"],
+      ["वे  प्रोटीन", "whey protein"],
+      ["वे लोग", "ve log"],
+      ["एक प्रोटीन बार", "ek protein bar"],
+      ["ग्रेनोला बार", "granola bar"],
+      ["विटामिन सी और डी3", "vitamin C aur D3"],
+      ["थोड़ी सी चीनी", "thodi si cheeni"],
+      ["विटामिन सीधा", "vitamin seedha"],
+      ["विटामिन ए", "vitamin A"],
+      ["विटामिन ई", "vitamin E"],
+    ]);
+  });
+
   it("handles 'ye', nasal sounds, digits and full stops", () => {
     check([
       ["प्रोटीन के लिए दही जोड़ें।", "protein ke liye dahi joden."],

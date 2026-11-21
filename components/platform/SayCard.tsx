@@ -21,7 +21,7 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from "react";
-import { MEAL_WORDS_MAX, spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
+import { langTag, MEAL_WORDS_MAX, spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
 import { IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { heardInScript, heardText, joinWords, REPEAT_TAP_MS, type Heard } from "./listen-state";
 import { lockPage } from "./lock-page";
@@ -407,6 +407,9 @@ function Transcript({ view, before, heard, words, spoken }: { view: SayView; bef
   const settled = hasSession ? [before, heard.final.trim()].filter(Boolean).join(" ") : words;
   const tail = hasSession ? heard.interim.trim() : "";
   const long = [...words].length > 160;
+  const placeholder = view.words === "placeholder" && !words.trim();
+  // The words in their language and script: Hinglish is "hi-Latn", हिंदी in Devanagari "hi".
+  const lang = placeholder ? "en" : langTag(spoken.id, `${settled} ${tail}`);
   return (
     <div
       ref={box}
@@ -417,9 +420,9 @@ function Transcript({ view, before, heard, words, spoken }: { view: SayView; bef
       }}
       className="say-words mt-3 overflow-y-auto overscroll-contain [overflow-wrap:anywhere]"
       dir="auto"
-      lang={spoken.translateFrom ?? "en"}
+      lang={lang}
     >
-      {view.words === "placeholder" && !words.trim() ? (
+      {placeholder ? (
         <p className={`text-graphite ${long ? "text-lg" : "text-xl"} leading-[1.45]`}>{C.placeholder}</p>
       ) : (
         <p className={`${long ? "text-lg" : "text-xl"} leading-[1.45]`}>

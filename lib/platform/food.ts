@@ -71,7 +71,10 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
   // checked against them, and a reply kept in Latin letters loses any Devanagari it was written in.
   const reply = settleReply(raw.reply_language, words);
   const data = replyInScript(raw, reply);
-  const refitted = data.title !== raw.title || data.tip !== raw.tip;
+  const refitted =
+    data.title !== raw.title ||
+    data.tip !== raw.tip ||
+    data.items.some((item, i) => item.name !== raw.items[i].name || item.portion !== raw.items[i].portion);
   console.info(`[food] reply ${reply.id} (expected ${words.reply.id}, model said ${raw.reply_language ?? "nothing"}${refitted ? ", put in Latin letters" : ""})`);
 
   // Minerals worked out in code from each ingredient's code and raw grams (lib/domain/meal-minerals.ts).
