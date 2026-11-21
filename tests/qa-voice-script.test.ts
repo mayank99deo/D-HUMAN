@@ -116,19 +116,19 @@ describe("the pick decides the meal reply's script", () => {
 // romanizes it before it reaches the box. Neither Latin form is on the lists. The model's own
 // crisis label is still the second net; these are about code's first net.
 
-describe("QA: Ask's crisis net after romanizing (todo until fixed)", () => {
+describe("QA: Ask's crisis net after romanizing (fixed by the sound lists in ask-floor.ts)", () => {
   const caughtInDevanagari = ["मैं आत्महत्या करना चाहता हूँ", "आत्महत्या के बारे में सोच रहा हूं", "जान दे दूंगा", "खुद को खत्म कर दूंगी", "उल्टी करके वजन कम करना है"];
 
   it("each of these is caught in Devanagari today (the baseline)", () => {
     for (const q of caughtInDevanagari) assert.equal(crisisMatch(q), true, q);
   });
 
-  it("the same words, romanized by Ask's mic for an English or Hinglish pick, are still caught", { todo: "crisis list has no Latin form the romanizer writes: aatmahatya, jan de doonga, khatm, ulti karke vajan" }, () => {
+  it("the same words, romanized by Ask's mic for an English or Hinglish pick, are still caught", () => {
     const missed = caughtInDevanagari.filter((q) => !crisisMatch(romanize(q))).map((q) => `${q} -> ${romanize(q)}`);
     assert.deepEqual(missed, []);
   });
 
-  it("Hinglish as en-IN writes it is caught", { todo: "no Latin 'aatmahatya'/'atmahatya', 'jaan dena', 'khatam kar' patterns in CRISIS" }, () => {
+  it("Hinglish as en-IN writes it is caught", () => {
     const missed = ["main aatmahatya karna chahta hoon", "main atmahatya karna chahta hu", "aatmhatya ke baare mein soch raha hu", "jaan dena chahta hoon"].filter((q) => !crisisMatch(q));
     assert.deepEqual(missed, []);
   });
@@ -140,7 +140,7 @@ describe("QA: Ask's crisis net after romanizing (todo until fixed)", () => {
     }
   });
 
-  it("'only one meal a day' survives romanizing", { todo: "VERY_LITTLE_FOOD has सिर्फ एक बार खाना in Devanagari but no 'sirf ek bar khana'" }, () => {
+  it("'only one meal a day' survives romanizing", () => {
     const q = "सिर्फ एक बार खाना खाऊं क्या";
     assert.equal(asksVeryLittleFood(q), true);
     assert.equal(asksVeryLittleFood(romanize(q)), true, romanize(q));
