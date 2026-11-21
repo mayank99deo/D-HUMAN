@@ -12,7 +12,10 @@ export type AskMicLine =
   | { kind: "none" }
   | { kind: "starting"; text: string }
   | { kind: "live"; text: string }
+  | { kind: "idle"; text: string }
   | { kind: "note"; text: string; mark: boolean; listen: SpokenId[] };
+
+const EVERYDAY: readonly SpokenId[] = ["en", "hinglish", "hi"];
 
 const PROBLEM_WORDS: Record<Exclude<MicProblem, "language">, string> = {
   nothing_heard: C.nothing,
@@ -26,7 +29,9 @@ const PROBLEM_WORDS: Record<Exclude<MicProblem, "language">, string> = {
 export function askMicLine(i: { mic: Mic; note: AskMicNote; spoken: Spoken; off: readonly SpokenId[]; limit: boolean }): AskMicLine {
   if (i.mic.kind === "starting") return { kind: "starting", text: i.mic.slow ? C.slow : C.starting };
   if (i.mic.kind === "live" || i.mic.kind === "stopping") return { kind: "live", text: C.live(i.spoken) };
-  if (!i.note) return { kind: "none" };
+  // A pick outside English, Hinglish and हिंदी (often left from one try in Fuel) decides
+  // the answer's language, so the idle mic says which it is, with Change beside it.
+  if (!i.note) return EVERYDAY.includes(i.spoken.id) ? { kind: "none" } : { kind: "idle", text: C.idle(i.spoken) };
   // At the limit there's no Ask button: the box finds screens, and Jump to says where.
   if (i.note === "check") return i.limit ? { kind: "none" } : { kind: "note", text: C.check, mark: false, listen: [] };
   if (i.note === "language") return { kind: "note", text: askCantListen(i.spoken), mark: false, listen: listenInstead(i.spoken.id, i.off) };

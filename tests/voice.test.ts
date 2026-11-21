@@ -278,6 +278,12 @@ describe("Ask's mic line", () => {
     assert.deepEqual(line(L.MIC_OFF, "nothing_heard"), { kind: "note", text: "Didn't hear anything. Try again, or type it.", mark: true, listen: [] });
     assert.equal(line(L.MIC_OFF, "offline").kind, "note");
   });
+  it("names a pick outside English, Hinglish and हिंदी while idle, since it decides the answer's language", () => {
+    assert.deepEqual(line(L.MIC_OFF, null, false, ta), { kind: "idle", text: "The mic listens in தமிழ்." });
+    assert.deepEqual(line(L.MIC_OFF, null, true, ta), { kind: "idle", text: "The mic listens in தமிழ்." });
+    for (const s of [en, hi, spokenById("hinglish")]) assert.deepEqual(line(L.MIC_OFF, null, false, s), { kind: "none" });
+    assert.equal(line(L.MIC_OFF, "check", false, ta).kind, "note");
+  });
 });
 
 describe("voice words", () => {

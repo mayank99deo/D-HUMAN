@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { spokenById, spokenForAppLanguage, type SpokenId } from "@/lib/domain/speech";
 import { askMicLine, type AskMicNote } from "./ask-mic";
-import { heardText, joinWords, micBusy, REPEAT_TAP_MS } from "./listen-state";
+import { heardInScript, heardText, joinWords, micBusy, REPEAT_TAP_MS } from "./listen-state";
 import { rememberSpoken, useSpokenPick, useVoiceRecord } from "./spoken-pick";
 import { SpokenChips } from "./SpokenChips";
 import { useRecognizer } from "./useRecognizer";
@@ -65,7 +65,8 @@ export function useAskMic(o: AskMicOptions) {
     {
       onLive: () => buzz(),
       onHeard: (h) => {
-        const said = heardText(h);
+        // A browser that ignores Hinglish's en-IN still never puts Devanagari in the box.
+        const said = heardText(heardInScript(h, sessionLang.current));
         const { text, full } = joinWords(base.current, said, opts.current.max);
         if (said) {
           heard.current = true;
@@ -187,12 +188,14 @@ export function AskMicLineView({ mic, limit }: { mic: AskMicState; limit: boolea
   if (line.kind === "none") return null;
   return (
     <div className="mb-2">
-      {line.kind === "live" ? (
+      {line.kind === "live" || line.kind === "idle" ? (
         <div className="flex items-center gap-2 text-sm">
-          <span className="shrink-0">
-            <VoiceMeter active activity={mic.activity} />
-          </span>
-          <p className="min-w-0 flex-1">{line.text}</p>
+          {line.kind === "live" && (
+            <span className="shrink-0">
+              <VoiceMeter active activity={mic.activity} />
+            </span>
+          )}
+          <p className={`min-w-0 flex-1 ${line.kind === "idle" ? "text-graphite" : ""}`}>{line.text}</p>
           <button type="button" className="link-quiet inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end" aria-expanded={mic.chips} onClick={() => mic.setChips(!mic.chips)}>
             {C.change}
           </button>

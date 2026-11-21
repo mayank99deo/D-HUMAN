@@ -70,6 +70,7 @@ export const ASK_MIC_COPY = {
   starting: "Getting your mic…",
   slow: "Still getting your mic. Tap it to stop, or type your question.",
   live: (s: Spoken) => `Listening in ${s.label}. Tap the mic when you're done.`,
+  idle: (s: Spoken) => `The mic listens in ${s.label}.`,
   check: "Check your question, then tap Ask.",
   nothing: "Didn't hear anything. Try again, or type it.",
   blocked: "Your mic is blocked for this site. Type your question instead.",
