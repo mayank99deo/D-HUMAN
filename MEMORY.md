@@ -293,7 +293,100 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-22
+- **Voice language bugs (Mayank, iPhone, live site), crew running:**
+  - **Fuel:** with Hinglish picked, Say transcribed and logged in full Devanagari ("दो रोटी और चने की सब्जी", tip in Hindi). Hinglish has listened with `hi-IN` since `93850a9`, and replies follow the transcript's script. His rule: the pick decides. Hinglish means Latin letters; हिंदी means Devanagari.
+  - **Ask:** the co-founder's Hindi came out as Marathi. Confirmed: `looksMarathi` in `lib/domain/ask-language.ts` classes everyday Hindi as Marathi ("…फायदे होते हैं", "मैं क्या करू"), and Ask's prompt calls करू Marathi.
+  - **Lanes:**
+    - The staff engineer takes Fuel: Hinglish listens in `en-IN`, a Devanagari→Latin safety net, and the pick sets the reply script.
+    - The AI efficiency lead takes Ask: the Marathi word list and prompt, and the mic's pick sent with the question.
+    - QA follows the merge.
+  - **Ask lane done, cherry-picked to main as `3cecad8` (not pushed):**
+    - **Three causes, measured on the old code** (46 of 68 right):
+      - The Marathi word list held Hindi words (होते, करू, तुम्ही, काय).
+      - The prompt line called करू, काय and नाही Marathi.
+      - The mic's pick never reached the server (Hinglish pick: 0 of 12).
+    - **The fix:**
+      - Marathi now needs one strong word or two weak ones, plus more Marathi words than Hindi ones.
+      - `/api/ask` takes an optional `spoken`, and the pick decides.
+      - The language retry names the language.
+      - New eval: `scripts/ask-lang-eval.mts`.
+    - **Results:**
+      - The language eval: 68 of 68, twice.
+      - The full `ask:eval`: unchanged, 106/116 strict and 116/116 with no severe failure.
+      - Spend $0.11; cost per question unchanged.
+      - Main: typecheck, lint, 1,294 tests and the build pass.
+    - **A trade, for Mayank:** short typed Marathi with one weak word ("प्रोटीन किती?") now gets Hindi.
+  - **Fuel lane done, cherry-picked as `36909be` (not pushed):**
+    - **Cause:** Hinglish listened with `hi-IN` since `93850a9`. The tests used a stand-in recogniser that returned Latin text, so the bug was never seen. The old prompt path reproduced it live.
+    - **Fix:**
+      - Hinglish listens with `en-IN`.
+      - For voice meals, `byPick` makes the pick decide the script of the title, items and tip.
+      - `lib/domain/romanize.ts`, a Devanagari→Latin converter with schwa deletion and a 70-word food list, runs on the Say transcript (`heardInScript`) and on saved replies (`replyInScript`).
+      - The "Listen in हिंदी" offer for an English pick is removed.
+      - A line under the chips: "Hinglish writes do roti aur dal. हिंदी writes दो रोटी और दाल."
+    - **Live check:** 7 calls, $0.006. Hinglish with a Devanagari transcript gave the title "2 roti aur chane ki sabzi".
+  - **`d1783dd` (orchestrator):**
+    - Ask's mic runs `heardInScript` too.
+    - The idle mic names a pick outside English, Hinglish and हिंदी ("The mic listens in தமிழ்." with Change), so one try of मराठी in Fuel can't silently set Ask's language.
+  - **QA** is proving all three on a production build before the push.
+  - **Only an iPhone can confirm:** how well en-IN dictation hears Hindi words ("aur" may come out "or"). If it's poor, the fallback is Hinglish back on `hi-IN`, always converted to Latin.
+  - **QA on a production build, Chromium and WebKit:**
+    - **What passed:**
+      - Fuel: 39 of 39 in each engine.
+      - The food API by pick, and Ask's `spoken` (400 on bad values; Try again keeps it).
+      - The idle line, founders-only gating, and layout at 320, 390 and 1440 px.
+      - 1,323 tests, with QA's tests in `cc82350`.
+    - **Bugs found:**
+      1. **High.** Ask's code-level crisis and very-little-food lists in `lib/domain/ask-floor.ts` are Devanagari-only. Hindi now often arrives in Latin, so "aatmahatya", "jaan dena" and "sirf ek bar khana" miss the first check (the model's label is the second).
+      2. **Medium.** Romanized marker names ("vitamin di", "heemoglobin") miss `touchedFlags`.
+      3. **Low to medium.** A question handed back and re-sent loses its `spoken`.
+      4. **Low.** Romanizer spellings ("rat ko", "bad").
+    - **Held:** the push waits for these fixes.
+    - **Running in parallel:**
+      - The AI efficiency lead: a phonetic key so every floor list and `touchedFlags` match romanized and typed Hinglish, plus a property test after `romanize()`.
+      - The staff engineer: the word list, the resend `spoken`, and the nits.
+  - **The QA fixes, cherry-picked to main:**
+    - **`bf23dcb` (staff engineer):**
+      - Marker names: "vitamin D", "B12", "hemoglobin", "ferritin", "kidney", "thyroid", "cholesterol", and about 20 more catalogue names. Letter names come out in capitals.
+      - Everyday spellings: raat, baad, baar, saath, jaan, khatam, zindagi, kaam, naam, plus English said in Hindi.
+      - Two-word phrases matched first ("वे प्रोटीन" → whey protein, "विटामिन सी").
+      - `questionFor` in `ask-state.ts`: a handed-back question keeps its `spoken`.
+      - Hinglish transcripts are tagged `hi-Latn`.
+      - `ruledOut` uses `sameEngine`, so English isn't retried after Hinglish fails.
+    - **`b85e22a` (AI efficiency lead):** `soundKey()` in `ask-floor.ts` puts Devanagari into Latin letters with `romanize()`, lower-cases, and folds long vowels, doubled letters, z→j, w→v, ph→f, chh→ch and a final h. It then runs `*_SOUNDS` lists beside the unchanged originals for:
+      - crisis, emergency, very little food, pregnancy and medicine;
+      - the flagged-marker names behind `touchedFlags`.
+    - **Proof:** a property test checks that 92 Devanagari samples still trip each check after `romanize()` and when hand-typed (`tests/ask-floor-hinglish.test.ts`).
+    - **False-positive check:** 6,083 texts in the repo and 75 near-miss Hinglish questions gave no new emergency matches, and the new crisis and low-food matches were all real distress.
+    - **Stricter in every script:** thyroid now relates to TSH, and cholesterol to LDL and non-HDL.
+  - **Before push:**
+    - Typecheck, lint, 1,348 tests (0 todo) and the build pass.
+    - The orchestrator spot-checked by hand: "main aatmahatya…", "jaan de doonga" and "mujhe jeena nahi hai" are crisis; "sirf ek baar khana… vajan kam" is very-little-food; "workout mein jaan laga do", "I'm starving after my run" and "protein ke kya fayde" match nothing.
+  - **For the native-speaker review (§20):** the new Latin crisis, emergency and medicine patterns. The AI efficiency lead's report lists the ambiguous ones: "khud khushi", "jaan de dunga" (can mean "I'll give it my all"), and "zindagi se thak". Also left out on purpose: lakwa, mirgi, "dil mein dard", roza.
+  - **Mayank's calls (2026-11-22):**
+    - With हिंदी picked, replies are Hindi only, whatever is spoken.
+    - An English pick keeps switching to Hinglish when Hindi words are spoken (the 2026-11-11 rule stands).
+    - Keep Hinglish on `en-IN`: his English-pick Hinglish meals on his iPhone 17 came out fine before.
+  - **Disk was full** (192 MB free) and stopped a build. Deleting the copied `node_modules` and `.next` in finished worktrees freed it to 4.5 GB. Copy `node_modules` into a worktree only when it needs to build, and delete it after.
+
+### 2026-11-21
+- **Tech stack overview for a teammate (Mayank's request):** `~/Downloads/D-Human-tech-stack.md` answers the backend framework (Next.js 16 route handlers on Vercel functions in Mumbai, no separate server), the database (Supabase Postgres in Mumbai, Drizzle with postgres.js, 34 tables), email and auth (Resend, plus our own code sign-in), AI, and India first then US/UK/Australia, with what each market needs. Note: no OpenAI is in the code; every AI call is Anthropic's Claude.
+- **Product and unit economics file for a Google Sheet (Mayank's request):** `~/Downloads/D-Human-product-and-unit-economics.md`, covering features, AI wrappers, differentiators, cost per action, per-user cost by day, week, month and year, plan economics, fixed costs by scale, scenarios for 1k, 10k and 1 lakh users, break-even, and assumptions.
+  - **Measured AI cost a month:** about ₹3.5 for a light user, ₹8.8 for a typical one, ₹29 for a heavy one at every cap.
+  - **A ₹49 pass:** we keep ₹47.84 after Razorpay (2% + GST on the fee), or ₹40.37 if GST-registered.
+  - **Break-even at ₹49:** 15% of monthly active users paying at 10k registered, 9% at 1 lakh. At ₹99: 5.6% and 3.4%.
+  - **The biggest free cost:** onboarding, about ₹4.26 per new signup once.
+  - **List prices checked Nov 2026:** Vercel Pro $20 a seat, Supabase Pro $25, Resend Pro $20 for 50k emails, Razorpay 2% + 18% GST on the fee.
+  - **Calculation scripts:** in the session scratchpad (`econ/calc2.py`).
+
 ### 2026-11-20
+- **Blog post 2 live:** https://www.d-human.fit/blog/meal-tracking-india. Checked live by the orchestrator:
+  - **Page:** 200 with index and follow, search title "Do Indians track their meals? What the data says | D-Human", canonical, one H1, JSON-LD (WebPage, ImageObject, BlogPosting, BreadcrumbList).
+  - **Content:** every fact-check fix is in, with none of the old wording, and 8 sources.
+  - **Images:** the cover (WebP) and the link-preview image load.
+  - **Feeds:** RSS lists it, and `/sitemap.xml` picked it up within minutes, which proves the request-time sitemap fix.
+  - **For Mayank:** the dek didn't save (re-paste and Update), and the byline reads "Mayank" (set the full name in /write → Your profile).
 - **Voice: the mic bug, Fuel's Say card, dictation in Ask** (staff engineer, worktree commit `58b9372`, cherry-picked; spec `docs/team/specs/2026-11-20-voice-ux.md`):
   - **The bug's root cause:** reproduced with Chrome, WebKit and "wedged" stand-in engines.
     - **Clean failures recovered.** The dead end was the screen saying "Listening…" the moment `start()` was called. If the engine never started after a failed language, nothing noticed, and Say did nothing while the false flag was on.
@@ -316,6 +409,7 @@ Newest first. One entry per change; pushes carry their commit hash.
     - The build passes, and the orchestrator reviewed the screens.
   - **Only a real phone can verify:** the iPhone wedge and the 400 ms wait, real error codes, the permission prompt, Android haptics, and real mic levels.
   - **Open (Mayank):** the "Check before logging" setting is deferred. Should iPhone users be told up front that only English, Hinglish and Hindi listen there?
+  - **Push `a0ee3fe`** (the voice release `85174c9` and this entry): Vercel says "Deployment has completed". Signed out, /fuel 307s to /signin, and the landing gives 200.
 - **Stack: vitamin D's food-gap note reads as one line (Mayank, from a meals-only stack in Hinglish):** the full paragraph, with the sachet warning, crowded "What your food is short of".
   - **The display:** `GapNote` in `components/platform/Stack.tsx` shows a long note's first sentence and keeps the rest behind More / Less (`<details>`, 44 × 44 px). `splitNote` in `components/platform/stack-state.ts` splits on ". " or "। ", so stacks already saved in Hindi or Hinglish work too.
   - **The words:** `VITAMIN_D_TEST` now leads with its summary ("Food gives little vitamin D, so only a blood test shows if you're low."). The 4,000 IU / 60,000 IU sachet warning is kept, behind More, which updates the 2026-11-17 decision.
