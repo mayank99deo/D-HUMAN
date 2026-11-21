@@ -3,6 +3,7 @@
 // speak (defaulting to their app language); typed text is recognised by its script.
 // Meal replies (title and tip) come back in the same language.
 // Pure: used by the browser, the server and tests.
+import { hasDevanagari, romanize } from "./romanize.ts";
 
 export type SpokenId = "en" | "hinglish" | "hi" | "bn" | "mr" | "te" | "ta" | "gu" | "kn" | "ml" | "pa" | "ur";
 
@@ -22,7 +23,9 @@ export type Spoken = {
 
 export const SPOKEN: readonly Spoken[] = [
   { id: "en", label: "English", name: "English", script: "Latin", speech: "en-IN", translateFrom: null },
-  { id: "hinglish", label: "Hinglish", name: "Hinglish", script: "Latin", speech: "hi-IN", translateFrom: null },
+  // Hinglish listens in Indian English, which writes Hindi words in Latin letters ("do roti aur dal").
+  // hi-IN writes them in Devanagari, which a Hinglish pick must never show (Mayank, 2026-11-22).
+  { id: "hinglish", label: "Hinglish", name: "Hinglish", script: "Latin", speech: "en-IN", translateFrom: null },
   { id: "hi", label: "हिंदी", name: "Hindi", script: "Devanagari", speech: "hi-IN", translateFrom: "hi" },
   { id: "bn", label: "বাংলা", name: "Bengali", script: "Bengali", speech: "bn-IN", translateFrom: "bn" },
   { id: "mr", label: "मराठी", name: "Marathi", script: "Devanagari", speech: "mr-IN", translateFrom: "mr" },
@@ -93,8 +96,9 @@ const HINDI_IN_LATIN = new Set(
 
 /**
  * True when Latin-letter words look like Hindi: at least two of the words above,
- * making up at least a quarter of the words. Used to suggest listening in Hindi
- * when English is picked; it never switches anything by itself.
+ * making up at least a quarter of the words. Ask uses it to answer such questions in
+ * Hinglish, and demo meals to reply in it. (Fuel's "Sounds like Hindi? Listen in हिंदी"
+ * offer was dropped on 2026-11-22: English already hears Hindi in Latin letters.)
  */
 export function soundsLikeHindi(text: string): boolean {
   if (scriptLanguage(text)) return false;
@@ -124,7 +128,15 @@ export type MealWords = {
   saidIn: Spoken;
   /** The language the title and tip are expected in: the model's hint, and the fallback. */
   reply: Spoken;
+  /**
+   * The reply must be in `reply`, whatever the words or the model say: a meal spoken with
+   * हिंदी or Hinglish picked. The pick decides the script (Mayank, 2026-11-22).
+   */
+  byPick: boolean;
 };
+
+/** Spoken picks that decide the reply language outright: Hindi and Hinglish differ only in script. */
+const PICK_DECIDES: readonly SpokenId[] = ["hi", "hinglish"];
 
 /**
  * What the server makes of a meal's words. `original` is what the person said when
@@ -136,22 +148,53 @@ export function mealWords(input: { text?: string; original?: string; spoken?: Sp
   const text = input.text?.trim();
   const english = input.original && text && text !== said ? text : null;
   const reply = spokenById(replyLanguage(said, { spoken: input.spoken, appLanguage: input.appLanguage }));
-  const saidIn = spokenOf(input.spoken) ?? spokenOf(scriptLanguage(said)) ?? reply;
-  return { said, english, saidIn, reply };
+  const picked = spokenOf(input.spoken);
+  const saidIn = picked ?? spokenOf(scriptLanguage(said)) ?? reply;
+  return { said, english, saidIn, reply, byPick: !!picked && PICK_DECIDES.includes(picked.id) };
 }
 
 /**
- * The language a meal's reply was written in. The model says which (it follows the
- * words actually used, with the expected language as a hint); its call stands when
- * it's one of ours and, for words in an Indian script, uses that same script, so
- * people get a reply in a script they wrote or heard. Otherwise the expected one.
+ * The language a meal's reply is kept in.
+ * - Spoken with हिंदी or Hinglish picked: the pick, whatever the model says.
+ * - Otherwise the model says which (it follows the words actually used, with the expected
+ *   language as a hint). Its call stands when it's one of ours and fits the words' script:
+ *   for words in an Indian script, that same script; for words in Latin letters, Hindi
+ *   counts as Hinglish, our id for Hindi written in them. Else the expected one.
+ * replyInScript then makes the reply's words match.
  */
 export function settleReply(claimed: unknown, words: MealWords): Spoken {
+  if (words.byPick) return words.reply;
   const said = typeof claimed === "string" ? spokenOf(claimed) : undefined;
   if (!said) return words.reply;
   const script = scriptLanguage(words.said);
   if (script && spokenById(script).script !== said.script) return words.reply;
+  if (!script && said.id === "hi" && /\p{L}/u.test(words.said)) return spokenById("hinglish");
   return said;
+}
+
+/**
+ * Text in the script `lang` is written in, where code can do it: Devanagari becomes Latin
+ * letters for English and Hinglish (romanize.ts). Anything else is left as it is. Used for
+ * what a Latin-letter pick hears, and for meal replies kept in English or Hinglish.
+ */
+export function fitScript(text: string, lang: Spoken): string {
+  return lang.script === "Latin" && hasDevanagari(text) ? romanize(text) : text;
+}
+
+type ReplyWords = { title: string; tip: string | null; items: { name: string; portion: string }[] };
+
+/** A meal reply's words in its language's script (fitScript); a title or tip that changed starts with a capital. */
+export function replyInScript<T extends ReplyWords>(reply: T, lang: Spoken): T {
+  const sentence = (text: string) => {
+    const fitted = fitScript(text, lang);
+    return fitted === text ? text : fitted.replace(/^(\P{L}*)(\p{Ll})/u, (_, lead: string, first: string) => lead + first.toUpperCase());
+  };
+  return {
+    ...reply,
+    title: sentence(reply.title),
+    tip: reply.tip === null ? null : sentence(reply.tip),
+    items: reply.items.map((i) => ({ ...i, name: fitScript(i.name, lang), portion: fitScript(i.portion, lang) })),
+  };
 }
 
 /**

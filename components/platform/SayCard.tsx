@@ -21,9 +21,9 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from "react";
-import { MEAL_WORDS_MAX, soundsLikeHindi, spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
+import { MEAL_WORDS_MAX, spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
 import { IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
-import { heardText, joinWords, REPEAT_TAP_MS, type Heard } from "./listen-state";
+import { heardInScript, heardText, joinWords, REPEAT_TAP_MS, type Heard } from "./listen-state";
 import { lockPage } from "./lock-page";
 import { sayView, type SayButton, type SayView } from "./say-view";
 import { rememberSpoken, useVoiceRecord } from "./spoken-pick";
@@ -116,7 +116,9 @@ function useSay(o: SayOptions, { dialog, panel, square }: SayElements) {
 
   const rec = useRecognizer({
     onLive: () => buzz(),
-    onHeard: (h, e) => {
+    onHeard: (raw, e) => {
+      // English and Hinglish show and log Latin letters, even from a browser that wrote Devanagari.
+      const h = heardInScript(raw, sessionLang.current);
       const said = heardText(h);
       const { text, full } = joinWords(base.current, said, MEAL_WORDS_MAX);
       setHeard(h);
@@ -373,6 +375,23 @@ function buttonLabel(id: SayButton["id"]): ReactNode {
   }
 }
 
+/** Under the chips: the pick decides the script of the words and the meal, so show what each writes. */
+function ScriptHint() {
+  return (
+    <p className="mt-2 text-sm text-graphite">
+      Hinglish writes{" "}
+      <span lang="hi-Latn" className="text-paper">
+        do roti aur dal
+      </span>
+      . <span lang="hi">हिंदी</span> writes{" "}
+      <span lang="hi" className="text-paper">
+        दो रोटी और दाल
+      </span>
+      .
+    </p>
+  );
+}
+
 /** The transcript: settled words in white, the tail still being guessed in grey. It follows the newest line unless scrolled up. */
 function Transcript({ view, before, heard, words, spoken }: { view: SayView; before: string; heard: Heard; words: string; spoken: Spoken }) {
   const box = useRef<HTMLDivElement>(null);
@@ -421,7 +440,6 @@ export function SayCard({ handle, ...o }: SayOptions & { handle: Ref<SayHandle> 
   useImperativeHandle(handle, () => ({ open: say.open }));
   const { view, spoken } = say;
   const inert = view.square.action === "none";
-  const suggestHindi = spoken.id === "en" && soundsLikeHindi(say.words) && (view.kind === "hearing" || view.kind === "review" || view.kind === "counting");
   return (
     <dialog
       ref={dialog}
@@ -447,7 +465,12 @@ export function SayCard({ handle, ...o }: SayOptions & { handle: Ref<SayHandle> 
             {C.close}
           </button>
         </div>
-        {say.chips && <SpokenChips name="say-spoken" spoken={spoken} onPick={say.pick} className="shrink-0 border-b border-line px-4 py-3" />}
+        {say.chips && (
+          <div className="shrink-0 border-b border-line px-4 py-3">
+            <SpokenChips name="say-spoken" spoken={spoken} onPick={say.pick} />
+            <ScriptHint />
+          </div>
+        )}
 
         <div className="say-body">
           <div className="[grid-area:head]">
@@ -459,14 +482,6 @@ export function SayCard({ handle, ...o }: SayOptions & { handle: Ref<SayHandle> 
           <div className="say-area flex flex-col [grid-area:words]">
             <Transcript view={view} before={say.before} heard={say.heard} words={say.words} spoken={spoken} />
             {view.line && <p className="mt-3 text-sm text-graphite">{view.line}</p>}
-            {suggestHindi && (
-              <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-graphite">
-                Sounds like Hindi?
-                <button type="button" className="link-quiet min-h-11 text-paper" onClick={() => say.pick("hi")}>
-                  Listen in <span lang="hi">हिंदी</span>
-                </button>
-              </p>
-            )}
           </div>
           <div className="say-dial [grid-area:ring]">
             <VoiceRing mode={view.ring} activity={say.activity} endsAt={say.endsAt} className="absolute inset-0 h-full w-full" />

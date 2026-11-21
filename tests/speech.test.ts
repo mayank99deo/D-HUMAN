@@ -6,8 +6,10 @@ import { allowAppImports } from "./support/app.ts";
 import {
   SPOKEN,
   SPOKEN_IDS,
+  fitScript,
   langTag,
   mealWords,
+  replyInScript,
   replyLanguage,
   scriptLanguage,
   settleReply,
@@ -144,7 +146,8 @@ describe("the language a reply was written in", () => {
     assert.equal(settleReply("hinglish", latin).id, "hinglish");
     assert.equal(settleReply("en", latin).id, "en");
     assert.equal(settleReply("ta", tamil).id, "ta");
-    assert.equal(settleReply("mr", mealWords({ text: "दोन पोळ्या", spoken: "hi" })).id, "mr");
+    assert.equal(settleReply("mr", mealWords({ text: "दोन पोळ्या" })).id, "mr", "typed Marathi");
+    assert.equal(settleReply("hi", mealWords({ text: "दो रोटी", spoken: "mr" })).id, "hi", "मराठी picked, Hindi spoken: same script");
   });
   it("falls back to the expected language when it doesn't", () => {
     assert.equal(settleReply("klingon", latin).id, "en");
@@ -160,6 +163,82 @@ describe("the language a reply was written in", () => {
     assert.equal(langTag("ta", "Rendu idli"), "ta-Latn");
     assert.equal(langTag("pa", "ਦੋ ਰੋਟੀਆਂ"), "pa");
     assert.equal(langTag("xx", "anything"), undefined);
+  });
+});
+
+// Mayank, 2026-11-22: Hinglish picked, "do roti aur chane ki sabzi" said, and the transcript and
+// the meal came out in Devanagari. The person's pick decides: Hinglish in Latin letters, हिंदी in
+// Devanagari.
+describe("the pick decides for Hindi and Hinglish", () => {
+  const latin = "do roti aur chane ki sabzi";
+  const devanagari = "दो रोटी और चने की सब्जी";
+  it("listens to Hinglish in Indian English, which writes Hindi in Latin letters", () => {
+    assert.equal(spokenById("hinglish").speech, "en-IN");
+    assert.equal(spokenById("en").speech, "en-IN");
+    assert.equal(spokenById("hi").speech, "hi-IN");
+    assert.equal(spokenById("mr").speech, "mr-IN");
+  });
+  it("pins the reply to the pick only for spoken हिंदी and Hinglish", () => {
+    assert.equal(mealWords({ text: latin, spoken: "hinglish" }).byPick, true);
+    assert.equal(mealWords({ text: devanagari, spoken: "hi" }).byPick, true);
+    assert.equal(mealWords({ text: latin, spoken: "en" }).byPick, false);
+    assert.equal(mealWords({ text: "இரண்டு இட்லி", spoken: "ta" }).byPick, false);
+    assert.equal(mealWords({ text: devanagari, appLanguage: "hinglish" }).byPick, false, "typed meals go by what's typed");
+    assert.equal(mealWords({ text: latin, spoken: "xx" as SpokenId }).byPick, false);
+  });
+  it("keeps each pick's language whatever script the words or the model used", () => {
+    // [pick, words, model's claim, kept]
+    const cases: [SpokenId, string, string, SpokenId][] = [
+      ["hinglish", latin, "hinglish", "hinglish"],
+      ["hinglish", latin, "en", "hinglish"],
+      ["hinglish", devanagari, "hi", "hinglish"],
+      ["hinglish", devanagari, "hinglish", "hinglish"],
+      ["hi", devanagari, "hi", "hi"],
+      ["hi", latin, "hinglish", "hi"],
+      ["hi", "दोन पोळ्या", "mr", "hi"],
+    ];
+    for (const [spoken, text, claim, kept] of cases) assert.equal(settleReply(claim, mealWords({ text, spoken })).id, kept, `${spoken} × ${text} × ${claim}`);
+  });
+  it("keeps the rest: English follows the words, other languages their script, typed meals what's typed", () => {
+    assert.equal(settleReply("hinglish", mealWords({ text: latin, spoken: "en" })).id, "hinglish", "English picked, Hindi spoken");
+    assert.equal(settleReply("en", mealWords({ text: "two rotis and dal", spoken: "en" })).id, "en");
+    assert.equal(settleReply("hi", mealWords({ text: latin, spoken: "en" })).id, "hinglish", "Latin letters never get a Devanagari reply");
+    assert.equal(settleReply("en", mealWords({ text: "இரண்டு இட்லி", spoken: "ta" })).id, "ta");
+    assert.equal(settleReply("hi", mealWords({ text: devanagari, appLanguage: "en" })).id, "hi", "typed Devanagari");
+    assert.equal(settleReply("hi", mealWords({ text: "2 roti dal", appLanguage: "hi" })).id, "hinglish", "typed Latin letters");
+    assert.equal(settleReply("hi", mealWords({ appLanguage: "hi" })).id, "hi", "a photo alone keeps the app language");
+  });
+  it("puts Devanagari in Latin letters only for English and Hinglish", () => {
+    assert.equal(fitScript(devanagari, spokenById("hinglish")), "do roti aur chane ki sabji");
+    assert.equal(fitScript(devanagari, spokenById("en")), "do roti aur chane ki sabji");
+    assert.equal(fitScript(devanagari, spokenById("hi")), devanagari);
+    assert.equal(fitScript(devanagari, spokenById("mr")), devanagari);
+    assert.equal(fitScript("2 roti, 1 katori (150 mL)", spokenById("hinglish")), "2 roti, 1 katori (150 mL)");
+  });
+  it("corrects a Hinglish reply the model wrote in Devanagari: title, items and tip", () => {
+    const meal = {
+      title: "दो रोटी और चने की सब्जी",
+      tip: "प्रोटीन के लिए दही जोड़ें।",
+      items: [
+        { name: "2 रोटी", portion: "2 rotis", kcal: 240 },
+        { name: "चने की सब्जी", portion: "1 कटोरी (150 mL)", kcal: 210 },
+      ],
+      confidence: "medium",
+    };
+    const fixed = replyInScript(meal, spokenById("hinglish"));
+    assert.equal(fixed.title, "Do roti aur chane ki sabji");
+    assert.equal(fixed.tip, "Protein ke liye dahi joden.");
+    assert.deepEqual(
+      fixed.items.map((i) => [i.name, i.portion, i.kcal]),
+      [
+        ["2 roti", "2 rotis", 240],
+        ["chane ki sabji", "1 katori (150 mL)", 210],
+      ],
+    );
+    assert.equal(fixed.confidence, "medium");
+    assert.equal(replyInScript(meal, spokenById("hi")).title, meal.title, "हिंदी keeps Devanagari");
+    const latinMeal = { title: "2 roti aur dal", tip: null, items: [{ name: "Roti", portion: "2" }] };
+    assert.deepEqual(replyInScript(latinMeal, spokenById("hinglish")), latinMeal);
   });
 });
 
@@ -180,6 +259,16 @@ describe("what Claude is asked", () => {
     const prompt = mealPrompt({ words: mealWords({ text: "do roti aur dal khayi", spoken: "en" }), voice: true, context });
     assert.match(prompt, /They chose to speak English\. Write the title and the tip in the language their words are actually in/);
     assert.match(prompt, /like Hinglish/);
+  });
+  it("holds the whole reply to the pick when हिंदी or Hinglish is picked", () => {
+    const hinglish = mealPrompt({ words: mealWords({ text: "दो रोटी और चने की सब्जी", spoken: "hinglish" }), voice: true, context });
+    assert.match(hinglish, /They chose Hinglish for speaking, so write the title, each item's name and portion, and the tip in Hinglish: Hindi written in Latin letters/);
+    assert.match(hinglish, /Use no Devanagari at all, even where speech recognition wrote their words in it\./);
+    assert.match(hinglish, /Keep marker names, units and brand names in English, and numbers as digits\. Set reply_language to "hinglish"\./);
+    assert.doesNotMatch(hinglish, /actually in/);
+    const hindi = mealPrompt({ words: mealWords({ text: "do roti aur dal", spoken: "hi" }), voice: true, context });
+    assert.match(hindi, /They chose Hindi for speaking, so write the title, each item's name and portion, and the tip in simple, everyday Hindi in Devanagari script, even where speech recognition wrote their words in Latin letters\./);
+    assert.match(hindi, /Set reply_language to "hi"\./);
   });
   it("sends typed words as they are", () => {
     const prompt = mealPrompt({ words: mealWords({ text: "2 rotis and dal", appLanguage: "en" }), voice: false, context });

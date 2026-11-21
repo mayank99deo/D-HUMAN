@@ -150,16 +150,16 @@ const YOUR_MEAL: Record<SpokenId, string> = {
 };
 
 // What the live model is asked to do with the language (lib/ai/food.ts), roughly:
-// follow the words actually used, in a script the person used.
-function mockReplyLanguage(words: Pick<MealWords, "said" | "reply">): SpokenId {
-  if (!words.said) return words.reply.id;
+// the pick for हिंदी and Hinglish, else follow the words actually used, in a script the person used.
+function mockReplyLanguage(words: Pick<MealWords, "said" | "reply" | "byPick">): SpokenId {
+  if (!words.said || words.byPick) return words.reply.id;
   const script = scriptLanguage(words.said);
   if (script) return words.reply.script === spokenById(script).script ? words.reply.id : script;
   if (soundsLikeHindi(words.said)) return "hinglish";
   return words.reply.script === "Latin" ? words.reply.id : "en";
 }
 
-export async function mockMeal(words: Pick<MealWords, "said" | "english" | "reply">): Promise<{ data: Meal; model: string }> {
+export async function mockMeal(words: Pick<MealWords, "said" | "english" | "reply" | "byPick">): Promise<{ data: Meal; model: string }> {
   await wait(1200);
   const heard = `${words.said} ${words.english ?? ""}`;
   const hit = MEALS.find(([re]) => re.test(heard));

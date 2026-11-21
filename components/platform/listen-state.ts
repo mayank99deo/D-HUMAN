@@ -14,7 +14,7 @@
 //   says it's slow after START_SLOW_MS, and a fresh recogniser is the way out.
 // An error is final: nothing waits for an `end` after it.
 
-import type { SpokenId } from "@/lib/domain/speech";
+import { fitScript, spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
 
 /** "Still getting your mic…" after this long without the recogniser starting. */
 export const START_SLOW_MS = 4000;
@@ -146,7 +146,7 @@ export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: rea
     case "language-not-supported":
       return "language";
     case "service-not-allowed":
-      return !LISTENS_WIDELY.includes(ctx.lang) || ctx.workedIn.some((id) => id !== ctx.lang && spokenTag(id) !== spokenTag(ctx.lang)) ? "language" : "dictation_off";
+      return !LISTENS_WIDELY.includes(ctx.lang) || ctx.workedIn.some((id) => !sameEngine(id, ctx.lang)) ? "language" : "dictation_off";
     case "network":
       return "offline";
     case "audio-capture":
@@ -158,8 +158,12 @@ export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: rea
   }
 }
 
-// Hinglish and Hindi listen with the same tag (hi-IN): one working doesn't prove the other's engine differs.
-const spokenTag = (id: SpokenId) => (id === "hinglish" ? "hi" : id);
+/**
+ * Two picks that listen with the same tag share the browser's engine: one working says nothing
+ * about the other's language, and one failing for its language rules out both. Hinglish and
+ * English both listen in en-IN (since 2026-11-22; Hinglish used hi-IN, like हिंदी, before).
+ */
+export const sameEngine = (a: SpokenId, b: SpokenId) => a === b || spokenById(a).speech === spokenById(b).speech;
 
 /** A problem that says something about the language rather than the device or the moment. */
 export const languageProblem = (p: MicProblem | null) => p === "language";
@@ -184,6 +188,17 @@ function dropEcho(h: Heard): Heard {
   if (ECHO.test(h.final)) return { ...h, final: h.final.replace(ECHO, "") };
   if (!h.final.trim() && ECHO.test(h.interim)) return { ...h, interim: h.interim.replace(ECHO, "") };
   return h;
+}
+
+/**
+ * What a session heard, in the script of the language it listened in. A browser that ignores
+ * en-IN can still write Hindi in Devanagari; English and Hinglish then show and send it in
+ * Latin letters ("do roti aur chane ki sabji"), as people picking them expect.
+ */
+export function heardInScript(h: Heard, spoken: Spoken): Heard {
+  const final = fitScript(h.final, spoken);
+  const interim = fitScript(h.interim, spoken);
+  return final === h.final && interim === h.interim ? h : { final, interim };
 }
 
 /** The words a session heard, in one string. */

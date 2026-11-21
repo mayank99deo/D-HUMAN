@@ -8,7 +8,15 @@ import { after, describe, it } from "node:test";
 import { allowAppImports, tempDatabase } from "./support/app.ts";
 
 type Captured = { words: { said: string; english: string | null; saidIn: { id: string }; reply: { id: string } }; voice: boolean };
-type TestGlobals = { __testUser?: { id: string; email: string } | null; __aiMode: "live" | "mock"; __meals: Captured[]; __claim?: string };
+type TestGlobals = {
+  __testUser?: { id: string; email: string } | null;
+  __aiMode: "live" | "mock";
+  __meals: Captured[];
+  __claim?: string;
+  __title?: string;
+  __itemName?: string;
+  __tip?: string;
+};
 const g = globalThis as unknown as TestGlobals;
 g.__aiMode = "live";
 g.__meals = [];
@@ -21,7 +29,9 @@ allowAppImports({
       const item = { name: "Idli", portion: "2", grams: null, kcal: 120, protein_g: 4, carbs_g: 24, fat_g: 1, fibre_g: 2 };
       const micros = { iron_mg: 1, calcium_mg: 10, magnesium_mg: 10, zinc_mg: 1, b12_ug: 0, folate_ug: 10, vitamin_c_mg: 0, vitamin_d_iu: 0 };
       const reply_language = globalThis.__claim ?? input.words.reply.id;
-      return { data: { is_food: true, reply_language, title: "reply:" + input.words.reply.id, meal_guess: null, items: [item], micros, confidence: "high", tip: null }, model: "test" };
+      const title = globalThis.__title ?? "reply:" + input.words.reply.id;
+      const items = [{ ...item, name: globalThis.__itemName ?? item.name }];
+      return { data: { is_food: true, reply_language, title, meal_guess: null, items, micros, confidence: "high", tip: globalThis.__tip ?? null }, model: "test" };
     };
     export const estimateTypicalDay = () => { throw new Error("AI in a test"); }; export const estimateUsualDay = estimateTypicalDay;`,
   "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
@@ -125,6 +135,39 @@ describe("meal languages on the server", () => {
     }
   });
 
+  // Mayank, 2026-11-22: Hinglish picked, and the meal came back in Devanagari.
+  it("holds a spoken meal to the हिंदी or Hinglish pick, and puts a Hinglish reply in Latin letters", async () => {
+    try {
+      g.__claim = "hi";
+      g.__title = "दो रोटी और चने की सब्जी";
+      g.__itemName = "चने की सब्जी";
+      g.__tip = "प्रोटीन के लिए दही जोड़ें।";
+      const hinglish = await logMeal("en", { source: "voice", spoken: "hinglish", text: "दो रोटी और चने की सब्जी" });
+      assert.equal(hinglish.status, 200);
+      assert.equal(hinglish.sent?.words.reply.id, "hinglish");
+      assert.equal(hinglish.body.log?.micros.lang, "hinglish");
+      assert.equal(hinglish.row.title, "Do roti aur chane ki sabji");
+      assert.deepEqual((hinglish.row.items as { name: string }[]).map((i) => i.name), ["chane ki sabji"]);
+      assert.equal((hinglish.row.micros as { tip?: string }).tip, "Protein ke liye dahi joden.");
+
+      g.__claim = "hinglish";
+      g.__title = "Do roti aur dal";
+      g.__itemName = undefined;
+      g.__tip = undefined;
+      const hindi = await logMeal("hinglish", { source: "voice", spoken: "hi", text: "दो रोटी और दाल" });
+      assert.equal(hindi.body.log?.micros.lang, "hi", "the हिंदी pick holds, whatever the model says");
+
+      // Typed, the words decide as before: Latin letters never keep a Devanagari reply.
+      g.__claim = "hi";
+      g.__title = "दो रोटी";
+      const typed = await logMeal("hi", { source: "text", text: "2 roti dal" });
+      assert.equal(typed.body.log?.micros.lang, "hinglish");
+      assert.equal(typed.row.title, "Do roti");
+    } finally {
+      g.__claim = g.__title = g.__itemName = g.__tip = undefined;
+    }
+  });
+
   it("answers in the reply language in mock mode", async () => {
     g.__aiMode = "mock";
     try {
@@ -140,6 +183,10 @@ describe("meal languages on the server", () => {
       const mixed = await logMeal("en", { source: "voice", spoken: "en", text: "do roti aur dal khayi" });
       assert.equal(mixed.body.log?.title, "Aapka khana: Dal, roti and sabzi");
       assert.equal(mixed.body.log?.micros.lang, "hinglish");
+      // Hinglish picked: a Hinglish reply even for words the browser wrote in Devanagari.
+      const pinned = await logMeal("en", { source: "voice", spoken: "hinglish", text: "राजमा चावल" });
+      assert.equal(pinned.body.log?.title, "Aapka khana");
+      assert.equal(pinned.body.log?.micros.lang, "hinglish");
     } finally {
       g.__aiMode = "live";
     }

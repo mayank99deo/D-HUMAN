@@ -12,7 +12,7 @@ import { MICROS, SHORT_OF_NEED, emptyMicros, inIuOnly, targetsFor, type Micros }
 import { sumMicros } from "@/lib/domain/food-sums";
 import { averageUsualDay, basisLine, basisOf, resolveItem } from "@/lib/domain/meal-minerals";
 import { addDays } from "@/lib/domain/periods";
-import { mealWords, settleReply, type SpokenId } from "@/lib/domain/speech";
+import { mealWords, replyInScript, settleReply, type SpokenId } from "@/lib/domain/speech";
 import type { Gap } from "@/lib/domain/supplements";
 import { localDate, personaFor } from "./profile";
 
@@ -64,12 +64,15 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     appLanguage: profile.language,
   });
   const context = { language: profile.language, diet: profile.diet, focus: await focusMarkers(userId) };
-  const { data, model }: { data: Meal; model: string } =
+  const { data: raw, model }: { data: Meal; model: string } =
     mode === "mock" ? await mockMeal(words) : await estimateMeal({ image: input.image, words, voice: input.source === "voice", context });
-  if (!data.is_food || data.items.length === 0) return { notFood: true };
-  // The model follows the words actually used; its call is checked against them.
-  const reply = settleReply(data.reply_language, words);
-  console.info(`[food] reply ${reply.id} (expected ${words.reply.id}, model said ${data.reply_language ?? "nothing"})`);
+  if (!raw.is_food || raw.items.length === 0) return { notFood: true };
+  // The model follows the words actually used (or, for हिंदी and Hinglish, the pick); its call is
+  // checked against them, and a reply kept in Latin letters loses any Devanagari it was written in.
+  const reply = settleReply(raw.reply_language, words);
+  const data = replyInScript(raw, reply);
+  const refitted = data.title !== raw.title || data.tip !== raw.tip;
+  console.info(`[food] reply ${reply.id} (expected ${words.reply.id}, model said ${raw.reply_language ?? "nothing"}${refitted ? ", put in Latin letters" : ""})`);
 
   // Minerals worked out in code from each ingredient's code and raw grams (lib/domain/meal-minerals.ts).
   const items = data.items.map(resolveItem);

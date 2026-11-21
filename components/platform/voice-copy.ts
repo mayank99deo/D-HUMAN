@@ -2,7 +2,7 @@
 // English, like every button in the app for now; language names show in their own script.
 // Pure, so the copy can be tested without a browser.
 import { spokenById, type Spoken, type SpokenId } from "@/lib/domain/speech";
-import { LISTENS_WIDELY } from "./listen-state";
+import { LISTENS_WIDELY, sameEngine } from "./listen-state";
 
 export const SAY_COPY = {
   title: "Say what you ate",
@@ -83,12 +83,10 @@ export const ASK_MIC_COPY = {
 /** "This browser can't listen in தமிழ்": the language as people see it in the chips. */
 export const cantListenIn = (s: Spoken) => `This browser can't listen in ${s.label}`;
 
-const sameEngine = (a: SpokenId, b: SpokenId) => a === b || (LISTENS_WIDELY.includes(a) && a !== "en" && LISTENS_WIDELY.includes(b) && b !== "en");
-
 /**
- * The languages to offer when one can't listen: English and Hindi, never the one that
- * failed (Hinglish and Hindi listen the same way, so one failing rules out both), and
- * none this browser already said it can't do.
+ * The languages to offer when one can't listen: English and Hindi, never one that listens
+ * the same way as the one that failed (Hinglish and English both listen in en-IN, so one
+ * failing rules out both), and none this browser already said it can't do.
  */
 export function listenInstead(failed: SpokenId, off: readonly SpokenId[] = []): SpokenId[] {
   return (["en", "hi"] as const).filter((id) => !sameEngine(id, failed) && !off.includes(id));

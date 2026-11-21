@@ -105,7 +105,16 @@ describe("what an error means", () => {
     assert.equal(L.micProblemOf("service-not-allowed", ctx("bn", ["en"])), "language");
     assert.equal(L.micProblemOf("service-not-allowed", ctx("en")), "dictation_off");
     assert.equal(L.micProblemOf("service-not-allowed", ctx("hi", ["en"])), "language", "English listened, Hindi didn't");
-    assert.equal(L.micProblemOf("service-not-allowed", ctx("hinglish", ["hi"])), "dictation_off", "the same hi-IN engine");
+    // Hinglish listens in en-IN, like English, since 2026-11-22.
+    assert.equal(L.micProblemOf("service-not-allowed", ctx("hinglish", ["en"])), "dictation_off", "the same en-IN engine");
+    assert.equal(L.micProblemOf("service-not-allowed", ctx("en", ["hinglish"])), "dictation_off", "the same en-IN engine");
+    assert.equal(L.micProblemOf("service-not-allowed", ctx("hinglish", ["hi"])), "language", "हिंदी listened in hi-IN, Hinglish didn't in en-IN");
+  });
+  it("knows which picks share an engine", () => {
+    assert.ok(L.sameEngine("hinglish", "en"));
+    assert.ok(L.sameEngine("ta", "ta"));
+    assert.equal(L.sameEngine("hinglish", "hi"), false);
+    assert.equal(L.sameEngine("hi", "mr"), false);
   });
   it("maps every other code", () => {
     assert.equal(L.micProblemOf("language-not-supported", ctx("en")), "language");
@@ -134,6 +143,15 @@ describe("words heard", () => {
     const hindi = L.joinWords("", "दो रोटी और दाल", 5);
     assert.equal(hindi.full, true);
     assert.equal([...hindi.text].length, 5);
+  });
+  // Mayank, 2026-11-22: Hinglish picked, "do roti aur chane ki sabzi" said, Devanagari shown.
+  it("shows Latin letters for English and Hinglish, even when the browser wrote Devanagari", () => {
+    const devanagari = { final: "दो रोटी और", interim: " चने की सब्जी" };
+    assert.deepEqual(L.heardInScript(devanagari, spokenById("hinglish")), { final: "do roti aur", interim: " chane ki sabji" });
+    assert.deepEqual(L.heardInScript(devanagari, en), { final: "do roti aur", interim: " chane ki sabji" });
+    assert.equal(L.heardInScript(devanagari, hi), devanagari, "हिंदी keeps Devanagari");
+    const latin = { final: "do roti aur", interim: " dal" };
+    assert.equal(L.heardInScript(latin, spokenById("hinglish")), latin, "Latin letters stay as they are");
   });
 });
 
@@ -233,7 +251,9 @@ describe("the Say card", () => {
   it("offers English and Hindi for a language this browser can't do, never the one that failed", () => {
     assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: ta }).buttons.map((b) => b.id), ["listen_en", "listen_hi", "type"]);
     assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: hi }).buttons.map((b) => b.id), ["listen_en", "type"]);
-    assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: spokenById("hinglish") }).buttons.map((b) => b.id), ["listen_en", "type"]);
+    // Hinglish and English listen the same way (en-IN), so a Hinglish failure rules out English.
+    assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: spokenById("hinglish") }).buttons.map((b) => b.id), ["listen_hi", "type"]);
+    assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: en }).buttons.map((b) => b.id), ["listen_hi", "type"]);
     assert.deepEqual(view({ kind: "off", problem: "language" }, { spoken: ta, off: ["hi"] }).buttons.map((b) => b.id), ["listen_en", "type"]);
     const nothing = view({ kind: "off", problem: "nothing_heard" }, { spoken: ta });
     assert.match(nothing.line ?? "", /If you were speaking தமிழ், this browser may not listen in it\./);
