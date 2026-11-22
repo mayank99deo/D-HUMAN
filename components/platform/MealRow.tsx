@@ -24,7 +24,7 @@ export function MealRow({ meal: l, deleting, disabled, onDelete }: { meal: MealV
       <div className="text-right">
         <p className="font-bold">{Math.round(l.kcal).toLocaleString("en-IN")} kcal</p>
         <p className="text-sm text-graphite">{Math.round(l.proteinG)} g protein</p>
-        <button type="button" className="link-quiet min-h-11 text-sm" onClick={onDelete} disabled={disabled} aria-label={`Delete ${l.title}`}>
+        <button type="button" className="link-quiet min-h-11 min-w-11 text-right text-sm" onClick={onDelete} disabled={disabled} aria-label={`Delete ${l.title}`}>
           {deleting ? "Deleting…" : "Delete"}
         </button>
       </div>
