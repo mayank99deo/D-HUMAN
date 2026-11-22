@@ -133,20 +133,26 @@ export function micEffect(before: Mic, after: Mic): "stop" | "abort" | null {
 /** Languages nearly every browser that listens at all can listen in. */
 export const LISTENS_WIDELY: readonly SpokenId[] = ["en", "hinglish", "hi"];
 
-/**
- * What a recogniser's error code means here. `service-not-allowed` is ambiguous on iPhone:
- * it's what a language the phone can't transcribe gets, and also what Dictation switched
- * off gets. It's the language when the language isn't one browsers listen in widely, or
- * when another language has already listened in this browser; otherwise Dictation is off.
- */
-export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: readonly SpokenId[] }): MicProblem {
+/** What a session knew when its recogniser failed. */
+export type ErrorContext = {
+  lang: SpokenId;
+  /** Picks that started listening in this browser this visit. */
+  workedIn: readonly SpokenId[];
+  /** This recogniser had started listening (its start, audiostart or words) before the error. */
+  live?: boolean;
+  /** navigator.onLine when it failed. */
+  online?: boolean;
+};
+
+/** What a recogniser's error code means here. Only "language" is remembered for the visit. */
+export function micProblemOf(error: string, ctx: ErrorContext): MicProblem {
   switch (error) {
     case "not-allowed":
       return "blocked";
     case "language-not-supported":
       return "language";
     case "service-not-allowed":
-      return !LISTENS_WIDELY.includes(ctx.lang) || ctx.workedIn.some((id) => !sameEngine(id, ctx.lang)) ? "language" : "dictation_off";
+      return serviceNotAllowed(ctx);
     case "network":
       return "offline";
     case "audio-capture":
@@ -156,6 +162,27 @@ export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: rea
     default:
       return "stopped";
   }
+}
+
+/**
+ * iPhone sends `service-not-allowed` for three things (WebKit: SpeechRecognitionPermissionManager.cpp,
+ * SpeechRecognizer.cpp, WebSpeechRecognizerTask.mm), and only one of them lasts:
+ * - The phone can't transcribe the language. Before the start, for a language outside
+ *   English, Hinglish and हिंदी, which every iPhone can transcribe.
+ * - Dictation is off. Before the start, while nothing has listened this visit (it's off
+ *   for the whole device, so anything that listened says it's on).
+ * - The speech service can't be reached right now (a weak signal; Hindi needs Apple's
+ *   servers). Before the start ("not available", "failed to start") or during it
+ *   ("becomes unavailable"). This one passes, so it must never rule a language out.
+ * Before 2026-11-22 the last read as the language whenever another language had listened,
+ * and the language stayed unusable until the tab was closed.
+ */
+function serviceNotAllowed({ lang, workedIn, live = false, online = true }: ErrorContext): MicProblem {
+  if (!online) return "offline";
+  // It listened in this language (this session, or with this engine earlier): the language is fine.
+  if (live || workedIn.some((id) => sameEngine(id, lang))) return "stopped";
+  if (!LISTENS_WIDELY.includes(lang)) return "language";
+  return workedIn.length ? "stopped" : "dictation_off";
 }
 
 /**
@@ -194,9 +221,10 @@ function dropEcho(h: Heard): Heard {
 }
 
 /**
- * What a session heard, in the script of the language it listened in. A browser that ignores
- * en-IN can still write Hindi in Devanagari; English and Hinglish then show and send it in
- * Latin letters ("do roti aur chane ki sabji"), as people picking them expect.
+ * What a session heard, in the script of the language it listened in. Hinglish listens in
+ * hi-IN, which writes Devanagari, and a browser that ignores en-IN can too; English and
+ * Hinglish then show and send it in Latin letters ("do roti aur chane ki sabji"), as people
+ * picking them expect.
  */
 export function heardInScript(h: Heard, spoken: Spoken): Heard {
   const final = fitScript(h.final, spoken);

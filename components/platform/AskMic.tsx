@@ -6,9 +6,9 @@
 // recogniser as Fuel's Say card (useRecognizer.ts).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { spokenById, spokenForAppLanguage, type SpokenId } from "@/lib/domain/speech";
-import { askMicLine, type AskMicNote } from "./ask-mic";
+import { askMicLabel, askMicLine, askMicTap, type AskMicNote } from "./ask-mic";
 import { heardInScript, heardText, joinWords, micBusy, REPEAT_TAP_MS } from "./listen-state";
-import { rememberSpoken, useSpokenPick, useVoiceRecord } from "./spoken-pick";
+import { forgetCantListen, rememberSpoken, useSpokenPick, useVoiceRecord } from "./spoken-pick";
 import { SpokenChips } from "./SpokenChips";
 import { useRecognizer } from "./useRecognizer";
 import { ASK_MIC_COPY as C } from "./voice-copy";
@@ -65,7 +65,7 @@ export function useAskMic(o: AskMicOptions) {
     {
       onLive: () => buzz(),
       onHeard: (h) => {
-        // A browser that ignores Hinglish's en-IN still never puts Devanagari in the box.
+        // Hinglish listens in hi-IN, which writes Devanagari: the box still gets Latin letters.
         const said = heardText(heardInScript(h, sessionLang.current));
         const { text, full } = joinWords(base.current, said, opts.current.max);
         if (said) {
@@ -110,16 +110,19 @@ export function useAskMic(o: AskMicOptions) {
     const now = clock();
     if (now - lastTap.current < REPEAT_TAP_MS) return;
     lastTap.current = now;
-    if (rec.mic.kind === "live") return rec.stop();
-    // A start that hasn't come through: a tap stops it, and the next one tries afresh.
-    if (rec.mic.kind === "starting") {
+    const does = askMicTap(rec.mic);
+    if (does === "stop") return rec.stop();
+    if (does === "cancel") {
       dropping.current = true;
       return rec.abort();
     }
-    if (rec.mic.kind === "off") listen();
+    // What it heard so far is already in the box; what it hears now goes after it.
+    listen();
   }
 
   function pickLanguage(id: SpokenId) {
+    // Their own pick: listen in it, even if this visit said it can't (that may have been a weak signal).
+    forgetCantListen(id);
     pick(id);
     setChips(false);
     listen(id);
@@ -150,6 +153,7 @@ export function useAskMic(o: AskMicOptions) {
     spokenFor,
     supported: rec.supported,
     mic: rec.mic,
+    prompt: rec.prompt,
     busy,
     activity: rec.activity,
     spoken,
@@ -165,17 +169,17 @@ export function useAskMic(o: AskMicOptions) {
 
 export type AskMicState = ReturnType<typeof useAskMic>;
 
-/** The 44 px mic beside the box. Filled white only while it really listens. */
+/** The 44 px mic beside the box. Filled white only while it listens and its last words land. */
 export function AskMicButton({ mic }: { mic: AskMicState }) {
-  const live = mic.mic.kind === "live" || mic.mic.kind === "stopping";
-  const starting = mic.mic.kind === "starting";
+  const m = mic.mic;
+  const filled = m.kind === "live" || m.kind === "stopping";
   return (
     <button
       type="button"
       onClick={mic.tap}
-      aria-label={live ? C.labelLive : starting ? C.labelStarting : C.label}
-      aria-busy={starting || undefined}
-      className={`grid h-11 w-11 shrink-0 place-items-center border ${live ? "border-paper bg-paper text-ink" : "border-line-strong text-paper active:bg-lift"}`}
+      aria-label={askMicLabel(m)}
+      aria-busy={(m.kind === "starting" && !m.slow) || undefined}
+      className={`grid h-11 w-11 shrink-0 place-items-center border ${filled ? "border-paper bg-paper text-ink" : "border-line-strong text-paper active:bg-lift"}`}
     >
       <MicGlyph className="h-5 w-5" />
     </button>
@@ -184,7 +188,7 @@ export function AskMicButton({ mic }: { mic: AskMicState }) {
 
 /** The line above the box while the mic is busy, or about how it last stopped. */
 export function AskMicLineView({ mic, limit }: { mic: AskMicState; limit: boolean }) {
-  const line = askMicLine({ mic: mic.mic, note: mic.note, spoken: mic.spoken, off: mic.off, limit });
+  const line = askMicLine({ mic: mic.mic, note: mic.note, spoken: mic.spoken, off: mic.off, limit, prompt: mic.prompt });
   if (line.kind === "none") return null;
   return (
     <div className="mb-2">

@@ -17,6 +17,24 @@ export type AskMicLine =
 
 const EVERYDAY: readonly SpokenId[] = ["en", "hinglish", "hi"];
 
+/**
+ * What a tap on the mic does now: "I'm done" while it listens; cancel a start that hasn't
+ * come through yet; otherwise listen. That covers a start slow to come (a fresh recogniser,
+ * like Fuel's Try again) and a stop still finishing, when they've more to say.
+ */
+export function askMicTap(mic: Mic): "stop" | "cancel" | "listen" {
+  if (mic.kind === "live") return "stop";
+  if (mic.kind === "starting" && !mic.slow) return "cancel";
+  return "listen";
+}
+
+/** The mic button's name, for what a tap on it does. */
+export function askMicLabel(mic: Mic): string {
+  if (mic.kind === "live") return C.labelLive;
+  if (mic.kind === "starting") return mic.slow ? C.labelRetry : C.labelStarting;
+  return C.label;
+}
+
 const PROBLEM_WORDS: Record<Exclude<MicProblem, "language">, string> = {
   nothing_heard: C.nothing,
   blocked: C.blocked,
@@ -26,8 +44,9 @@ const PROBLEM_WORDS: Record<Exclude<MicProblem, "language">, string> = {
   stopped: C.stopped,
 };
 
-export function askMicLine(i: { mic: Mic; note: AskMicNote; spoken: Spoken; off: readonly SpokenId[]; limit: boolean }): AskMicLine {
-  if (i.mic.kind === "starting") return { kind: "starting", text: i.mic.slow ? C.slow : C.starting };
+export function askMicLine(i: { mic: Mic; note: AskMicNote; spoken: Spoken; off: readonly SpokenId[]; limit: boolean; prompt?: boolean }): AskMicLine {
+  // While it starts: the browser's microphone question first, as Fuel's Say card does; after 4 s, a way out.
+  if (i.mic.kind === "starting") return { kind: "starting", text: i.mic.slow ? C.slow : i.prompt ? C.prompt : C.starting };
   if (i.mic.kind === "live" || i.mic.kind === "stopping") return { kind: "live", text: C.live(i.spoken) };
   // A pick outside English, Hinglish and हिंदी (often left from one try in Fuel) decides
   // the answer's language, so the idle mic says which it is, with Change beside it.

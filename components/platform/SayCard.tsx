@@ -26,7 +26,7 @@ import { IDLE, stepAutoLog, type AutoEvent, type AutoLog } from "./autolog";
 import { heardInScript, heardText, joinWords, REPEAT_TAP_MS, type Heard } from "./listen-state";
 import { lockPage } from "./lock-page";
 import { sayView, type SayButton, type SayView } from "./say-view";
-import { rememberSpoken, useVoiceRecord } from "./spoken-pick";
+import { forgetCantListen, rememberSpoken, useVoiceRecord } from "./spoken-pick";
 import { SpokenChips } from "./SpokenChips";
 import { useOnline, useRecognizer } from "./useRecognizer";
 import { SAY_COPY as C } from "./voice-copy";
@@ -76,7 +76,6 @@ type SayElements = {
 
 function useSay(o: SayOptions, { dialog, panel, square }: SayElements) {
   const [open, setOpen] = useState(false);
-  const [prompt, setPrompt] = useState(false);
   const [chips, setChips] = useState(false);
   const [heard, setHeard] = useState<Heard>(NONE);
   /** The words in the box before this listening session, for the transcript. */
@@ -179,10 +178,6 @@ function useSay(o: SayOptions, { dialog, panel, square }: SayElements) {
     // Keyboards: Space or Enter on the control is "done". Touch: no keyboard opens for a button.
     square.current?.focus({ preventScroll: true });
     listen(opts.current.spoken);
-    navigator.permissions
-      ?.query({ name: "microphone" as PermissionName })
-      .then((s) => setPrompt(s.state === "prompt"))
-      .catch(() => setPrompt(false));
   }
 
   /** Leave the card. The words stay in Fuel's box; Edit and Type instead focus it in this same tap. */
@@ -194,13 +189,15 @@ function useSay(o: SayOptions, { dialog, panel, square }: SayElements) {
   }
 
   function pick(id: SpokenId) {
+    // Their own pick: listen in it, even if this visit said it can't (that may have been a weak signal).
+    forgetCantListen(id);
     opts.current.pickSpoken(id);
     setChips(false);
     listen(spokenById(id));
   }
 
   // The view, and what each control does in it.
-  const view = sayView({ mic: rec.mic, auto: autoView, words: o.words, spoken: o.spoken, online, prompt, off: record.off });
+  const view = sayView({ mic: rec.mic, auto: autoView, words: o.words, spoken: o.spoken, online, prompt: rec.prompt, off: record.off });
 
   function onSquare() {
     const now = clock();

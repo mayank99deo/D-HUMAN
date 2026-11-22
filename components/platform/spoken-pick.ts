@@ -8,9 +8,9 @@
 //   language can't make every later visit fail the same way.
 // - This visit's record (sessionStorage `dh-voice`): languages that started listening, and
 //   languages the browser said it can't listen in. A language on the "can't" list isn't
-//   handed to the recogniser again this visit; the card says so at once and offers the
-//   ways that work. Handing an iPhone a language it can't transcribe is what led to the
-//   mic that stopped responding until the page was reopened.
+//   handed to the recogniser again this visit unless they pick it themselves; the card
+//   says so at once and offers the ways that work. Only a lasting problem goes on the
+//   list (micProblemOf in listen-state.ts): a weak signal never does.
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { SPOKEN_IDS, spokenById, spokenOf, type Spoken, type SpokenId } from "@/lib/domain/speech";
 import { ruledOut, sameEngine } from "./listen-state";
@@ -102,6 +102,16 @@ export function noteCantListen(id: SpokenId) {
   const r = voiceRecord();
   if (r.off.includes(id)) return;
   saveRecord({ ok: r.ok, off: [...r.off, id] });
+}
+
+/**
+ * They picked this language themselves: hand it to the recogniser again, whatever this
+ * visit said before. A wrong "can't" then lasts until they pick, not until the tab closes.
+ */
+export function forgetCantListen(id: SpokenId) {
+  const r = voiceRecord();
+  if (!ruledOut(id, r.off)) return;
+  saveRecord({ ok: r.ok, off: r.off.filter((x) => !sameEngine(x, id)) });
 }
 
 const serverRecord = () => EMPTY;

@@ -67,8 +67,10 @@ export const ASK_MIC_COPY = {
   label: "Speak your question",
   labelLive: "Done speaking",
   labelStarting: "Getting your mic",
+  labelRetry: "Try the mic again",
   starting: "Getting your mic…",
-  slow: "Still getting your mic. Tap it to stop, or type your question.",
+  prompt: "Your browser will ask to use the microphone. Choose Allow.",
+  slow: "Still getting your mic. Tap it to try again, or type your question.",
   live: (s: Spoken) => `Listening in ${s.label}. Tap the mic when you're done.`,
   idle: (s: Spoken) => `The mic listens in ${s.label}.`,
   check: "Check your question, then tap Ask.",
@@ -86,8 +88,8 @@ export const cantListenIn = (s: Spoken) => `This browser can't listen in ${s.lab
 
 /**
  * The languages to offer when one can't listen: English and Hindi, never one that listens
- * the same way as the one that failed (Hinglish and English both listen in en-IN, so one
- * failing rules out both), and none this browser already said it can't do.
+ * the same way as the one that failed (Hinglish and हिंदी both listen in hi-IN, so a Hinglish
+ * failure rules out हिंदी and offers English), and none this browser already said it can't do.
  */
 export function listenInstead(failed: SpokenId, off: readonly SpokenId[] = []): SpokenId[] {
   return (["en", "hi"] as const).filter((id) => !sameEngine(id, failed) && !ruledOut(id, off));

@@ -100,15 +100,13 @@ describe("a listening session", () => {
 
 describe("what an error means", () => {
   const ctx = (lang: Parameters<typeof L.micProblemOf>[1]["lang"], workedIn: Parameters<typeof L.micProblemOf>[1]["workedIn"] = []) => ({ lang, workedIn });
-  it("reads iPhone's service-not-allowed as the language when it can be, else Dictation off", () => {
+  it("reads iPhone's service-not-allowed as the language only when it lasts, else Dictation off or a passing stop", () => {
     assert.equal(L.micProblemOf("service-not-allowed", ctx("ta")), "language", "iPhone can't transcribe Tamil");
     assert.equal(L.micProblemOf("service-not-allowed", ctx("bn", ["en"])), "language");
     assert.equal(L.micProblemOf("service-not-allowed", ctx("en")), "dictation_off");
-    assert.equal(L.micProblemOf("service-not-allowed", ctx("hi", ["en"])), "language", "English listened, Hindi didn't");
-    // Hinglish listens in hi-IN, like हिंदी (it was on en-IN for a few hours on 2026-11-22).
-    assert.equal(L.micProblemOf("service-not-allowed", ctx("hinglish", ["hi"])), "dictation_off", "the same hi-IN engine");
-    assert.equal(L.micProblemOf("service-not-allowed", ctx("hi", ["hinglish"])), "dictation_off", "the same hi-IN engine");
-    assert.equal(L.micProblemOf("service-not-allowed", ctx("hinglish", ["en"])), "language", "English listened in en-IN, Hinglish didn't in hi-IN");
+    // Mayank, 2026-11-22: after English listened, a weak signal on हिंदी read as "can't listen" until the tab
+    // closed. Every iPhone transcribes English and Hindi, so it's the moment (tests/voice-engine.test.ts).
+    for (const lang of ["en", "hinglish", "hi"] as const) for (const worked of ["en", "hinglish", "hi"] as const) assert.equal(L.micProblemOf("service-not-allowed", ctx(lang, [worked])), "stopped", `${lang} after ${worked}`);
   });
   it("knows which picks share an engine", () => {
     assert.ok(L.sameEngine("hinglish", "hi"));
