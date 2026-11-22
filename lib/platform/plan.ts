@@ -48,28 +48,53 @@ async function countsFor(q: Db, userId: string, pass: Pass | null, today: string
   return c ?? { readsTotal: 0, readsInPass: 0, mealsTotal: 0, mealsToday: 0 };
 }
 
+/** How a claim went: a use recorded now, one already recorded for the same thing (and when), or a refusal. */
+type Claimed = { status: "fresh" } | { status: "held"; since: Date } | { status: "refused"; refusal: Refusal };
+
+async function claimIn(tx: Db, userId: string, kind: UseKind, refId: string, today: string): Promise<Claimed> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`usage:${userId}`}))`);
+  const [had] = await tx.select({ userId: u.userId, createdAt: u.createdAt }).from(u).where(and(eq(u.kind, kind), eq(u.refId, refId))).limit(1);
+  if (had) {
+    // Ids belong to one person (a meal's is made from its key and the person: mealIdFor), so this
+    // can't happen; if it ever did, someone else's use must never pass for this person's.
+    if (had.userId !== userId) throw new Error(`[plan] a ${kind} use with this id belongs to someone else`);
+    return { status: "held", since: had.createdAt };
+  }
+  const pass = await activePass(tx, userId);
+  const refusal = refusalFor(kind, pass, await countsFor(tx, userId, pass, today));
+  if (refusal) return { status: "refused", refusal };
+  await tx
+    .insert(u)
+    .values({ id: newId(), userId, kind, refId, localDate: kind === "meal" ? today : null })
+    .onConflictDoNothing();
+  return { status: "fresh" };
+}
+
 /**
  * Inside a transaction: counts under a per-person lock, then records the use, or
  * says why it isn't allowed. A use already recorded for the same thing (a read
  * retried after it went stale) counts once.
  */
 export async function claimUseIn(tx: Db, userId: string, kind: UseKind, refId: string, today: string): Promise<Refusal | null> {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`usage:${userId}`}))`);
-  const [had] = await tx.select({ id: u.id }).from(u).where(and(eq(u.kind, kind), eq(u.refId, refId))).limit(1);
-  if (had) return null;
-  const pass = await activePass(tx, userId);
-  const refusal = refusalFor(kind, pass, await countsFor(tx, userId, pass, today));
-  if (refusal) return refusal;
-  await tx
-    .insert(u)
-    .values({ id: newId(), userId, kind, refId, localDate: kind === "meal" ? today : null })
-    .onConflictDoNothing();
-  return null;
+  const c = await claimIn(tx, userId, kind, refId, today);
+  return c.status === "refused" ? c.refusal : null;
+}
+
+/**
+ * A meal's claim, under the meal's own id. `fresh`: this request recorded the use and owns the
+ * try. `held`: a request with the same id (the same try, sent again) recorded it at `since`, and
+ * may still be reading the meal; the meal counts once either way. `refused`: the plan says no.
+ */
+export type MealClaim = Claimed;
+
+export async function claimMealTry(userId: string, refId: string, today: string): Promise<MealClaim> {
+  const d = await db();
+  return d.transaction((tx) => claimIn(tx, userId, "meal", refId, today));
 }
 
 export async function claimMeal(userId: string, refId: string, today: string): Promise<Refusal | null> {
-  const d = await db();
-  return d.transaction((tx) => claimUseIn(tx, userId, "meal", refId, today));
+  const c = await claimMealTry(userId, refId, today);
+  return c.status === "refused" ? c.refusal : null;
 }
 
 /** What the browser gets when the plan doesn't allow one more use: 402 and the reason. */

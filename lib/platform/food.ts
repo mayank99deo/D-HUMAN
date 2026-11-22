@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { aiMode, AiUnavailableError } from "@/lib/ai/client";
 import { estimateMeal, estimateUsualDay } from "@/lib/ai/food";
@@ -38,6 +39,68 @@ export async function focusMarkers(userId: string): Promise<string[]> {
   if (!latest) return [];
   const rows = await d.select().from(schema.markers).where(eq(schema.markers.reportId, latest.id));
   return rows.filter((m) => m.status !== "in_range" && m.status !== "unknown").map((m) => `${m.name} (${m.status.replace("_", " ")})`);
+}
+
+// ── One meal, however many times it's sent ────────────────────────────────
+// iPhone's WebKit never resends a POST that died on an idle connection (Apple, forum thread
+// 796906), and on some mobile networks an idle connection to Vercel's edge stops carrying the
+// phone's bytes (Jio at bom1, community.vercel.com, 2026-11-11). So the browser resends a meal
+// itself, with a key made once per try (components/platform/net.ts). The meal's id comes from
+// that key and the person, so a resend lands on the same id: food_logs' primary key and the
+// usage ledger's (kind, ref_id) index then make one meal and one use, whatever races.
+
+/** A try's key from the browser: random, 16 to 64 URL-safe characters (crypto.randomUUID() is 36). */
+export const MEAL_KEY = /^[A-Za-z0-9_-]{16,64}$/;
+
+/**
+ * The meal's id for a try's key: a UUID (version 8, RFC 9562) from SHA-256 of the person and
+ * the key, so the same key from someone else can never name this person's meal, and the id
+ * gives nothing back about the key.
+ */
+export function mealIdFor(userId: string, key: string): string {
+  const b = createHash("sha256").update(`meal\u0000${userId}\u0000${key}`).digest().subarray(0, 16);
+  b[6] = (b[6] & 0x0f) | 0x80;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = b.toString("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** The route gives up after 120 s (maxDuration in app/api/food/route.ts); a claim older than this with no meal has no live owner. */
+export const MEAL_CLAIM_STALE_MS = 130_000;
+/** How long a resend waits for the try it repeats before saying it's still being read. */
+export const MEAL_WAIT_MS = 55_000;
+
+export type Waited = { log: FoodLog } | { state: "released" | "stale" | "busy" };
+
+/**
+ * A resend whose try is already claimed (claimMealTry said `held`) waits here for that try to
+ * end: its meal (logged), its use handed back (it failed: this request may try again), the claim
+ * gone stale (its request died), or this wait running out (busy). Reads only.
+ */
+export async function waitForMeal(
+  userId: string,
+  id: string,
+  { waitMs = MEAL_WAIT_MS, staleMs = MEAL_CLAIM_STALE_MS, sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) } = {},
+): Promise<Waited> {
+  const d = await db();
+  const until = Date.now() + waitMs;
+  let pause = 200;
+  for (;;) {
+    // The meal first, then the use: a try that ends writes its meal (and keeps the use) or
+    // deletes its use (and writes no meal), so reading in this order can't miss a logged meal.
+    const [log] = await d.select().from(schema.foodLogs).where(and(eq(schema.foodLogs.id, id), eq(schema.foodLogs.userId, userId))).limit(1);
+    if (log) return { log };
+    const [use] = await d
+      .select({ at: schema.usage.createdAt })
+      .from(schema.usage)
+      .where(and(eq(schema.usage.kind, "meal"), eq(schema.usage.refId, id), eq(schema.usage.userId, userId)))
+      .limit(1);
+    if (!use) return { state: "released" };
+    if (Date.now() - use.at.getTime() > staleMs) return { state: "stale" };
+    if (Date.now() + pause > until) return { state: "busy" };
+    await sleep(pause);
+    pause = Math.min(1_000, Math.round(pause * 1.5));
+  }
 }
 
 export type MealInput = {
@@ -105,18 +168,40 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     model,
   };
   const d = await db();
-  const [log] = await d.insert(schema.foodLogs).values(row).returning();
-  return { log };
+  const [log] = await d.insert(schema.foodLogs).values(row).onConflictDoNothing({ target: schema.foodLogs.id }).returning();
+  if (log) return { log };
+  // A resend of the same try got here first (a stale claim taken over while its first request
+  // still ran): that meal stands, and this one is the same meal.
+  const [first] = await d.select().from(schema.foodLogs).where(and(eq(schema.foodLogs.id, row.id), eq(schema.foodLogs.userId, userId))).limit(1);
+  if (!first) throw new Error("[food] a meal with this id belongs to someone else");
+  return { log: first };
 }
+
+/** A usual day saved with the same words this recently is the same save, sent again (net.ts resends once). */
+export const USUAL_DAY_REPEAT_MS = 3 * 60_000;
 
 export async function saveTypicalDay(userId: string, profile: Profile, description: string): Promise<SavedDay> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailableError();
-  const context = { language: profile.language, diet: profile.diet, focus: await focusMarkers(userId) };
+  const d = await db();
+  const [focus, [saved]] = await Promise.all([
+    focusMarkers(userId),
+    d
+      .select({ description: schema.dietBaselines.description, estimate: schema.dietBaselines.estimate, updatedAt: schema.dietBaselines.updatedAt })
+      .from(schema.dietBaselines)
+      .where(eq(schema.dietBaselines.userId, userId))
+      .limit(1),
+  ]);
+  // The browser resends a save whose answer it never got. When the first one landed, its three
+  // estimates are already saved: hand them back rather than paying for three more.
+  if (saved && saved.description === description && Date.now() - saved.updatedAt.getTime() < USUAL_DAY_REPEAT_MS) {
+    console.info("[typical-day] same words saved moments ago: returning that save");
+    return saved.estimate as SavedDay;
+  }
+  const context = { language: profile.language, diet: profile.diet, focus };
   const { data, model } =
     mode === "mock" ? await mockDay().then((r) => ({ data: averageUsualDay([r.data]), model: r.model })) : await estimateUsualDay(description, context);
   if (data.basis) console.info(basisLine(data.basis));
-  const d = await db();
   await d
     .insert(schema.dietBaselines)
     .values({ userId, description, estimate: data, model })
