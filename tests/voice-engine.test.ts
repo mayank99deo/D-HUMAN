@@ -46,6 +46,7 @@ const { VoiceEngine, HANDOVER_MS } = await import("../components/platform/voice-
 const L = await import("../components/platform/listen-state.ts");
 const P = await import("../components/platform/spoken-pick.ts");
 const A = await import("../components/platform/ask-mic.ts");
+const V = await import("../components/platform/voice-copy.ts");
 const { spokenById } = await import("../lib/domain/speech.ts");
 type Mic = import("../components/platform/listen-state.ts").Mic;
 type MicProblem = import("../components/platform/listen-state.ts").MicProblem;
@@ -650,6 +651,26 @@ describe("the engine on Chrome", () => {
     t.run(100);
     assert.deepEqual(t.mic(), { kind: "off", problem: "language" });
     assert.deepEqual(P.voiceRecord().off, ["ta"]);
+  });
+
+  it("a Hinglish that can't listen rules out the pick sharing its engine, and offers the other", () => {
+    // Since 2026-11-22 Hinglish listens in hi-IN with हिंदी, and English stays en-IN; written so it holds either way.
+    const twin = L.sameEngine("hinglish", "hi") ? hi : en;
+    const other = twin === hi ? en : hi;
+    const t = control("chrome");
+    (t.browser as Chrome).supported = new Set([other.speech]);
+    t.engine.start(hinglish);
+    t.run(100);
+    assert.deepEqual(t.mic(), { kind: "off", problem: "language" });
+    assert.ok(L.ruledOut(twin.id, P.voiceRecord().off), `${twin.id} shares Hinglish's ${hinglish.speech}`);
+    const n = (t.browser as Chrome).starts.length;
+    t.engine.start(twin);
+    t.run(100);
+    assert.equal((t.browser as Chrome).starts.length, n, "not handed to the engine again");
+    assert.deepEqual(V.listenInstead("hinglish", P.voiceRecord().off), [other.id]);
+    t.engine.start(other);
+    t.run(800);
+    assert.equal(t.mic().kind, "live");
   });
 });
 
