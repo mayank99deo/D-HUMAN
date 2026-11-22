@@ -194,9 +194,34 @@ The running record of this project: where things stand, why they are the way the
   - On desktop the UPI tab shows only a QR code, so use Netbanking: picking a bank opens the demo bank window at once (listen for it before the click), which has Success and Failure buttons.
   - Razorpay can't reach localhost, so test the webhook by signing a payload with `RAZORPAY_WEBHOOK_SECRET` from `.env.local`.
 - **Sleeping functions and pooled Postgres connections (2026-11-19):** a Vercel function's timers don't run while it's suspended, so postgres.js's `idle_timeout` never closes idle connections. The network drops them after about 350 s, and the first query after waking hangs on the dead socket with no error. `lib/db/pool.ts` guards against it. Keep its deadlines, the wall-clock sweep and the `[db]` log lines. Never hold a transaction open across an AI, payment or email call: the sweep would take a connection silent for more than about 2 minutes as dead. To check live, run the scratchpad's `live-probe.sh` across 7–10 minute idle gaps; `rc=28` means a hang.
+- **iOS never resends a POST (2026-11-22):** Safari and in-app browsers fail a POST written into a connection that stopped carrying bytes while the page sat idle, after about 10 s with "Load failed" / "The network connection was lost.". Chromium resends by itself; WebKit doesn't, by design. So:
+  - Every POST a person waits on goes through `postResending` (`components/platform/net.ts`) or Ask's resend, with an idempotency key the server enforces in the database. Meals use `mealIdFor`; Ask uses its clientKey.
+  - The stand-in edge (scratchpad `b-net/edge.mjs`) reproduces it.
+  - bom1 serves HTTP/2 only, PINGs idle connections every 60 s and sends GOAWAY at 300 s.
+- **iPhone's `service-not-allowed` isn't always the language (2026-11-22):** WebKit also sends it when Apple's speech service can't be reached (a weak signal). Never remember a language as unusable from it unless the rules in `micProblemOf` say so: before the start, online, outside en/hinglish/hi, and that language hasn't listened this visit.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
 ## Open items
+
+- [ ] **After the 2026-11-22 voice and meal-resend push, on Mayank's iPhone:**
+  - Hinglish on hi-IN: how numbers and English words come out. The quickest check: pick हिंदी and say "do sau gram chawal aur chicken", "ek scoop whey protein aur do boiled egg", then the same with Hinglish.
+  - One photo meal and one typed meal after a 2–5 minute idle on 5G.
+  - What the grey support line says if "No connection" shows again.
+  - The gallery picker and HEIC.
+  - "This device couldn't start listening" on a weak signal.
+- [ ] **Decide (Mayank), from that round:**
+  - Does "300 gram chawal" mean cooked rice unless he says raw? It was read as raw (about 1,400 kcal) in 3 of 4 runs.
+  - Gallery photos: should the meal slot come from the photo's time? (A lunch photo logged at 8 pm guesses dinner.)
+  - His mobile carrier: if it's Jio, raise the dead idle connections to bom1 with Vercel; they may also explain the earlier stuck loading screens.
+  - The grey support line shows to everyone: limit it to founders once the cause is known.
+  - Should the countdown's big number pause instead of logging now?
+- [ ] **Follow-ups from that round:**
+  - Send the hi-IN Devanagari beside the romanized text for Hinglish voice meals.
+  - `soundsLikeHindi` lacks mujhe, kitna and chahiye.
+  - Ask's Clear now deletes answered turns, so a question whose answer was lost, cleared, then sent again counts twice despite "It won't count twice".
+  - A usual day saved again with the same words within 3 minutes ignores a diet change in between.
+  - Changing only "Which meal?" after a lost answer makes a new try, so it could log twice.
+  - Record whether a photo came from the camera or the gallery.
 
 - [x] Platform live (2026-11-09): Supabase tables in place; `DATABASE_URL` (or the integration's `POSTGRES_URL`), `ANTHROPIC_API_KEY` and `AUTH_SECRET` set in Vercel and redeployed. Checked live: sign-in codes save and send. The local key Mayank deleted on 2026-11-11 was a separate one; the Vercel key wasn't checked after that. Mayank put a new, working local key in `.env.local` on 2026-11-13.
 - [x] Razorpay live (2026-11-14): live keys and the live webhook (`https://www.d-human.fit/api/billing/webhook`; events `payment.captured`, `payment.authorized`, `order.paid`), the three variables in Vercel Production, redeployed, and one real ₹49 paid by Mayank. Production must never get test keys: with them, anyone could take a pass by pressing the test bank's Success button.
@@ -294,6 +319,81 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-22
+- **Second iPhone round after `fdc28d5` (Mayank, Google app on his iPhone 17, 5G), crew running:**
+  - **Hinglish on en-IN mishears Hindi:** "300 gram chawal aur chicken" → "300 g towel or chicken"; "ek katori daal aur do sau gram chawal" → "…Daal aur Dosa gram chawal". The 2026-11-22 call to keep Hinglish on en-IN is reversed by the orchestrator (the fallback noted below): Hinglish listens in `hi-IN` again and shows and logs in Latin through `romanize()`.
+  - **"No connection" after Edit mid-countdown:** the meal orbit showed "No connection. Check your signal and try again." and, by his account, kept failing until he closed and reopened the page. The text means `fetch('/api/food')` rejected; the route always answers. Leads: a POST on a connection closed while the page idled (iOS doesn't retry those), and `dh-voice` in sessionStorage ruling a language out for the whole visit after a transient error.
+  - **Asks:** check Ask's mic for slow starts and errors; add "choose from gallery" to Snap; "least of the bugs" in this push.
+  - **Lanes, in worktrees:**
+    - A1, staff engineer: voice engine state after Edit/abort, Ask mic parity.
+    - A2, AI efficiency lead: Hinglish on hi-IN, romanizer coverage of what Apple's Hindi dictation writes (numbers, units, English food words), a live romanized-vs-Devanagari meal check.
+    - B, systems and data engineer: reproduce, idempotency key, one retry on a network failure, Try again in the orbit, a support line with the error name and time.
+    - C, UX designer: Snap gallery option.
+    - QA follows the merge.
+  - **A2 done, cherry-picked as `0fc9bf9` and `12a8ec5` (not pushed):**
+    - Hinglish listens with `hi-IN`. A Hinglish failure now rules out हिंदी and offers English.
+    - `romanize()` gained about 200 words (English food, gym and app words as hi-IN writes them, units, spelled-out letters like एमएल) and phrases for words with two meanings (पाव किलो vs पाव भाजी). Phrases match with or without nukta, and NFC runs only on Devanagari.
+    - Eval `scripts/romanize-eval.mts` (free): a held-out set scored 40 of 47 on its first run; every miss was an English word off the list.
+    - Property tests over 3,000 random mixes: Latin never changes, digits never lost, nothing left in Devanagari, दो सौ is "do sau".
+    - Browser: no Devanagari flashes in Say or Ask with a Devanagari stand-in, in Chromium and WebKit.
+    - Live meal check ($0.045): romanized and Devanagari read alike within run-to-run noise. Exception: "maik and cheez" became makki roti (मैक added).
+    - Deferred: send the Devanagari transcript beside the romanized text for Hinglish voice meals (about 20 tokens a meal).
+    - For Mayank, existed before this round: "300 gram chawal" was read as raw rice (about 1,400 kcal) in 3 of 4 runs, but "200 gram chawal" as cooked.
+  - **C done, cherry-picked as `cc3756d` (not pushed):**
+    - **Phones:** Snap still opens the camera, and a 44 px "Choose a photo from your gallery" sits under the tiles. Laptops get one "Photo" tile that opens the file picker. Labels switch with the `touch` variant, and the tile picks its input with the same media query.
+    - **The photo:** the preview shows the whole photo and offers swap links.
+    - **Problems** get plain words beside the controls (`meal-photo.ts`): HEIC a browser can't open, a file that isn't a photo, a photo that won't open.
+    - **Privacy:** meal photos are always re-encoded (`keepSmaller: false`), so EXIF (place, time, camera) never leaves the phone.
+    - **Checked:** 132 of 132 in Chromium and 134 of 134 in WebKit.
+    - **For Mayank:** a gallery lunch logged at 8 pm guesses dinner. Measuring camera vs gallery use isn't built.
+  - **B done, cherry-picked as two commits (server, then client; not pushed). No migration.**
+    - **Reproduced:**
+      - **No app-level cause:** the old build sends one POST and gets 200 on every path after 150–180 s idle, in WebKit and Chromium.
+      - **His screen, exactly:** a stand-in TLS/HTTP/2 edge (scratchpad `b-net/edge.mjs`) that stops passing the phone's bytes on an idle connection. WebKit failed the POST after about 9.7 s ("Load failed", "The network connection was lost.") and showed his screen. Chromium resent it by itself.
+      - **Double logs:** tapping again on the old build double-logged when only the answer was lost.
+    - **Live edge (probed 15 min):** bom1 is HTTP/2 only, with no HTTP/3. It PINGs idle connections every 60 s and sends GOAWAY at 300 s, so the edge itself doesn't close a short idle.
+    - **Inferred:** a mobile network path that stops carrying bytes on an idle connection. A Vercel community thread of 11 Nov 2026 reports this for Reliance Jio to bom1. Apple's engineer: Safari never retries POSTs.
+    - **Server:**
+      - **The key:** the browser sends a random `key` per try, and the meal's id is `mealIdFor` (a UUIDv8 from SHA-256 of user and key).
+      - **Once, enforced by the database:** `food_logs`' primary key and the usage ledger's unique `(kind, ref_id)`.
+      - **A resend** (`claimMealTry`, `takeTry`, `waitForMeal`) returns the logged meal, takes over a failed or stale (130 s) claim, or answers 409 `in_progress` after 55 s.
+      - **No key** (an old tab) behaves as before.
+      - **Usual day:** a save with the same words within 3 minutes returns the saved estimate.
+    - **Client:** `postResending` in `net.ts` resends once, 1 s after a rejection or a cut-off answer, never after an HTTP status. `meal-send.ts` keeps the try, and its key for 30 minutes unless the words change. The orbit gets Try again (lost connection, 5xx, in_progress), and a grey support line shows, for example "Load failed after 9.7 s, then Load failed after 0.3 s".
+    - **Checked:**
+      - 31 new tests.
+      - Real Postgres 17.10 (`tests/pg/meal-parallel.mts`): 20 parallel sends of one try give 1 meal, 1 use and 1 AI call.
+      - Through the stand-in edge, every path recovers with no error and 1 meal.
+      - `b-net/verify.mjs`: 40 of 40 in each engine.
+    - **Ask** has the same failure: B is adding the single resend there too (orchestrator's call; it changes the Ask contract's "nothing is resent").
+  - **A1 done, cherry-picked as `99da62d` and `e8cd42f` (not pushed); `tests/voice.test.ts` conflict resolved to A1's block:**
+    - **The "until reopen" bug, reproduced:** on iPhone, `service-not-allowed` also means Apple's speech service is out of reach (WebKit source). `micProblemOf` called it "language" once another language had listened, and `noteCantListen` saved it in sessionStorage `dh-voice`. हिंदी (and now Hinglish) then said "can't listen" without asking the engine, in Fuel and Ask, until the tab closed.
+    - **The fix:** a "language" verdict needs an error before the start, while online, for a language outside en/hinglish/hi that hasn't listened this visit. Otherwise it's "stopped", or `dictation_off` with nothing heard yet. `forgetCantListen` makes a pick by hand try again.
+    - **`voice-engine.ts` (new, React-free):** a new start waits for the old recogniser's `end` even after an abort (WebKit queues `setInactive` on the current one), and `HANDOVER_MS` went from 400 to 1000.
+    - **Ask's mic:** a tap while stopping or on a slow start listens again, and a permission-prompt line shows.
+    - **Checked:** 19 engine tests on WebKit and Chrome stand-ins, and 50 of 50 browser checks in each engine.
+  - **`7ec5b9b` (orchestrator):** the `dictation_off` words were wrong for a weak signal. Fuel now says "This device couldn't start listening" (Try again, then Dictation); Ask says the same, adding "On iPhone, Dictation must be on." The voice UX spec is updated.
+  - **Main at `7ec5b9b`:** typecheck and 1,417 tests pass. QA is proving the integrated build.
+  - **`b22f24f` (B, Ask's resend):**
+    - **The resend:** `askQuestion` resends once with the same clientKey, 1 s after a rejection or a cut-off answer (`send(…, { wholeAnswer: true })`). After `busy` or a 500 on the resend, it looks the key up over GET; a wait with no GET getting through ends as offline.
+    - **The words:** offline now says "…It won't count twice." instead of "It didn't count", which was false when only the answer was lost. Contract §16.2, §6.4 and the Ask UX spec are updated.
+    - **Server, unchanged:** it replays a repeated key from any day, answers 409 `busy` while one is pending, and checks consent before replaying.
+    - **Tests:** 8 new UI-state tests and 7 through the real route.
+    - **Through the stand-in edge:** WebKit failed at 9.6 s and the resend answered, counted once; Chromium resent by itself.
+    - **Left open:** a 500 on the resend when the first send was answered before midnight IST still says "It didn't count".
+  - **QA on the integrated build** (production build, Chromium and WebKit, 320/390/1440 px, touch and laptop):
+    - **Three fixes, cherry-picked:**
+      - `88f26b1` (medium): a deleted meal kept its use under the meal's id, so its key sent again waited 54 s for "still reading", then re-logged it free once the claim went stale. `deleteMeal` now moves the use to its own id in the same transaction.
+      - `8fb42f0`: phrases ran together ("daland") when the engine sent no leading space after Keep talking.
+      - `37f8282`: Delete on a meal row was 41 px wide.
+    - **Proven:**
+      - Through the stand-in edge, every Fuel flow and Ask logged or answered exactly once; WebKit failed the first send and the resend landed.
+      - Meal API: 16 of 16, including malformed keys, other people's keys, and the limit under parallel sends (6 sends of one try give 1 meal; 6 new meals at 4 of 5 give exactly 1).
+      - 409 and the paywall: 8 of 8. Ask resend: 29 of 29 in WebKit.
+      - Voice: 59 of 59. Gallery: 132 of 132. EXIF: none leaves.
+      - Regressions: 130 of 130 per engine.
+      - No meal or question text in 210 server log lines; the usage ledger is consistent.
+    - **Not an app bug, but worth one try on the iPhone:** a WebKit photo resend arrived empty in 2 of about 17 runs, only under Playwright's own interception.
+  - **Before push, on main `37f8282`:** typecheck, lint, 1,438 tests and `next build` (second run, after the SecurityFatalError notice).
 - **Voice language bugs (Mayank, iPhone, live site), crew running:**
   - **Fuel:** with Hinglish picked, Say transcribed and logged in full Devanagari ("दो रोटी और चने की सब्जी", tip in Hindi). Hinglish has listened with `hi-IN` since `93850a9`, and replies follow the transcript's script. His rule: the pick decides. Hinglish means Latin letters; हिंदी means Devanagari.
   - **Ask:** the co-founder's Hindi came out as Marathi. Confirmed: `looksMarathi` in `lib/domain/ask-language.ts` classes everyday Hindi as Marathi ("…फायदे होते हैं", "मैं क्या करू"), and Ask's prompt calls करू Marathi.
@@ -363,6 +463,11 @@ Newest first. One entry per change; pushes carry their commit hash.
   - **Before push:**
     - Typecheck, lint, 1,348 tests (0 todo) and the build pass.
     - The orchestrator spot-checked by hand: "main aatmahatya…", "jaan de doonga" and "mujhe jeena nahi hai" are crisis; "sirf ek baar khana… vajan kam" is very-little-food; "workout mein jaan laga do", "I'm starving after my run" and "protein ke kya fayde" match nothing.
+  - **Push `fdc28d5`** (`3cecad8` through `fdc28d5`, 7 commits): Vercel says "Deployment has completed". Checked live:
+    - The landing and /signin give 200; /fuel signed out 307s to `/signin?next=%2Ffuel`.
+    - `/api/ask` signed out gives 401 (403 without an Origin header: the same-origin check, as before).
+    - Functions run in `bom1`.
+    - Mayank to try one Hinglish meal and one Hindi Ask question on his iPhone.
   - **For the native-speaker review (§20):** the new Latin crisis, emergency and medicine patterns. The AI efficiency lead's report lists the ambiguous ones: "khud khushi", "jaan de dunga" (can mean "I'll give it my all"), and "zindagi se thak". Also left out on purpose: lakwa, mirgi, "dil mein dard", roza.
   - **Mayank's calls (2026-11-22):**
     - With हिंदी picked, replies are Hindi only, whatever is spoken.
