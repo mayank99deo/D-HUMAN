@@ -48,6 +48,7 @@ const { istDay, claimAsk } = await import("../lib/platform/ask.ts");
 const { deleteReports } = await import("../lib/platform/reports.ts");
 const { ASK_ERROR_STATUS } = await import("../lib/ask/types.ts");
 type AskReply = import("../lib/ask/types.ts").AskReply;
+const { askQuestion } = await import("../components/platform/ask-api.ts");
 
 after(async () => {
   const d = await db();
@@ -703,3 +704,150 @@ describe("DELETE /api/ask and POST /api/ask/consent", () => {
   });
 });
 
+
+// ── The browser's one resend, through the real route ────────────────────────
+// components/platform/ask-api.ts resends a question once when the connection fails, with
+// the same key. Here its askQuestion talks to this route through a stand-in network that
+// can lose a send before it arrives ("drop") or lose only the answer ("lose": the route ran,
+// the reply never came back). Whatever is lost, a question is answered once and counted once.
+
+describe("the browser's resend, through the real route", () => {
+  type Send = import("../components/platform/ask-api.ts").Send;
+  type Step = "drop" | "lose" | "pass";
+  function network(p: Person, posts: Step[]) {
+    const calls: string[] = [];
+    let clock = 0;
+    const send = (async (_url: string, o: { method?: string; body?: unknown } = {}) => {
+      const method = o.method ?? "POST";
+      calls.push(method);
+      signIn(p);
+      if (method === "GET") {
+        const res = await route.GET();
+        return { ok: res.ok, status: res.status, offline: false, data: await res.json() };
+      }
+      const step = posts.shift() ?? "pass";
+      if (step === "drop") return { ok: false, status: 0, offline: true, data: {} };
+      const res = await route.POST(postRequest(p, o.body));
+      const data = await res.json();
+      if (step === "lose") return { ok: false, status: 0, offline: true, data: {} };
+      return { ok: res.ok, status: res.status, offline: false, data };
+    }) as unknown as Send;
+    return { calls, deps: { send, now: () => clock, sleep: async (ms: number) => void (clock += ms) } };
+  }
+  const req = (question = "Is poha a good breakfast before a run?") => ({ clientKey: crypto.randomUUID(), question });
+
+  it("an answer lost once: the resend gets the same turn, counted once, one model call", async () => {
+    const me = await person();
+    const net = network(me, ["lose", "pass"]);
+    const out = await askQuestion(req(), net.deps);
+    assert.equal(out.type, "ok");
+    assert.deepEqual(net.calls, ["POST", "POST"]);
+    assert.equal((await turnsOf(me)).length, 1);
+    assert.equal(g.__ask.calls.length, 1);
+    assert.deepEqual(await counts(me), { used: 1, attempts: 1 });
+    assert.equal(out.type === "ok" && out.reply.left, 4);
+  });
+
+  it("a send lost before it arrived: the resend asks it, counted once", async () => {
+    const me = await person();
+    const out = await askQuestion(req(), network(me, ["drop", "pass"]).deps);
+    assert.equal(out.type, "ok");
+    assert.deepEqual(await counts(me), { used: 1, attempts: 1 });
+  });
+
+  it("both answers lost: offline; sending it again from the box (same key) shows that answer and never counts twice", async () => {
+    const me = await person();
+    const q = req();
+    const out = await askQuestion(q, network(me, ["lose", "lose"]).deps);
+    assert.deepEqual(out, { type: "offline" });
+    assert.deepEqual(await counts(me), { used: 1, attempts: 1 }, "it did reach us, so it counted once");
+    for (let i = 0; i < 3; i++) {
+      const again = await askQuestion(q, network(me, ["pass"]).deps);
+      assert.equal(again.type, "ok");
+    }
+    assert.equal(g.__ask.calls.length, 1);
+    assert.deepEqual(await counts(me), { used: 1, attempts: 1 });
+    assert.equal((await turnsOf(me)).length, 1);
+  });
+
+  it("the resend lands while the first is still being answered: busy, then GET shows the one answer", async () => {
+    const me = await person();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    g.__ask.answer = async () => {
+      await gate;
+      return { ok: true, reply: answerReply(), usage };
+    };
+    const q = req();
+    // The first send reaches the route and is still being answered; its reply will be lost.
+    signIn(me);
+    const first = route.POST(postRequest(me, q));
+    const net = network(me, ["pass"]);
+    const sendAgain = net.deps.send;
+    let posts = 0;
+    const deps = {
+      ...net.deps,
+      // The first POST "drops"; the resend arrives while the first is in flight (busy); the
+      // first finishes before the next GET.
+      send: (async (url: string, o: { method?: string; body?: unknown } = {}) => {
+        if ((o.method ?? "POST") === "POST" && posts++ === 0) return { ok: false, status: 0, offline: true, data: {} };
+        const r = await sendAgain(url, o as never);
+        if ((o.method ?? "POST") === "POST") {
+          release();
+          await first;
+        }
+        return r;
+      }) as unknown as Send,
+    };
+    const out = await askQuestion(q, deps);
+    assert.equal(out.type, "landed");
+    assert.deepEqual(net.calls, ["POST", "GET"]);
+    assert.equal(g.__ask.calls.length, 1);
+    assert.deepEqual(await counts(me), { used: 1, attempts: 1 });
+  });
+
+  it("across midnight (IST): a resend of yesterday's answered question replays it and counts nothing today", async () => {
+    const me = await person();
+    const q = req();
+    assert.equal((await askQuestion(q, network(me, ["lose", "lose"]).deps)).type, "offline");
+    // The day turns while the answer is lost: move the turn and its count to yesterday.
+    const d = await db();
+    const yesterday = istDay(new Date(Date.now() - 86_400_000));
+    await d.update(schema.askTurns).set({ day: yesterday }).where(eq(schema.askTurns.userId, me.id));
+    await d.update(schema.askDays).set({ day: yesterday }).where(eq(schema.askDays.userId, me.id));
+    const again = await askQuestion(q, network(me, ["pass"]).deps);
+    assert.equal(again.type, "ok");
+    assert.equal(again.type === "ok" && again.reply.turn?.clientKey, q.clientKey);
+    assert.equal(again.type === "ok" && again.reply.left, 5, "today's count untouched");
+    assert.deepEqual(await counts(me), { used: 0, attempts: 0 });
+    assert.equal(g.__ask.calls.length, 1);
+  });
+
+  it("before the one-time notice: consent_needed is an answer, so no resend, and nothing is stored", async () => {
+    const me = await person({ askConsent: false });
+    const net = network(me, ["pass", "pass"]);
+    const out = await askQuestion(req(), net.deps);
+    assert.equal(out.type === "error" && out.error, "consent_needed");
+    assert.deepEqual(net.calls, ["POST"]);
+    assert.equal((await turnsOf(me)).length, 0);
+    assert.deepEqual(await counts(me), { used: 0, attempts: 0 });
+  });
+
+  it("a drop, then the notice withdrawn before the resend: consent_needed, and the first send never counted", async () => {
+    const me = await person();
+    const d = await db();
+    const net = network(me, ["drop", "pass"]);
+    const send = net.deps.send;
+    let n = 0;
+    const deps = {
+      ...net.deps,
+      send: (async (url: string, o: { method?: string; body?: unknown } = {}) => {
+        if (n++ === 1) await d.update(schema.profiles).set({ askConsentAt: null }).where(eq(schema.profiles.userId, me.id));
+        return send(url, o as never);
+      }) as unknown as Send,
+    };
+    const out = await askQuestion(req(), deps);
+    assert.equal(out.type === "error" && out.error, "consent_needed");
+    assert.deepEqual(await counts(me), { used: 0, attempts: 0 });
+  });
+});

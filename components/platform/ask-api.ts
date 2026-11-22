@@ -23,7 +23,7 @@ import {
   type AskTurn,
   type AskTurnKind,
 } from "@/lib/ask/types";
-import { send as realSend } from "./net";
+import { RESEND_AFTER_MS, send as realSend } from "./net";
 
 export type Send = typeof realSend;
 export type ApiDeps = { send: Send; now: () => number; sleep: (ms: number) => Promise<void> };
@@ -198,27 +198,60 @@ export type AskOutcome =
   /** POST timed out, but GET found the answer. */
   | { type: "landed"; turn: AskTurn; thread: AskThread }
   | { type: "error"; error: AskErrorCode; body: AskError }
-  /** The connection dropped quickly: nothing reached the server, or nothing came back. */
+  /**
+   * The connection failed, and so did the one resend; or no GET got through to say what
+   * happened. The question may or may not have reached the server: sending it again with
+   * the same key counts it at most once.
+   */
   | { type: "offline" }
-  /** No answer within the wait; `thread` is the last GET, if any came back. */
+  /** No answer within the wait, and the server (a GET that came back) has no answer for it; `thread` is that GET. */
   | { type: "timeout"; thread: AskThread | null };
 
 /**
- * POST a question. If the reply doesn't come within the browser's wait, GET looks for it
- * by its key and, while it's still being answered, asks again every 2 s, up to 45 s after
- * sending. Nothing here resends the question: only the person's "Try again" does, with
- * the same key, so it's counted once.
+ * POST a question. When the connection fails fast (fetch rejects, or the answer is cut off
+ * on the way), send it once more after RESEND_AFTER_MS with the same key: iPhone never
+ * resends a POST that dies on a connection the network dropped while the sheet sat open.
+ * The server answers a key it has answered with that turn and counts nothing, and says
+ * "busy" while that key is being answered, so the resend is counted once at most.
+ *
+ * If the reply doesn't come within the browser's wait, or the resend finds the question
+ * in flight or can't tell (a server error), GET looks for it by its key and, while it's
+ * still being answered, asks again every 2 s, up to 45 s after the last send. Never resent
+ * after an HTTP answer, or after the whole wait; past that, only the person resends.
  */
 export async function askQuestion(req: AskRequest, deps: ApiDeps = realDeps): Promise<AskOutcome> {
-  const started = deps.now();
-  const r = await deps.send("/api/ask", { body: req, timeoutMs: ASK_LIMITS.clientTimeoutMs });
+  const post = () => deps.send("/api/ask", { body: req, timeoutMs: ASK_LIMITS.clientTimeoutMs, wholeAnswer: true });
+  let sentAt = deps.now();
+  let r = await post();
+  let resent = false;
+  if (r.offline && deps.now() - sentAt < TIMED_OUT_AFTER_MS) {
+    await deps.sleep(RESEND_AFTER_MS);
+    resent = true;
+    sentAt = deps.now();
+    r = await post();
+  }
   if (r.ok) {
     const reply = cleanPost(r.data);
     return reply ? { type: "ok", reply } : { type: "error", error: "error", body: { error: "error" } };
   }
-  if (!r.offline) return { type: "error", error: errorOf(r.data), body: errorBody(r.data) };
-  if (deps.now() - started < TIMED_OUT_AFTER_MS) return { type: "offline" };
+  if (!r.offline) {
+    const failed: AskOutcome = { type: "error", error: errorOf(r.data), body: errorBody(r.data) };
+    // After a resend, "busy" is most likely the first send still being answered, and a server
+    // error can't say whether the first send was answered: ask the server rather than guess.
+    if (resent && (failed.error === "busy" || failed.error === "error")) return lookUp(req, deps, sentAt, failed);
+    return failed;
+  }
+  if (deps.now() - sentAt < TIMED_OUT_AFTER_MS) return { type: "offline" };
+  return lookUp(req, deps, sentAt, null);
+}
 
+/**
+ * GET finds the question by its key: answered (landed), or in flight (ask again every 2 s,
+ * up to 45 s after `sentAt`). Not there: `absent` when given (the error that sent us here,
+ * now known not to have counted), else timeout. When no GET gets through at all, nothing is
+ * known, so it's offline: the words that hold either way.
+ */
+async function lookUp(req: AskRequest, deps: ApiDeps, sentAt: number, absent: AskOutcome | null): Promise<AskOutcome> {
   let last: AskThread | null = null;
   for (;;) {
     const t = await getThread(deps.send);
@@ -227,9 +260,9 @@ export async function askQuestion(req: AskRequest, deps: ApiDeps = realDeps): Pr
       const turn = t.thread.turns.find((x) => x.clientKey === req.clientKey);
       if (turn) return { type: "landed", turn, thread: t.thread };
       // Not answered and not in flight: it never landed, or the server handed it back.
-      if (t.thread.pending?.clientKey !== req.clientKey) return { type: "timeout", thread: last };
+      if (t.thread.pending?.clientKey !== req.clientKey) return absent ?? { type: "timeout", thread: last };
     }
-    if (deps.now() - started + ASK_LIMITS.pollEveryMs > WAIT_FOR_LANDING_MS) return { type: "timeout", thread: last };
+    if (deps.now() - sentAt + ASK_LIMITS.pollEveryMs > WAIT_FOR_LANDING_MS) return last ? { type: "timeout", thread: last } : { type: "offline" };
     await deps.sleep(ASK_LIMITS.pollEveryMs);
   }
 }

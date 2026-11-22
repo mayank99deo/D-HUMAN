@@ -6,7 +6,20 @@ export type Reply<T = Record<string, unknown>> = { ok: boolean; status: number; 
 
 export async function send<T = Record<string, unknown>>(
   url: string,
-  { method = "POST", body, timeoutMs = 20_000, keepalive }: { method?: string; body?: unknown; timeoutMs?: number; keepalive?: boolean } = {},
+  {
+    method = "POST",
+    body,
+    timeoutMs = 20_000,
+    keepalive,
+    wholeAnswer = false,
+  }: {
+    method?: string;
+    body?: unknown;
+    timeoutMs?: number;
+    keepalive?: boolean;
+    /** An answer cut off on the way counts as offline, not as an empty answer (for sends the caller may resend). */
+    wholeAnswer?: boolean;
+  } = {},
 ): Promise<Reply<T>> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutMs);
@@ -18,7 +31,16 @@ export async function send<T = Record<string, unknown>>(
       signal: abort.signal,
       keepalive,
     });
-    const data = await res.json().catch(() => ({}));
+    let data: Reply<T>["data"] = {};
+    if (wholeAnswer) {
+      // Reading the text rejects when the connection drops mid-answer (caught below as offline);
+      // an answer that arrives whole but isn't JSON (a gateway's page) is still an answer.
+      const raw = await res.text();
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) data = parsed as Reply<T>["data"];
+      } catch {}
+    } else data = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, offline: false, data };
   } catch {
     return { ok: false, status: 0, offline: true, data: {} };

@@ -68,7 +68,11 @@ export const ASK_COPY = {
 const SERVER = "Couldn't answer that just now. It didn't count. Try again.";
 const STILL = "Still answering your last question.";
 
-/** What each error says. None of them count against the day. */
+/**
+ * What each error says. None of them count against the day, with one exception the words
+ * allow for: an offline question may have reached us before the connection failed (only
+ * the answer was lost). Sending it again goes with the same key, which never counts twice.
+ */
 export const ASK_ERROR_WORDS: Record<AskErrorCode | "offline", string> = {
   invalid: SERVER,
   too_large: SERVER,
@@ -91,7 +95,9 @@ export const ASK_ERROR_WORDS: Record<AskErrorCode | "offline", string> = {
   timeout: "That took too long. It didn't count. Try again.",
   ai_off: "Ask is switched off for now.",
   paused: "Ask is resting until midnight (IST). Your questions for today aren't used up.",
-  offline: "No connection. Your question is still here; send it when you're back. It didn't count.",
+  // It may or may not have reached us, so no "It didn't count": what holds either way is that
+  // sending it again (the same question, so the same key) won't count it twice.
+  offline: "No connection. Your question is still here; send it again when you're back. It won't count twice.",
 };
 
 /** Errors that offer "Try again", which sends the same question with the same key. */

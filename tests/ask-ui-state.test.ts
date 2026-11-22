@@ -306,10 +306,82 @@ describe("askQuestion over HTTP", () => {
     assert.equal(odd.type === "error" && odd.error, "error", "an unknown code is a plain error");
   });
 
-  it("a quick drop is offline, and nothing is resent", async () => {
-    const f = fakeServer([() => ({ ok: false, status: 0, offline: true, data: {} })]);
+  const drop = () => ({ ok: false, status: 0, offline: true, data: {} });
+
+  it("a quick drop is resent once, 1 s later, with the same key and words, and asks for the whole answer", async () => {
+    const f = fakeServer([drop, ok(post)]);
+    const opts: unknown[] = [];
+    const send = f.deps.send;
+    const out = await Api.askQuestion(req, {
+      ...f.deps,
+      send: ((url: string, o: unknown) => (opts.push(o), send(url, o as never))) as Send,
+    });
+    assert.equal(out.type, "ok");
+    assert.deepEqual(f.calls.map((c) => c.method), ["POST", "POST"]);
+    assert.deepEqual(f.calls[1].body, f.calls[0].body);
+    assert.deepEqual(f.calls[1].body, req, "the same clientKey");
+    assert.ok(opts.every((o) => (o as { wholeAnswer?: boolean }).wholeAnswer === true), "an answer cut off on the way counts as a drop");
+  });
+
+  it("two quick drops are offline: two POSTs, no GET, nothing more", async () => {
+    const f = fakeServer([drop, drop]);
     assert.deepEqual(await Api.askQuestion(req, f.deps), { type: "offline" });
-    assert.equal(f.calls.length, 1);
+    assert.deepEqual(f.calls.map((c) => c.method), ["POST", "POST"]);
+  });
+
+  it("never resends after an HTTP answer", async () => {
+    for (const status of [400, 409, 429, 500, 502, 503, 504]) {
+      const f = fakeServer([fail(status, { error: "failed" })]);
+      assert.equal((await Api.askQuestion(req, f.deps)).type, "error");
+      assert.equal(f.calls.length, 1, `one POST for ${status}`);
+    }
+  });
+
+  it("a drop, then an HTTP refusal on the resend: that answer, and no third send", async () => {
+    const f = fakeServer([drop, fail(429, { error: "too_many_tries", left: 0, day: DAY, resetsAt: RESETS })]);
+    const out = await Api.askQuestion(req, f.deps);
+    assert.equal(out.type === "error" && out.error, "too_many_tries");
+    assert.deepEqual(f.calls.map((c) => c.method), ["POST", "POST"]);
+  });
+
+  it("a drop, then busy on the resend (the first send still being answered): GET waits for it and shows it", async () => {
+    const pending = thread({ pending: { clientKey: KEY_A, question: "x y", at: "2026-11-19T10:00:00.000Z" } });
+    const f = fakeServer([drop, fail(409, { error: "busy", left: 4, day: DAY, resetsAt: RESETS }), ok(pending), ok(thread({ turns: [turn()], left: 4 }))]);
+    const out = await Api.askQuestion(req, f.deps);
+    assert.equal(out.type, "landed");
+    assert.deepEqual(f.calls.map((c) => c.method), ["POST", "POST", "GET", "GET"], "never a third POST");
+  });
+
+  it("a drop, then a server error on the resend: GET finds the first send answered, and shows it", async () => {
+    const f = fakeServer([drop, fail(500, { error: "error" }), ok(thread({ turns: [turn()], left: 4 }))]);
+    const out = await Api.askQuestion(req, f.deps);
+    assert.equal(out.type, "landed");
+  });
+
+  it("a drop, then a server error, and GET has no such question: the error, which truly didn't count", async () => {
+    const f = fakeServer([drop, fail(500, { error: "error" }), ok(thread())]);
+    const out = await Api.askQuestion(req, f.deps);
+    assert.equal(out.type === "error" && out.error, "error");
+    assert.deepEqual(f.calls.map((c) => c.method), ["POST", "POST", "GET"]);
+  });
+
+  it("says words for offline that hold whether or not the question reached us", async () => {
+    const { ASK_ERROR_WORDS } = await import("../components/platform/ask-copy.ts");
+    assert.doesNotMatch(ASK_ERROR_WORDS.offline, /didn't count/i, "only the answer may have been lost");
+    assert.match(ASK_ERROR_WORDS.offline, /won't count twice/);
+    assert.match(ASK_ERROR_WORDS.offline, /still here/);
+  });
+
+  it("a wait that ran out with no GET getting through is offline, not a timeout that claims it didn't count", async () => {
+    const f = fakeServer([
+      () => {
+        f.advance(ASK_LIMITS.clientTimeoutMs);
+        return drop();
+      },
+      ...Array.from({ length: 30 }, () => drop),
+    ]);
+    assert.deepEqual(await Api.askQuestion(req, f.deps), { type: "offline" });
+    assert.equal(f.calls.filter((c) => c.method === "POST").length, 1, "a whole wait is never resent");
   });
 
   it("after 24 s with no reply, GET looks for the key: found answered", async () => {
