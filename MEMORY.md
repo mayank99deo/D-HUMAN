@@ -199,6 +199,7 @@ The running record of this project: where things stand, why they are the way the
   - The stand-in edge (scratchpad `b-net/edge.mjs`) reproduces it.
   - bom1 serves HTTP/2 only, PINGs idle connections every 60 s and sends GOAWAY at 300 s.
 - **iPhone's `service-not-allowed` isn't always the language (2026-11-22):** WebKit also sends it when Apple's speech service can't be reached (a weak signal). Never remember a language as unusable from it unless the rules in `micProblemOf` say so: before the start, online, outside en/hinglish/hi, and that language hasn't listened this visit.
+- **Rules in the meal system prompt reach every meal (2026-11-22):** a rice-only rule there moved rajma and biryani. Put a rule only some meals need in the request, triggered by code (as `cookedRiceLine` does), and keep the system prompt stable for caching.
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
 ## Open items
@@ -210,11 +211,9 @@ The running record of this project: where things stand, why they are the way the
   - The gallery picker and HEIC.
   - "This device couldn't start listening" on a weak signal.
 - [ ] **Decide (Mayank), from that round:**
-  - Does "300 gram chawal" mean cooked rice unless he says raw? It was read as raw (about 1,400 kcal) in 3 of 4 runs.
   - Gallery photos: should the meal slot come from the photo's time? (A lunch photo logged at 8 pm guesses dinner.)
-  - His mobile carrier: if it's Jio, raise the dead idle connections to bom1 with Vercel; they may also explain the earlier stuck loading screens.
-  - The grey support line shows to everyone: limit it to founders once the cause is known.
   - Should the countdown's big number pause instead of logging now?
+- [ ] **Decide (Mayank): dal, rajma, chana, quinoa and oats in grams as cooked?** Today they always read as dry (200 g dal = 680 kcal, about 6–7 bowls). It would need per-food cooked factors (USDA has them) and the same matcher as rice.
 - [ ] **Follow-ups from that round:**
   - Send the hi-IN Devanagari beside the romanized text for Hinglish voice meals.
   - `soundsLikeHindi` lacks mujhe, kitna and chahiye.
@@ -394,6 +393,28 @@ Newest first. One entry per change; pushes carry their commit hash.
       - No meal or question text in 210 server log lines; the usage ledger is consistent.
     - **Not an app bug, but worth one try on the iPhone:** a WebKit photo resend arrived empty in 2 of about 17 runs, only under Playwright's own interception.
   - **Before push, on main `37f8282`:** typecheck, lint, 1,438 tests and `next build` (second run, after the SecurityFatalError notice).
+  - **Push `b1f9709`** (`0fc9bf9` through `b1f9709`, 14 commits):
+    - **Deploy:** Vercel says "Deployment has completed".
+    - **Checked live:** / and /signin give 200; /fuel and /fuel/past 307 to `/signin?next=…`; POST `/api/food` and `/api/ask` give 401 signed out; served from `bom1`.
+    - **Next:** Mayank to run the iPhone checks in Open items.
+  - **Mayank's calls after the push:**
+    - Grams of rice mean cooked unless he says raw or otherwise. The AI efficiency lead is changing the meal prompt, with a live check.
+    - He's on Jio, but "network is always there": no Vercel ticket.
+    - The grey support line is for founders only: `a43d9c7` passes `founder` (`isOwnerEmail`, BLOG_OWNER_EMAILS) from the Fuel page to FuelLogger. 1,438 tests pass.
+  - **`150cedc` (AI efficiency lead): grams of rice mean cooked rice unless raw is said.**
+    - **The rule:** `lib/domain/rice-grams.ts` finds rice in grams in the person's own words (English, Hinglish, Devanagari, digits or Hindi number words) and adds one request line with the raw equivalent.
+    - **When it doesn't fire:** with a raw word in the same clause (raw, uncooked, dry, kachcha, कच्चा, "pakane se pehle"), or for dishes and rice products (biryani, fried rice, rice flour, kheer…).
+    - **The factor** (`COOKED_RICE` in `food-table.ts`, USDA SR Legacy): white 130/365 kcal (fdc 169757/169756), so 0.356; brown 123/367, so 0.335. 300 g cooked white rice = 107 g raw = 390 kcal.
+    - **The system prompt is unchanged on purpose:** a rice rule there moved rajma (cooked in 2 of 7 runs) and biryani. Requests without rice grams are byte for byte the same as before.
+    - **Live, $0.145 over 181 Haiku calls:**
+      - "200 g rice and dal" went from 863–888 kcal (raw, 3 of 3) to 400–410.
+      - "300 ग्राम चावल और राजमा" went from 560–1,285 to 560–580.
+      - The model copied the given raw grams in 42 of 42 runs; raw phrasings still read raw.
+      - Cost: +56 input tokens on rice-gram meals only.
+    - **Found:** before this, the rice minerals came from 190 g raw for "300 gram chawal" (1.8 times too much).
+    - **Not changed (Mayank to decide):** dal, rajma, quinoa and oats in grams always read as dry (200 g dal = 680 kcal).
+    - **Not checked live:** the usual day (tests only).
+  - **Before push, on main `150cedc`:** typecheck, lint, 1,449 tests, `next build` (second run).
 - **Voice language bugs (Mayank, iPhone, live site), crew running:**
   - **Fuel:** with Hinglish picked, Say transcribed and logged in full Devanagari ("दो रोटी और चने की सब्जी", tip in Hindi). Hinglish has listened with `hi-IN` since `93850a9`, and replies follow the transcript's script. His rule: the pick decides. Hinglish means Latin letters; हिंदी means Devanagari.
   - **Ask:** the co-founder's Hindi came out as Marathi. Confirmed: `looksMarathi` in `lib/domain/ask-language.ts` classes everyday Hindi as Marathi ("…फायदे होते हैं", "मैं क्या करू"), and Ask's prompt calls करू Marathi.
