@@ -239,7 +239,7 @@ describe("the Say card", () => {
     const cases: [import("../components/platform/listen-state.ts").MicProblem, string, boolean, string[]][] = [
       ["nothing_heard", "We didn't hear anything", false, ["type"]],
       ["blocked", "Your mic is blocked", true, ["type", "retry"]],
-      ["dictation_off", "Listening is off on this device", true, ["type", "retry"]],
+      ["dictation_off", "This device couldn't start listening", true, ["type", "retry"]],
       ["offline", "You're offline", true, ["type", "retry"]],
       ["no_mic", "We couldn't find a microphone", true, ["retry", "type"]],
       ["stopped", "Listening stopped", true, ["type"]],
