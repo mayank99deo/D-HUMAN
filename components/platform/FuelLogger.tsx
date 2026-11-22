@@ -130,6 +130,7 @@ export function FuelLogger({
   stackReady,
   focusUsual,
   ask = false,
+  founder = false,
 }: {
   /** No report and no stack yet, and their meals are now enough to build one. */
   stackReady: boolean;
@@ -137,6 +138,8 @@ export function FuelLogger({
   focusUsual: boolean;
   /** Ask is open to this person: the meal just logged and the gaps get "Ask about this". */
   ask?: boolean;
+  /** A founder (BLOG_OWNER_EMAILS): failed sends also show the grey support line ("Load failed after 9.7 s"). */
+  founder?: boolean;
   aiOff: boolean;
   targets: Totals & { basis: string[]; estimated: boolean };
   totals: Totals;
@@ -302,8 +305,9 @@ export function FuelLogger({
     const l = res?.ok ? (data.log as LoggedMeal | undefined) : undefined;
     if (!l) {
       const f = sendFailure(sent);
-      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail: f.detail, retry: f.retry } : r));
-      setErrorNote(f.detail ? { error: f.message, note: f.detail } : null);
+      const detail = founder ? f.detail : undefined;
+      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail, retry: f.retry } : r));
+      setErrorNote(detail ? { error: f.message, note: detail } : null);
       return setError(f.message);
     }
     lastTry.current = null;
@@ -348,8 +352,9 @@ export function FuelLogger({
     } else {
       // A 4xx we don't name (too short, refused without a message) asks for more words.
       const f = sendFailure(sent, "Tell us a little more about a normal day, then save.", TYPICAL_ERRORS);
-      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail: f.detail, retry: f.retry } : r));
-      setErrorNote(f.detail ? { error: f.message, note: f.detail } : null);
+      const detail = founder ? f.detail : undefined;
+      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail, retry: f.retry } : r));
+      setErrorNote(detail ? { error: f.message, note: detail } : null);
       setError(f.message);
     }
   }

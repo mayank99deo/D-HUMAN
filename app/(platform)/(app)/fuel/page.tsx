@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { FuelLogger } from "@/components/platform/FuelLogger";
 import { aiMode } from "@/lib/ai/client";
 import { askGate } from "@/lib/ask/types";
+import { isOwnerEmail } from "@/lib/auth/owners";
 import type { SavedDay } from "@/lib/ai/schemas";
 import { db, schema } from "@/lib/db";
 import { foodFactsFor } from "@/lib/domain/food-facts";
@@ -61,6 +62,8 @@ async function Fuel({ searchParams }: { searchParams: Promise<Record<string, str
       stackReady={stackReady}
       focusUsual={usual}
       ask={askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok"}
+      // Mayank, 2026-11-22: the grey support line under a failed send is for founders only.
+      founder={isOwnerEmail(user.email)}
     />
   );
 }
