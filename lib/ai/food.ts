@@ -5,6 +5,7 @@ import { strictOutputFormat } from "./output-format";
 import { USUAL_DAY_RUNS, settledRuns } from "@/lib/domain/food-sums";
 import { foodListText, portionsText } from "@/lib/domain/food-table";
 import { averageUsualDay } from "@/lib/domain/meal-minerals";
+import { cookedRiceLine } from "@/lib/domain/rice-grams";
 import type { MealWords, Spoken } from "@/lib/domain/speech";
 import { DaySchema, MealSchema, type Day, type Meal, type SavedDay } from "./schemas";
 
@@ -16,6 +17,13 @@ import { DaySchema, MealSchema, type Day, type Meal, type SavedDay } from "./sch
 // prompt carries portions as raw grams to copy, never values to multiply.
 // The portions are the textbook ones (lib/domain/food-table.ts, PORTIONS); until 2026-11-18 this prompt
 // said 35 g atta a roti, against the textbooks' 20 g.
+// Rice in grams is cooked rice unless the person says it's raw (Mayank, 2026-11-22). With only "when the
+// person gives a raw amount, use it as given", grams of rice came back as raw rice in 22 of 26 live runs
+// ("300 ग्राम चावल" at 1,245-1,285 kcal). A rule for it in this system prompt fixed rice, but every meal
+// reads the system prompt: 150 g rajma then came back as cooked rajma in 2 of 7 runs (it was dry in 3 of
+// 3), and 300 g biryani rose from 620-640 kcal to 640-755. So the rule goes only where it applies: when
+// the person's words give rice in grams, the request carries the raw grams worked out in code
+// (cookedRiceLine, lib/domain/rice-grams.ts), and every other meal's request is exactly as before.
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
 - One item per dish or food the person names: "2 rotis, dal and curd" is three items.
 - For each item, first list its ingredients:
@@ -34,7 +42,14 @@ ${portionsText()}
 Food list (code and what it covers):
 ${foodListText()}`;
 
-const SYSTEM = `${VOICE}\n\n${FOOD_RULES}`;
+/** The system prompt for meals and usual days. Exported for tests. */
+export const SYSTEM = `${VOICE}\n\n${FOOD_RULES}`;
+
+/** The raw grams for rice the words give in grams as cooked rice, on a line of its own; or "". */
+const riceLine = (words: string) => {
+  const line = cookedRiceLine(words);
+  return line ? `\n${line}` : "";
+};
 
 export type FoodContext = { language: string; diet: string | null; focus: string[] };
 
@@ -92,7 +107,7 @@ type MealRequest = { image?: { mime: string; bytes: Buffer }; words: MealWords; 
 
 /** The text part of the meal request. Exported for tests. */
 export function mealPrompt(input: MealRequest): string {
-  return `${input.image ? "Here's a photo of what I ate." : ""}${wordsLine(input.words, input.voice)}
+  return `${input.image ? "Here's a photo of what I ate." : ""}${wordsLine(input.words, input.voice)}${riceLine(input.words.said)}
 
 ${contextLine(input.context)}
 Title: a short name for the meal, as they'd say it. Tip: one short, specific nudge linked to what their report says to watch, or null if nothing useful. Keep food names as Indians say them (e.g. "rajma chawal").
@@ -133,6 +148,14 @@ export async function estimateMeal(input: MealRequest): Promise<{ data: Meal; mo
   return { data: message.parsed_output, model: message.model };
 }
 
+/** The usual-day request. Exported for tests. */
+export function usualDayPrompt(description: string, context: FoodContext): string {
+  return `This is how I usually eat on a normal day: "${description}"${riceLine(description)}
+
+Break it into meals, each with its estimates, ingredients and vitamins. ${contextLine(context)}
+Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protein comes at dinner"). ${languageRule(context.language)}`;
+}
+
 export async function estimateTypicalDay(description: string, context: FoodContext): Promise<{ data: Day; model: string }> {
   const t0 = Date.now();
   const message = await anthropic()
@@ -142,15 +165,7 @@ export async function estimateTypicalDay(description: string, context: FoodConte
       ...fallbackFor(MODELS.food),
       output_config: { effort: "low", format: strictOutputFormat(DaySchema) },
       system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `This is how I usually eat on a normal day: "${description}"
-
-Break it into meals, each with its estimates, ingredients and vitamins. ${contextLine(context)}
-Patterns: 2–4 plain observations about how they eat (e.g. "Most of your protein comes at dinner"). ${languageRule(context.language)}`,
-        },
-      ],
+      messages: [{ role: "user", content: usualDayPrompt(description, context) }],
     }, DAY_DEADLINE)
     .finalMessage();
   logUsage("typical_day", message, t0);

@@ -239,6 +239,25 @@ export const PORTIONS: readonly { serving: string; raw: string; source: string }
   { serving: "Ghee or butter", raw: "1 tsp = 4.5 g, 1 tbsp = 13 g", source: "USDA: 1 tbsp ghee 12.8 g (fdc 173412), butter 14.2 g (fdc 173410)" },
 ];
 
+/**
+ * Cooked rice to raw rice (Mayank, 2026-11-22: grams of rice mean the cooked weight on the plate,
+ * unless the person says the rice is raw). Raw grams = cooked grams × cooked kcal ÷ raw kcal, the same
+ * energy ratio as the "1 cup cooked rice" portion above. USDA SR Legacy: white long-grain rice cooked
+ * without salt, 130 kcal per 100 g (fdc 169757; raw 365, fdc 169756); brown long-grain rice cooked,
+ * 123 kcal (fdc 169704; raw 367, fdc 169703). Their dry matter gives the same factors within 1%.
+ */
+export const COOKED_RICE = {
+  rice_white: { kcal: 130, src: "fdc:169757" },
+  rice_brown: { kcal: 123, src: "fdc:169704" },
+} as const;
+export type RiceCode = keyof typeof COOKED_RICE;
+
+/** The raw rice in cooked grams of rice, and its energy (the same as the cooked rice's). */
+export function rawRice(cookedG: number, code: RiceCode): { g: number; kcal: number } {
+  const kcal = (cookedG * COOKED_RICE[code].kcal) / 100;
+  return { g: Math.round((kcal / FOODS[code].kcal) * 100), kcal: Math.round(kcal) };
+}
+
 const GROUP_NAMES: Record<FoodGroup, string> = {
   grain: "Grains and flours, raw or dry", pulse: "Pulses and soy, dry", dairy: "Milk and dairy", fat: "Fats", egg: "Eggs",
   meat: "Meat", fish: "Fish and seafood", veg: "Vegetables and greens", fruit: "Fruit", nut: "Nuts and seeds", sugar: "Sugar", drink: "Drinks",
