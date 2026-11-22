@@ -3,8 +3,11 @@
 import { ASK_LIMITS } from "@/lib/ask/types";
 import { PLAN } from "@/lib/domain/plan";
 
-/** Each stop points at a real control, marked data-tour="<id>" in Nav.tsx (Ask's in AskButton.tsx). */
-export type TourStop = { id: "fuel" | "upload" | "home" | "stack" | "ask" | "wraps" | "settings"; title: string; body: string };
+/**
+ * Each stop points at a real control, marked data-tour="<id>" in Nav.tsx (Ask's in AskButton.tsx).
+ * `touch`: the body where a finger is the main pointer, when phones and laptops differ; `body` is the rest.
+ */
+export type TourStop = { id: "fuel" | "upload" | "home" | "stack" | "ask" | "wraps" | "settings"; title: string; body: string; touch?: string };
 
 // The pilot leads with calorie tracking, so Fuel comes first. Every claim here is
 // checked against the screen it describes; keep them in step when screens change.
@@ -12,7 +15,9 @@ export const TOUR: readonly TourStop[] = [
   {
     id: "fuel",
     title: "Fuel: log what you eat",
-    body: "Snap a photo, say it or type it. AI estimates the calories and protein in Indian portions, like a katori of dal or two rotis.",
+    // Phones and tablets get Snap (the camera) and the gallery; laptops pick a photo file (meal-photo.ts).
+    body: "Choose a photo of your plate, say it or type it. AI estimates the calories and protein in Indian portions, like a katori of dal or two rotis.",
+    touch: "Snap a photo or pick one from your gallery, say it or type it. AI estimates the calories and protein in Indian portions, like a katori of dal or two rotis.",
   },
   {
     id: "upload",

@@ -269,7 +269,16 @@ function TourDialog({
             </p>
             {lead && <p className="mb-2 text-[0.9375rem]">{lead}</p>}
             <h2 className="text-xl font-bold leading-tight semiwide">{s.title}</h2>
-            <p className="mt-2 text-[0.9375rem] leading-snug text-graphite">{s.body}</p>
+            <p className="mt-2 text-[0.9375rem] leading-snug text-graphite">
+              {s.touch ? (
+                <>
+                  <span className="hidden touch:inline">{s.touch}</span>
+                  <span className="touch:hidden">{s.body}</span>
+                </>
+              ) : (
+                s.body
+              )}
+            </p>
             {last && <p className="mt-3 text-[0.9375rem] font-semibold">{FREE_LINE}</p>}
           </div>
         </div>

@@ -30,7 +30,7 @@ after(async () => {
 });
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const allCopy = [...TOUR.flatMap((s) => [s.title, s.body]), FREE_LINE].join("\n");
+const allCopy = [...TOUR.flatMap((s) => [s.title, s.body, s.touch ?? ""]), FREE_LINE].join("\n");
 
 describe("tour copy", () => {
   it("has four to six stops and starts with Fuel", () => {

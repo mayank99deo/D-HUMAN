@@ -1,7 +1,9 @@
 // Shrinks a photo in the browser before upload: phones shoot 4–12 MB images,
 // and on a slow connection in a small town every megabyte counts. Long edge
 // capped, re-encoded as JPEG. Keeps enough detail to read a lab report.
-export async function shrinkImage(file: File, maxEdge = 2200, quality = 0.86): Promise<File> {
+// `keepSmaller` (the default) hands back the original when re-encoding wouldn't shrink it;
+// meal photos turn it off so their metadata never leaves the phone (meal-photo.ts).
+export async function shrinkImage(file: File, maxEdge = 2200, quality = 0.86, { keepSmaller = true }: { keepSmaller?: boolean } = {}): Promise<File> {
   const source = await decode(file);
   const scale = Math.min(1, maxEdge / Math.max(source.width, source.height));
   const w = Math.round(source.width * scale);
@@ -19,7 +21,7 @@ export async function shrinkImage(file: File, maxEdge = 2200, quality = 0.86): P
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("encode failed"))), "image/jpeg", quality),
   );
   // Small files already under the cap stay as they are if re-encoding grew them.
-  if (blob.size >= file.size && /^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+  if (keepSmaller && blob.size >= file.size && /^image\/(jpeg|png|webp)$/.test(file.type)) return file;
   return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
 }
 

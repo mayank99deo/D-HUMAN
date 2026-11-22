@@ -16,7 +16,7 @@ import { Paywall, PlanLine } from "./Paywall";
 import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
 import { SayCard, type SayHandle, type SayLeave } from "./SayCard";
-import { shrinkImage } from "./shrink";
+import { PHOTO_ACCEPT, PHOTO_COPY, PROBLEM_CLEARANCE, readMealPhoto, revealProblem } from "./meal-photo";
 import { useSpokenPick } from "./spoken-pick";
 import { toEnglish } from "./translate";
 import { useSpeechSupported } from "./useRecognizer";
@@ -154,7 +154,20 @@ export function FuelLogger({
   const { spoken, saved, pick: pickSpoken } = useSpokenPick(spokenForAppLanguage(language));
   // The language the words in the box were heard in, when they came from the Say card.
   const [heardIn, setHeardIn] = useState<SpokenId | null>(null);
+  // Two file inputs: the camera (capture) and the gallery (no capture). Laptops ignore
+  // capture, so there both open the file picker and the photo tile uses the gallery one.
   const camera = useRef<HTMLInputElement>(null);
+  const gallery = useRef<HTMLInputElement>(null);
+  // A picked photo is being shrunk (a big one takes a moment on a phone).
+  const [opening, setOpening] = useState(false);
+  // Only the newest pick lands; the preview's object URL is freed when it's replaced.
+  const picks = useRef(0);
+  const shown = useRef<string | null>(null);
+  // Why the last pick couldn't be used, shown beside the photo controls rather than under Log,
+  // which can be off screen on a phone. Tied to the photo it left in place, so it goes once that
+  // photo is logged, swapped or cancelled.
+  const [photoTrouble, setPhotoTrouble] = useState<{ text: string; kept: typeof photo } | null>(null);
+  const trouble = photoTrouble && photoTrouble.kept === photo ? photoTrouble.text : null;
   const box = useRef<HTMLTextAreaElement>(null);
   // One meal log at a time, however it was started.
   const inFlight = useRef(false);
@@ -181,17 +194,33 @@ export function FuelLogger({
     b.setSelectionRange(b.value.length, b.value.length);
   }
 
-  async function pickPhoto(files: FileList | null) {
-    const f = files?.[0];
+  // The photo tile: the camera where a finger is the main pointer (the same test as the
+  // labels' `touch` variant, so what it says and what it does always agree), the file picker elsewhere.
+  const openPhoto = () => (matchMedia("(pointer: coarse)").matches ? camera : gallery).current?.click();
+
+  // Either input. Cleared each time, so picking the same photo again still counts.
+  // Cancelling the picker fires nothing, so the photo already chosen stays.
+  function picked(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.currentTarget.files?.[0];
+    e.currentTarget.value = "";
+    void pickPhoto(f);
+  }
+
+  async function pickPhoto(f: File | undefined) {
     if (!f) return;
+    const pick = ++picks.current;
     setError(null);
-    try {
-      const small = await shrinkImage(f, 1280, 0.8);
-      setPhoto({ file: small, url: URL.createObjectURL(small) });
-      setMode("photo");
-    } catch {
-      setError("We couldn't open that photo. Try a JPEG or PNG.");
-    }
+    setPhotoTrouble(null);
+    setOpening(true);
+    const read = await readMealPhoto(f);
+    if (pick !== picks.current) return;
+    setOpening(false);
+    // A photo that won't open leaves the one already chosen in place.
+    if ("problem" in read) return setPhotoTrouble({ text: PHOTO_COPY.problems[read.problem], kept: photo });
+    if (shown.current) URL.revokeObjectURL(shown.current);
+    shown.current = URL.createObjectURL(read.file);
+    setPhoto({ file: read.file, url: shown.current });
+    setMode("photo");
   }
 
   /** Log the meal. The Say card passes the words it heard and their language; the form uses its box. */
@@ -380,18 +409,33 @@ export function FuelLogger({
           ) : (
             <>
               <div className="mt-4 grid grid-cols-3 gap-2">
+                {/* Snap on phones and tablets, Photo on laptops (meal-photo.ts). */}
                 <button
                   type="button"
-                  onClick={() => camera.current?.click()}
+                  onClick={openPhoto}
+                  aria-busy={opening || undefined}
                   className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "photo" ? "border-paper" : "border-line-strong"}`}
                 >
-                  <span className="text-lg font-bold semiwide">Snap</span>
-                  <span className="text-xs text-graphite">A photo of your plate</span>
+                  <span className="text-lg font-bold semiwide">
+                    <span className="hidden touch:inline">{PHOTO_COPY.snap.title}</span>
+                    <span className="touch:hidden">{PHOTO_COPY.file.title}</span>
+                  </span>
+                  <span className="text-xs text-graphite">
+                    {opening ? (
+                      PHOTO_COPY.opening
+                    ) : (
+                      <>
+                        <span className="hidden touch:inline">{PHOTO_COPY.snap.note}</span>
+                        <span className="touch:hidden">{PHOTO_COPY.file.note}</span>
+                      </>
+                    )}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setMode("voice");
+                    setPhotoTrouble(null);
                     // Open the card and start listening inside this tap: iPhone needs that.
                     if (voiceOk) sayCard.current?.open();
                   }}
@@ -402,20 +446,69 @@ export function FuelLogger({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMode("text")}
+                  onClick={() => {
+                    setMode("text");
+                    setPhotoTrouble(null);
+                  }}
                   className={`flex min-h-24 flex-col items-start justify-between border p-4 text-left ${mode === "text" ? "border-paper" : "border-line-strong"}`}
                 >
                   <span className="text-lg font-bold semiwide">Type</span>
                   <span className="text-xs text-graphite">A few words is enough</span>
                 </button>
               </div>
-              <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => pickPhoto(e.target.files)} />
+              {/* One tap from the tiles to the gallery, on phones and tablets. Laptops' photo tile already picks a file.
+                  Gone once a photo is showing: the swap under it takes over. */}
+              {!aiOff && !(mode === "photo" && photo) && (
+                <button type="button" onClick={() => gallery.current?.click()} className="link-quiet mt-1 hidden min-h-11 items-center text-sm touch:inline-flex">
+                  {PHOTO_COPY.gallery}
+                </button>
+              )}
+              {trouble && !(mode === "photo" && photo) && (
+                <p ref={revealProblem} role="alert" className={`error-mark mt-2 text-sm ${PROBLEM_CLEARANCE}`}>
+                  {trouble}
+                </p>
+              )}
+              <input ref={camera} type="file" accept={PHOTO_ACCEPT} capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={picked} />
+              <input ref={gallery} type="file" accept={PHOTO_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={picked} />
+              <p role="status" className="sr-only">
+                {opening ? PHOTO_COPY.opening : ""}
+              </p>
 
               {mode && (
                 <div className="mt-5 space-y-4">
                   {mode === "photo" && photo && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photo.url} alt="Your meal" className="max-h-72 w-full border border-line object-cover" />
+                    <div>
+                      {/* Whole, not cropped: a screenshot or a tall plate shows as the AI will see it. */}
+                      <div className="relative border border-line bg-lift">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.url}
+                          alt={PHOTO_COPY.alt}
+                          className={`max-h-72 w-full object-contain transition-opacity motion-reduce:transition-none ${opening ? "opacity-30" : ""}`}
+                        />
+                        {opening && (
+                          <p aria-hidden className="absolute inset-0 grid place-items-center text-sm font-semibold">
+                            {PHOTO_COPY.opening}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-6">
+                        <button type="button" onClick={() => camera.current?.click()} className="link-quiet hidden min-h-11 items-center text-sm touch:inline-flex">
+                          {PHOTO_COPY.retake}
+                        </button>
+                        <button type="button" onClick={() => gallery.current?.click()} className="link-quiet hidden min-h-11 items-center text-sm touch:inline-flex">
+                          {PHOTO_COPY.regallery}
+                        </button>
+                        <button type="button" onClick={() => gallery.current?.click()} className="link-quiet inline-flex min-h-11 items-center text-sm touch:hidden">
+                          {PHOTO_COPY.another}
+                        </button>
+                      </div>
+                      {trouble && (
+                        <p ref={revealProblem} role="alert" className={`error-mark mt-1 text-sm ${PROBLEM_CLEARANCE}`}>
+                          {trouble}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {mode === "voice" && !voiceOk && <p className="text-sm text-graphite">This browser can&apos;t listen. Use the mic on your keyboard in the box below instead.</p>}
                   <label className="block">
