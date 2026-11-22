@@ -240,22 +240,40 @@ export const PORTIONS: readonly { serving: string; raw: string; source: string }
 ];
 
 /**
- * Cooked rice to raw rice (Mayank, 2026-11-22: grams of rice mean the cooked weight on the plate,
- * unless the person says the rice is raw). Raw grams = cooked grams × cooked kcal ÷ raw kcal, the same
- * energy ratio as the "1 cup cooked rice" portion above. USDA SR Legacy: white long-grain rice cooked
- * without salt, 130 kcal per 100 g (fdc 169757; raw 365, fdc 169756); brown long-grain rice cooked,
- * 123 kcal (fdc 169704; raw 367, fdc 169703). Their dry matter gives the same factors within 1%.
+ * Cooked food to raw (Mayank, 2026-11-22: grams of rice, dal, pulses, quinoa, oats and daliya mean the
+ * cooked food on the plate, unless the person says it's raw). Each way gives the raw grams in 1 g of
+ * cooked food and where that comes from.
+ * - Drained, from USDA SR Legacy: cooked kcal ÷ raw kcal per 100 g, the same energy ratio as the "1 cup
+ *   cooked rice" portion above (dry matter gives the same factors within about 1%). For foods that take
+ *   up their cooking water (rice, quinoa), oats and daliya cooked in water, and whole pulses boiled and
+ *   drained (boiled chana for chaat).
+ * - As served, from the textbooks: a bowl of dal, or of rajma, chole, lobia, kala chana, whole moong or
+ *   matki curry, holds 30 g of dry dal or beans (the portions above), and a katori is 150 mL, about
+ *   150 g of a mostly watery dish. USDA's drained lentils (116 ÷ 352 kcal, 0.33) would put two thirds
+ *   more dal in a katori than the app's own bowl has.
  */
-export const COOKED_RICE = {
-  rice_white: { kcal: 130, src: "fdc:169757" },
-  rice_brown: { kcal: 123, src: "fdc:169704" },
+const usda = (cookedKcal: number, code: FoodCode, src: string) => ({ factor: cookedKcal / FOODS[code].kcal, src });
+const BOWL = 30 / 150;
+export const COOKED = {
+  rice_white: usda(130, "rice_white", "fdc:169757"), // Rice, white, long-grain, regular, unenriched, cooked without salt; raw 365 (fdc 169756)
+  rice_brown: usda(123, "rice_brown", "fdc:169704"), // Rice, brown, long-grain, cooked; raw 367 (fdc 169703)
+  dal: { factor: BOWL, src: "ASC151-155, BFP170-174: 30 g dry dal a bowl; 1 katori 150 mL" },
+  curry: { factor: BOWL, src: "ASC156, ASC158, ASC161-163, ASC165: 30 g dry beans a bowl; 1 katori 150 mL" },
+  chana_boiled: usda(164, "chana", "fdc:173757"), // Chickpeas, mature seeds, cooked, boiled, without salt; raw 378 (fdc 173756)
+  rajma_boiled: usda(127, "rajma", "fdc:175194"), // Beans, kidney, red, mature seeds, cooked, boiled, without salt; raw 337 (fdc 173744)
+  moong_boiled: usda(105, "moong", "fdc:174257"), // Mung beans, mature seeds, cooked, boiled, without salt; raw 347 (fdc 174256)
+  lobia_boiled: usda(116, "lobia", "fdc:173759"), // Cowpeas, common, mature seeds, cooked, boiled, without salt; raw 336 (fdc 173758)
+  moth_boiled: usda(117, "moth", "fdc:172426"), // Mothbeans, mature seeds, cooked, boiled, without salt; raw 343 (fdc 172425)
+  quinoa: usda(120, "quinoa", "fdc:168917"), // Quinoa, cooked; uncooked 368 (fdc 168874)
+  oats: usda(71, "oats", "fdc:173905"), // Cereals, oats, regular and quick, unenriched, cooked with water, without salt; dry 379 (fdc 173904)
+  dalia: usda(83, "dalia", "fdc:170287"), // Bulgur, cooked; dry 342 (fdc 170688)
 } as const;
-export type RiceCode = keyof typeof COOKED_RICE;
+export type CookedWay = keyof typeof COOKED;
 
-/** The raw rice in cooked grams of rice, and its energy (the same as the cooked rice's). */
-export function rawRice(cookedG: number, code: RiceCode): { g: number; kcal: number } {
-  const kcal = (cookedG * COOKED_RICE[code].kcal) / 100;
-  return { g: Math.round((kcal / FOODS[code].kcal) * 100), kcal: Math.round(kcal) };
+/** The raw food in cooked grams of it, and the raw food's energy (the cooked food's, before any oil or ghee). */
+export function rawFor(cookedG: number, code: FoodCode, way: CookedWay): { g: number; kcal: number } {
+  const g = cookedG * COOKED[way].factor;
+  return { g: Math.round(g), kcal: Math.round((g * FOODS[code].kcal) / 100) };
 }
 
 const GROUP_NAMES: Record<FoodGroup, string> = {
