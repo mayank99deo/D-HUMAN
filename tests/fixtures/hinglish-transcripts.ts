@@ -89,6 +89,7 @@ export const TRANSCRIPTS: Transcript[] = [
   { id: "m-olive-oil", kind: "meal", hi: "एक चम्मच ऑलिव ऑयल", want: "ek chammach|chamach olive oil" },
   { id: "m-chowmein", kind: "meal", hi: "वेज चाउमीन और मंचूरियन", want: "veg chowmein|chowmien aur manchurian" },
   { id: "m-cold-coffee", kind: "meal", hi: "एक कोल्ड कॉफी विद आइसक्रीम", want: "ek cold coffee with ice cream" },
+  { id: "m-mac-cheese", kind: "meal", hi: "एक प्लेट मैक एंड चीज़", want: "ek plate mac and cheez|cheese", note: "live check: 'maik and cheez' was logged as makki roti" },
 
   // ── Everyday Indian dishes ──
   { id: "m-poha", kind: "meal", hi: "एक प्लेट पोहा और एक कप चाय", want: "ek plate poha aur ek cup chai" },

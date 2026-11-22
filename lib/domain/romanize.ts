@@ -260,6 +260,8 @@ const WORDS: Record<string, string> = {
   सिंगल: "single", एक्स्ट्रा: "extra", लार्ज: "large", मीडियम: "medium", स्मॉल: "small", रेगुलर: "regular",
   होममेड: "homemade", मिक्स: "mix", होल: "whole", व्हीट: "wheat", गार्लिक: "garlic", डाइजेस्टिव: "digestive",
   रस्क: "rusk", हेल्दी: "healthy", चीट: "cheat", प्री: "pre",
+  // "maik" read as makki (corn) in the live check: mac and cheese came back as makki roti.
+  मैक: "mac", मैकडॉनल्ड्स: "mcdonald's", मैकडोनाल्ड्स: "mcdonald's", मैकडी: "mcd",
   // Units, and short forms said letter by letter.
   स्कूप: "scoop", स्कूप्स: "scoops", कप्स: "cups", प्लेट्स: "plates", पीसेस: "pieces", स्लाइसेस: "slices",
   टेबलस्पून: "tablespoon", टीस्पून: "teaspoon", पैकेट: "packet", बॉटल: "bottle", मग: "mug",
