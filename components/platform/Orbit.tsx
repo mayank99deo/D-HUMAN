@@ -34,6 +34,7 @@ export function OrbitScreen({
   caption,
   done,
   error,
+  errorNote,
   actions,
 }: {
   facts: OrbitFact[];
@@ -46,6 +47,8 @@ export function OrbitScreen({
   caption?: string | null;
   done?: React.ReactNode; // the centre once finished
   error?: string | null;
+  /** A small grey line under the error, for support: what the connection did ("Load failed after 9.7 s"). */
+  errorNote?: string | null;
   actions?: React.ReactNode; // buttons under the centre when finished or failed
 }) {
   const [f, setF] = useState(0);
@@ -167,6 +170,7 @@ export function OrbitScreen({
         {state === "error" ? (
           <div className="fact-in">
             <p className="error-mark text-lg font-semibold">{error ?? "Something went wrong."}</p>
+            {errorNote && <p className="mt-2 text-xs text-graphite">{errorNote}</p>}
             <div className="mt-5">{actions}</div>
           </div>
         ) : state === "done" && !showFact ? (

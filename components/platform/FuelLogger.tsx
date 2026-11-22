@@ -9,9 +9,10 @@ import { MEAL_ENGLISH_MAX, MEAL_WORDS_MAX, langTag, spokenById, spokenForAppLang
 import { ASK_COPY } from "./ask-copy";
 import { gapsPrefill, mealPrefill } from "./ask-starters";
 import { AskAbout } from "./AskAbout";
+import { mealForm, sameTry, sendFailure, type MealTry } from "./meal-send";
 import { MealOrbit, type MealRun } from "./MealOrbit";
 import { MealRow } from "./MealRow";
-import { OFFLINE, send } from "./net";
+import { OFFLINE, postResending, send, tryKey } from "./net";
 import { Paywall, PlanLine } from "./Paywall";
 import { overBy, TargetBar } from "./Target";
 import type { OrbitFact } from "./Orbit";
@@ -35,12 +36,24 @@ const MEALS: { id: Meal; label: string }[] = [
   { id: "snack", label: "Snack" },
 ];
 
-const ERRORS: Record<string, string> = {
-  not_food: "That doesn't look like food. Try another photo, or tell us what you ate.",
+const TYPICAL_ERRORS: Record<string, string> = {
+  rate_limited: "That's a lot of tries in an hour. Try again a bit later.",
   ai_off: "Food reading isn't switched on yet on this server.",
-  rate_limited: "That's a lot of meals in an hour. Try again a bit later.",
-  too_large: "That photo is too big. Try again; we shrink photos before sending.",
-  empty: "Add a photo or a few words first.",
+  failed: "We couldn't save your usual day. Try again.",
+};
+
+/** A meal as /api/food sends it back (a food_logs row). */
+type LoggedMeal = {
+  id: string;
+  meal: string;
+  title: string;
+  source: string;
+  kcal: number;
+  proteinG: number;
+  confidence: string | null;
+  model: string | null;
+  items: { name: string; portion: string }[];
+  micros?: { tip?: string | null; lang?: string };
 };
 
 // Handlers and timers read the time through this. They never run during render, but
@@ -147,6 +160,8 @@ export function FuelLogger({
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The grey support line for a failed send, shown only under the error it belongs to.
+  const [errorNote, setErrorNote] = useState<{ error: string; note: string } | null>(null);
   const [last, setLast] = useState<Log | null>(null);
   const voiceOk = useSpeechSupported();
   // "Speaking in": this screen's pick, else the one remembered here, else the app language.
@@ -171,6 +186,8 @@ export function FuelLogger({
   const box = useRef<HTMLTextAreaElement>(null);
   // One meal log at a time, however it was started.
   const inFlight = useRef(false);
+  // The last try that didn't get logged, kept so sending it again reuses its key (meal-send.ts).
+  const lastTry = useRef<MealTry | null>(null);
   const [typicalText, setTypicalText] = useState(typical?.description ?? "");
   // Opened from the Stack screen (?usual=1) with a usual day too light to count: straight to the editor, with what they wrote.
   const [editingTypical, setEditingTypical] = useState(!typical || (focusUsual && typical.short));
@@ -234,44 +251,65 @@ export function FuelLogger({
     }
   }
 
+  /** Try again, from the orbit: the very same try (words, photo and key), so a meal that did land isn't logged twice. */
+  async function retryMeal() {
+    const t = lastTry.current;
+    if (!t || inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await sendMeal(t);
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
   async function logNow(said?: string, lang?: SpokenId | null) {
-    setBusy(true);
-    setError(null);
     const words = (said ?? text).trim();
     // The language they spoke in, for words that came from the Say card; typed words go by their script.
     const speaking = said != null ? (lang ?? null) : mode === "voice" ? heardIn : null;
-    const startedAt = clock();
-    setRun({ kind: "meal", startedAt, state: "running" });
+    const source = mode === "photo" ? "photo" : mode === "voice" ? "voice" : "text";
+    const file = mode === "photo" && photo ? photo.file : null;
+    // The same meal as a try that didn't get logged: send that try again, with its key.
+    const again = sameTry(lastTry.current, { words, speaking, source, meal, photo: file }, clock());
+    if (again) return sendMeal(again);
+    setBusy(true);
+    setError(null);
+    setRun({ kind: "meal", startedAt: clock(), state: "running" });
     // Into English on this device when the browser can; if not, their words go as they are.
     // The server answers in the language they spoke either way.
     const english = await toEnglish(words, translateSource(words, speaking), { maxLength: MEAL_ENGLISH_MAX });
-    const form = new FormData();
-    form.append("source", mode === "photo" ? "photo" : mode === "voice" ? "voice" : "text");
-    if (english) {
-      form.append("text", english);
-      form.append("original", words);
-    } else if (words) form.append("text", words);
-    if (speaking) form.append("spoken", speaking);
-    if (meal) form.append("meal", meal);
-    if (mode === "photo" && photo) form.append("photo", photo.file, "meal.jpg");
-    const res = await fetch("/api/food", { method: "POST", body: form }).catch(() => null);
-    const data = res ? await res.json().catch(() => ({})) : {};
+    const t: MealTry = { key: tryKey(), at: clock(), words, english, speaking, source, meal, photo: file };
+    lastTry.current = t;
+    await sendMeal(t);
+  }
+
+  async function sendMeal(t: MealTry) {
+    setBusy(true);
+    setError(null);
+    // Keeps the orbit already turning for this try; starts it again for Try again, or after Close.
+    setRun((r) => (r?.kind === "meal" && r.state === "running" ? r : { kind: "meal", startedAt: clock(), state: "running" }));
+    // One resend if the connection fails (net.ts); the key makes it safe.
+    const sent = await postResending("/api/food", () => mealForm(t));
+    const { res, data } = sent;
     setBusy(false);
     if (res?.status === 402) {
       // Out of meal logs: the refreshed page shows the paywall in place of the buttons.
+      lastTry.current = null;
       setRun(null);
       setMode(null);
       return startTransition(() => router.refresh());
     }
-    if (!res?.ok) {
-      const message = data.message || (res ? (ERRORS[data.error] ?? "We couldn't log that. Try again.") : "No connection. Check your signal and try again.");
-      setRun((r) => (r ? { ...r, state: "error", error: message } : r));
-      return setError(message);
+    const l = res?.ok ? (data.log as LoggedMeal | undefined) : undefined;
+    if (!l) {
+      const f = sendFailure(sent);
+      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail: f.detail, retry: f.retry } : r));
+      setErrorNote(f.detail ? { error: f.message, note: f.detail } : null);
+      return setError(f.message);
     }
-    const l = data.log;
+    lastTry.current = null;
     const logged: Log = {
       id: l.id, meal: l.meal, title: l.title, source: l.source, kcal: l.kcal, proteinG: l.proteinG, confidence: l.confidence,
-      tip: l.micros?.tip ?? null, items: l.items.map((i: { name: string; portion: string }) => `${i.name}, ${i.portion}`), demo: l.model === "mock",
+      tip: l.micros?.tip ?? null, items: l.items.map((i) => `${i.name}, ${i.portion}`), demo: l.model === "mock",
       lang: langTag(l.micros?.lang, l.title),
     };
     setLast(logged);
@@ -294,26 +332,25 @@ export function FuelLogger({
 
   async function saveTypical() {
     setTypicalBusy(true);
+    setError(null);
     setRun({ kind: "typical", startedAt: clock(), state: "running" });
-    const res = await fetch("/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description: typicalText }) }).catch(() => null);
-    const data = res ? await res.json().catch(() => ({})) : {};
+    const description = typicalText;
+    // Safe to send twice: it replaces the one saved usual day, and the server hands back a save
+    // of the same words from moments ago instead of reading it again (saveTypicalDay).
+    const sent = await postResending("/api/food/typical", () => JSON.stringify({ description }), { headers: { "content-type": "application/json" } });
+    const { res, data } = sent;
     setTypicalBusy(false);
-    if (res?.ok) {
+    const day = res?.ok ? (data.day as { patterns?: string[] } | undefined) : undefined;
+    if (day) {
       setEditingTypical(false);
-      setRun((r) => (r ? { ...r, state: "done", patterns: data.day?.patterns ?? [] } : r));
+      setRun((r) => (r ? { ...r, state: "done", patterns: day.patterns ?? [] } : r));
       startTransition(() => router.refresh());
     } else {
-      const message =
-        data.message ||
-        (!res
-          ? "No connection. Check your signal and try again."
-          : data.error === "rate_limited"
-            ? "That's a lot of tries in an hour. Try again a bit later."
-            : data.error === "ai_off"
-              ? "Food reading isn't switched on yet on this server."
-              : "Tell us a little more about a normal day, then save.");
-      setRun((r) => (r ? { ...r, state: "error", error: message } : r));
-      setError(message);
+      // A 4xx we don't name (too short, refused without a message) asks for more words.
+      const f = sendFailure(sent, "Tell us a little more about a normal day, then save.", TYPICAL_ERRORS);
+      setRun((r) => (r ? { ...r, state: "error", error: f.message, detail: f.detail, retry: f.retry } : r));
+      setErrorNote(f.detail ? { error: f.message, note: f.detail } : null);
+      setError(f.message);
     }
   }
 
@@ -329,7 +366,15 @@ export function FuelLogger({
     // Laptops: today's ring and macros stay in view on the left while meals are logged on the
     // right, so each one lands where you can see it. One column on phones and tablets.
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:grid lg:max-w-6xl lg:grid-cols-12 lg:gap-x-12 lg:pt-12">
-      {run && <MealOrbit run={run} facts={facts} categories={categories} onClose={() => setRun(null)} />}
+      {run && (
+        <MealOrbit
+          run={run}
+          facts={facts}
+          categories={categories}
+          onClose={() => setRun(null)}
+          onRetry={() => void (run.kind === "meal" ? retryMeal() : saveTypical())}
+        />
+      )}
       {voiceOk && !plan.mealBlock && (
         <SayCard
           handle={sayCard}
@@ -572,6 +617,7 @@ export function FuelLogger({
               {error}
             </p>
           )}
+          {error && errorNote?.error === error && <p className="mt-1 text-xs text-graphite">{errorNote.note}</p>}
 
           {last && (
             <article className="fact-in mt-6 border border-paper p-5" aria-live="polite">

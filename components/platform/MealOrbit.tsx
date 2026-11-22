@@ -16,6 +16,10 @@ export type MealRun = {
   result?: { title: string; kcal: number; proteinG: number; tip: string | null; demo: boolean };
   patterns?: string[];
   error?: string;
+  /** The grey support line under an error: what the connection did ("Load failed after 9.7 s"). */
+  detail?: string | null;
+  /** The same send can be tried again (a lost connection or a server failure, not a refusal). */
+  retry?: boolean;
 };
 
 const STEPS: Record<MealRun["kind"], string[]> = {
@@ -23,7 +27,20 @@ const STEPS: Record<MealRun["kind"], string[]> = {
   typical: ["Reading your day", "Splitting it into meals", "Counting the nutrients", "Finding your patterns"],
 };
 
-export function MealOrbit({ run, facts, categories, onClose }: { run: MealRun; facts: OrbitFact[]; categories: string[]; onClose: () => void }) {
+export function MealOrbit({
+  run,
+  facts,
+  categories,
+  onClose,
+  onRetry,
+}: {
+  run: MealRun;
+  facts: OrbitFact[];
+  categories: string[];
+  onClose: () => void;
+  /** Try again: the same words, photo and key, so a meal that did land isn't logged twice. */
+  onRetry?: () => void;
+}) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -72,10 +89,22 @@ export function MealOrbit({ run, facts, categories, onClose }: { run: MealRun; f
         caption={categories.length ? "Facts picked for your age, height and weight" : "Facts while you wait"}
         done={done}
         error={run.error}
+        errorNote={run.state === "error" ? run.detail : null}
         actions={
-          <button type="button" onClick={onClose} className="button-primary h-11 px-8 sm:h-12">
-            {run.state === "error" ? "Back to Fuel" : "Done"}
-          </button>
+          run.state === "error" && run.retry && onRetry ? (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button type="button" onClick={onRetry} className="button-primary h-11 px-6 sm:h-12">
+                Try again
+              </button>
+              <button type="button" onClick={onClose} className="button-ghost h-11 px-4 sm:h-12">
+                Back to Fuel
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={onClose} className="button-primary h-11 px-8 sm:h-12">
+              {run.state === "error" ? "Back to Fuel" : "Done"}
+            </button>
+          )
         }
       />
       {running && (
