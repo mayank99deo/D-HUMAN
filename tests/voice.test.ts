@@ -137,6 +137,20 @@ describe("words heard", () => {
   it("splits what's settled from the tail still being guessed", () => {
     assert.deepEqual(L.heardOf(results(["two rotis", true], [" and dal", false])), { final: "two rotis", interim: " and dal" });
   });
+  // QA, 2026-11-22: Chrome starts each later phrase with a space; an engine that doesn't (WebKit
+  // hands over Apple's formattedString as it is) ran phrases together after Keep talking: the
+  // stand-in logged "two rotis and daland a bowl of curd", while the card showed a space.
+  it("keeps a space between phrases whether or not the engine sends one", () => {
+    const chrome = L.heardOf(results(["two rotis and dal", true], [" and a bowl of curd", true], [" and chai", false]));
+    assert.deepEqual(chrome, { final: "two rotis and dal and a bowl of curd", interim: " and chai" });
+    const bare = L.heardOf(results(["two rotis and dal", true], ["and a bowl of curd", true], ["and chai", false]));
+    assert.equal(bare.final, "two rotis and dal and a bowl of curd");
+    assert.equal(L.heardText(bare), "two rotis and dal and a bowl of curd and chai");
+    assert.equal(L.heardText(L.heardOf(results(["दो रोटी", true], ["और दाल", true]))), "दो रोटी और दाल");
+    // One phrase, or a guess on its own, is left exactly as it came.
+    assert.deepEqual(L.heardOf(results(["two rotis", false])), { final: "", interim: "two rotis" });
+    assert.equal(L.heardText({ final: "", interim: "two rotis" }), "two rotis");
+  });
   it("drops one leading 'speak now' a screen reader put in the mic", () => {
     assert.deepEqual(L.heardOf(results(["Speak now. Two rotis", true])), { final: "Two rotis", interim: "" });
     assert.deepEqual(L.heardOf(results(["speak now", false])), { final: "", interim: "" });

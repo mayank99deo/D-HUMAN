@@ -201,13 +201,20 @@ export const languageProblem = (p: MicProblem | null) => p === "language";
 /** One recogniser result list as words: what's settled, and the tail still being guessed. */
 export type Heard = { final: string; interim: string };
 
+/**
+ * One phrase after another. Chrome starts each later phrase with a space. An engine that doesn't
+ * (QA's WebKit-like stand-in; whether iPhone does is unconfirmed) ran "two rotis and dal" and
+ * "and curd" together as "daland curd" in the box and the meal, while the card showed a space.
+ */
+const nextPhrase = (so: string, more: string) => (so && more && !/\s$/.test(so) && !/^\s/.test(more) ? `${so} ${more}` : so + more);
+
 export function heardOf(results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>): Heard {
   let final = "";
   let interim = "";
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
-    if (r.isFinal) final += r[0]?.transcript ?? "";
-    else interim += r[0]?.transcript ?? "";
+    if (r.isFinal) final = nextPhrase(final, r[0]?.transcript ?? "");
+    else interim = nextPhrase(interim, r[0]?.transcript ?? "");
   }
   return dropEcho({ final, interim });
 }
@@ -233,7 +240,7 @@ export function heardInScript(h: Heard, spoken: Spoken): Heard {
 }
 
 /** The words a session heard, in one string. */
-export const heardText = (h: Heard) => (h.final + h.interim).replace(/\s+/g, " ").trim();
+export const heardText = (h: Heard) => nextPhrase(h.final, h.interim).replace(/\s+/g, " ").trim();
 
 /**
  * What goes in the box: the words already there, a space, then what this session heard,
