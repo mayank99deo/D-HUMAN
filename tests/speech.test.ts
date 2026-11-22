@@ -172,8 +172,11 @@ describe("the language a reply was written in", () => {
 describe("the pick decides for Hindi and Hinglish", () => {
   const latin = "do roti aur chane ki sabzi";
   const devanagari = "दो रोटी और चने की सब्जी";
-  it("listens to Hinglish in Indian English, which writes Hindi in Latin letters", () => {
-    assert.equal(spokenById("hinglish").speech, "en-IN");
+  // Mayank, 2026-11-22, later: on en-IN, "do sau gram chawal" came out "Dosa gram chawal".
+  // hi-IN hears Hindi right; fitScript then writes it in Latin letters.
+  it("listens to Hinglish in Hindi, which hears Hindi words right, and writes it in Latin letters", () => {
+    assert.equal(spokenById("hinglish").speech, "hi-IN");
+    assert.equal(fitScript("दो सौ ग्राम चावल", spokenById("hinglish")), "do sau gram chawal");
     assert.equal(spokenById("en").speech, "en-IN");
     assert.equal(spokenById("hi").speech, "hi-IN");
     assert.equal(spokenById("mr").speech, "mr-IN");

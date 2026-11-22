@@ -161,7 +161,7 @@ export function micProblemOf(error: string, ctx: { lang: SpokenId; workedIn: rea
 /**
  * Two picks that listen with the same tag share the browser's engine: one working says nothing
  * about the other's language, and one failing for its language rules out both. Hinglish and
- * English both listen in en-IN (since 2026-11-22; Hinglish used hi-IN, like हिंदी, before).
+ * हिंदी both listen in hi-IN (Hinglish was on en-IN for a few hours on 2026-11-22).
  */
 export const sameEngine = (a: SpokenId, b: SpokenId) => a === b || spokenById(a).speech === spokenById(b).speech;
 

@@ -2,7 +2,8 @@
 // net for a Hinglish pick that still comes back in Devanagari.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hasDevanagari, romanize } from "../lib/domain/romanize.ts";
+import { hasDevanagari, ROMAN_PHRASES, ROMAN_WORDS, romanize } from "../lib/domain/romanize.ts";
+import { HELD_OUT, readsNaturally, TRANSCRIPTS } from "./fixtures/hinglish-transcripts.ts";
 
 const check = (pairs: [string, string][]) => {
   for (const [devanagari, latin] of pairs) assert.equal(romanize(devanagari), latin, devanagari);
@@ -198,5 +199,142 @@ describe("Devanagari in Latin letters", () => {
     assert.ok(hasDevanagari("2 रोटी"));
     assert.equal(hasDevanagari("2 roti"), false);
     assert.equal(hasDevanagari("ਦੋ ਰੋਟੀਆਂ"), false);
+  });
+});
+
+// Since 2026-11-22 (later) Hinglish listens in hi-IN again: everything a Hinglish pick says
+// comes through romanize(), so what hi-IN writes for spoken meals and questions has to read
+// the way people text it. en-IN had written "do sau gram chawal" as "Dosa gram chawal".
+describe("Hinglish heard in hi-IN", () => {
+  it("reads every transcript in the corpus, and the held-out set, the way people text it", () => {
+    for (const t of [...TRANSCRIPTS, ...HELD_OUT]) {
+      const r = readsNaturally(romanize(t.hi), t.want);
+      assert.ok(r.ok, `${t.id}: ${t.hi} → ${romanize(t.hi)} (${r.why})`);
+    }
+  });
+
+  it("writes Mayank's two meals right", () => {
+    check([
+      ["300 ग्राम चावल और चिकन", "300 gram chawal aur chicken"],
+      ["एक कटोरी दाल और दो सौ ग्राम चावल", "ek katori dal aur do sau gram chawal"],
+    ]);
+  });
+
+  it("writes numbers, fractions and units as people say them", () => {
+    check([
+      ["ढाई सौ ग्राम", "dhai sau gram"],
+      ["डेढ़ कटोरी", "dedh katori"],
+      ["साढ़े तीन सौ एमएल", "sadhe teen sau ml"],
+      ["300 एम एल छाछ", "300 ml chhachh"],
+      ["सवा सौ ग्राम", "sawa sau gram"],
+      ["आधा किलो", "aadha kilo"],
+      ["एक केजी", "ek kg"],
+      ["पांच ग्राम क्रिएटिन", "paanch gram creatine"],
+    ]);
+  });
+
+  it("reads a word by its neighbour where it means two things", () => {
+    check([
+      ["पाव किलो चिकन", "paav kilo chicken"],
+      ["पाव भाजी", "pav bhaji"],
+      ["लो कार्ब डाइट", "low carb diet"],
+      ["दवा लो", "dawa lo"],
+      ["चिकन करी", "chicken curry"],
+      ["एग करी", "egg curry"],
+      ["पोस्ट वर्कआउट मील", "post workout meal"],
+      ["दो मील चला", "do meel chala"],
+      ["चीज़ सैंडविच", "cheese sandwich"],
+      ["कोई चीज़ नहीं", "koi cheez nahi"],
+    ]);
+  });
+
+  it("keeps the word list's keys findable and its values in Latin letters, without digits", () => {
+    for (const [key, value] of Object.entries(ROMAN_WORDS)) {
+      assert.match(key, /^[ऀ-ॣॱ-ॿ]+$/, `${key}: one Devanagari word`);
+      assert.doesNotMatch(key, /[़ँ]/, `${key}: no nukta or ँ, as lookups have none`);
+      assert.doesNotMatch(value, /[0-9ऀ-ॿ]/, `${key} → ${value}`);
+    }
+    for (const [key, value] of Object.entries(ROMAN_PHRASES)) {
+      assert.match(key, /^[ऀ-ॣॱ-ॿ]+(?: [ऀ-ॣॱ-ॿ]+)+$/, `${key}: words with one space`);
+      assert.doesNotMatch(key, /[़ँ]/, `${key}: no nukta or ँ`);
+      assert.doesNotMatch(value, /[0-9ऀ-ॿ]/, `${key} → ${value}`);
+      assert.equal(romanize(key), value, `${key} matches itself`);
+    }
+  });
+});
+
+// The three things romanize() never does, on seeded random text: words from the corpus, the
+// word list and random Devanagari, mixed with Latin words, digits, punctuation and spaces.
+describe("what romanize never does", () => {
+  // mulberry32: the same strings every run, so a failure can be reproduced.
+  function random(seed: number) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rand = random(20261122);
+  const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rand() * xs.length)];
+  const corpusWords = [...new Set([...TRANSCRIPTS, ...HELD_OUT].flatMap((t) => t.hi.split(/\s+/)).filter(hasDevanagari))];
+  const listWords = [...Object.keys(ROMAN_WORDS), ...Object.keys(ROMAN_PHRASES)];
+  // Any code point in the Devanagari block except dandas, so the piecewise check below holds.
+  const anyDevanagari = () =>
+    Array.from({ length: 1 + Math.floor(rand() * 6) }, () => {
+      const c = 0x0900 + Math.floor(rand() * 0x80);
+      return c === 0x0964 || c === 0x0965 ? "क" : String.fromCodePoint(c);
+    }).join("");
+  const latinWords = ["2", "200", "1.5", "KFC", "Domino's", "protein", "shake", "50%", "₹49", "café", "café", "B12", "x2", "(150 mL)", "-", "/", "😀", "naïve", "e.g.", "100g"];
+  const digits = () =>
+    Array.from({ length: 1 + Math.floor(rand() * 4) }, () => (rand() < 0.5 ? String(Math.floor(rand() * 10)) : String.fromCodePoint(0x0966 + Math.floor(rand() * 10)))).join("");
+  const space = () => pick([" ", " ", " ", "  ", "\n", "\t", ", ", "? "]);
+  const sample = (n: number) =>
+    Array.from({ length: n }, () => {
+      const r = rand();
+      return r < 0.3 ? pick(corpusWords) : r < 0.5 ? pick(listWords) : r < 0.6 ? anyDevanagari() : r < 0.85 ? pick(latinWords) : digits();
+    }).join(space());
+  const texts = Array.from({ length: 3000 }, () => sample(1 + Math.floor(rand() * 10)));
+
+  // A stretch of Devanagari with the spaces inside it, as phrases span them.
+  const RUN = /[ऀ-ॿ‌‍]+(?:\s+[ऀ-ॿ‌‍]+)*/g;
+  const digitsOf = (s: string) =>
+    [...s]
+      .filter((c) => /[0-9०-९]/.test(c))
+      .map((c) => (c >= "०" && c <= "९" ? String(c.charCodeAt(0) - 0x0966) : c))
+      .join("");
+
+  it("never changes Latin text: only the Devanagari in it is rewritten", () => {
+    for (const t of texts) assert.equal(romanize(t), t.replace(RUN, (run) => romanize(run)), JSON.stringify(t));
+    for (const t of latinWords) assert.equal(romanize(t), t);
+    assert.equal(romanize("café और चाय"), "café aur chai", "a decomposed é stays decomposed");
+  });
+
+  it("never loses or reorders a digit", () => {
+    for (const t of texts) assert.equal(digitsOf(romanize(t)), digitsOf(t), JSON.stringify(t));
+  });
+
+  it("never leaves Devanagari behind", () => {
+    for (const t of texts) assert.equal(hasDevanagari(romanize(t)), false, JSON.stringify(t));
+    for (const t of ["दो रोटी।", "खाना॥", "२॰५", "ॐ", "ऽ", "क्‍ष"]) assert.equal(hasDevanagari(romanize(t)), false, t);
+  });
+
+  it("never reads दो सौ as anything but do sau", () => {
+    for (let i = 0; i < 500; i++) {
+      const before = sample(Math.floor(rand() * 4));
+      const after = sample(Math.floor(rand() * 4));
+      const out = romanize(`${before} दो सौ ${after}`.trim());
+      assert.match(out, /(?:^|\s)do sau(?:\s|$)/, JSON.stringify(out));
+    }
+    check([
+      ["दो सौ", "do sau"],
+      ["दो  सौ ग्राम", "do  sau gram"],
+      ["दो सौ।", "do sau."],
+      ["२ सौ ग्राम", "2 sau gram"],
+      ["दो सौ पचास ग्राम चावल", "do sau pachas gram chawal"],
+      ["ढाई सौ", "dhai sau"],
+    ]);
   });
 });

@@ -23,9 +23,11 @@ export type Spoken = {
 
 export const SPOKEN: readonly Spoken[] = [
   { id: "en", label: "English", name: "English", script: "Latin", speech: "en-IN", translateFrom: null },
-  // Hinglish listens in Indian English, which writes Hindi words in Latin letters ("do roti aur dal").
-  // hi-IN writes them in Devanagari, which a Hinglish pick must never show (Mayank, 2026-11-22).
-  { id: "hinglish", label: "Hinglish", name: "Hinglish", script: "Latin", speech: "en-IN", translateFrom: null },
+  // Hinglish listens in Hindi (hi-IN), which hears Hindi words right but writes them in
+  // Devanagari; fitScript puts every word in Latin letters before anyone sees it or it's sent,
+  // so a Hinglish pick never shows Devanagari. en-IN (2026-11-22, a few hours) wrote Latin
+  // letters but misheard the Hindi: "do sau gram chawal" came out "Dosa gram chawal".
+  { id: "hinglish", label: "Hinglish", name: "Hinglish", script: "Latin", speech: "hi-IN", translateFrom: null },
   { id: "hi", label: "हिंदी", name: "Hindi", script: "Devanagari", speech: "hi-IN", translateFrom: "hi" },
   { id: "bn", label: "বাংলা", name: "Bengali", script: "Bengali", speech: "bn-IN", translateFrom: "bn" },
   { id: "mr", label: "मराठी", name: "Marathi", script: "Devanagari", speech: "mr-IN", translateFrom: "mr" },

@@ -1,8 +1,13 @@
 // Hindi in Devanagari, written out in Latin letters the way people text it in India
 // (Hinglish), not a scholarly transliteration: "दो रोटी और चने की सब्जी" becomes
-// "do roti aur chane ki sabji". It's the safety net for a Hinglish or English pick that
-// still comes back in Devanagari: a browser that ignored the listening language, or a
-// meal reply in the wrong script (fitScript in lib/domain/speech.ts).
+// "do roti aur chane ki sabji". Hinglish listens in hi-IN, which hears Hindi right and writes
+// it in Devanagari, so every spoken Hinglish meal and Ask question goes through here before
+// anyone sees it (fitScript in lib/domain/speech.ts). It also catches a meal reply in the
+// wrong script. tests/fixtures/hinglish-transcripts.ts is how it's judged.
+//
+// Three things never change: Latin text stays as it is, digits stay in order (Devanagari
+// digits become 0–9), and number words stay words ("दो सौ ग्राम" is "do sau gram", never a
+// dosa). Nothing comes out in Devanagari.
 //
 // How a word is read:
 // - Letter by letter into syllables: consonants (joined by viramas into clusters), each
@@ -14,11 +19,14 @@
 // - Long vowels the common way: "aa" only to start a word ("aaj"), "ee" and "oo" inside
 //   a word ("paneer", "doodh") but "i" and "u" at its end ("roti", "kaju").
 // - A list of common words is spelt the way people write them: everyday words the rules
-//   get wrong ("raat", not "rat"), and food, portion and health words, many of them
-//   English said in Hindi ("चिकन", "प्रोटीन"), including marker names, so Ask can still
-//   tell which marker a romanized question is about ("विटामिन डी" is "vitamin D").
+//   get wrong ("raat", not "rat"), and food, portion, gym, health and app words, most of
+//   them English said in Hindi ("चिकन", "प्रोटीन", "वर्कआउट", "एमएल"), including marker
+//   names, so Ask can still tell which marker a romanized question is about ("विटामिन डी"
+//   is "vitamin D"). English the rules can't spell (ै for the "a" in "snack", "-ed" and
+//   "-ing" endings, letters said one by one) is on the list, or it comes out odd.
 // - A few two-word phrases go first, where a word means something else alone: वे is "they"
-//   but "वे प्रोटीन" is whey protein; बार is "baar" (times) but "प्रोटीन बार" a protein bar.
+//   but "वे प्रोटीन" is whey protein; बार is "baar" (times) but "प्रोटीन बार" a protein bar;
+//   लो is "lo" (take) but "लो कार्ब" low carb; करी is "kari" but "चिकन करी" chicken curry.
 // Pure: used by the browser, the server and tests.
 
 const VIRAMA = "्";
@@ -229,10 +237,50 @@ const WORDS: Record<string, string> = {
   स्प्राउट्स: "sprouts", कप: "cup", ग्लास: "glass", प्लेट: "plate", बाउल: "bowl", स्लाइस: "slice", पीस: "piece",
   लीटर: "litre", कैलोरी: "calorie", कैलोरीज: "calories", कैल्शियम: "calcium", आयरन: "iron",
   शुगर: "sugar", डॉक्टर: "doctor", ब्लड: "blood", रिपोर्ट: "report", जिम: "gym", डाइट: "diet",
+  // Everyday words people text one way: "pehle", "roz".
+  पहले: "pehle", पहला: "pehla", पहली: "pehli", रोज: "roz",
+  // Food, drink and cooking words said in English.
+  एप्पल: "apple", ऐपल: "apple", एपल: "apple", ऑरेंज: "orange", मैंगो: "mango", ग्रेप्स: "grapes",
+  स्ट्रॉबेरी: "strawberry", ब्लूबेरी: "blueberry", एवोकाडो: "avocado", कीवी: "kiwi", डेट्स: "dates",
+  ब्रोकली: "broccoli", ब्रोकोली: "broccoli", मशरूम: "mushroom", मशरूम्स: "mushrooms", बीन्स: "beans",
+  लेमन: "lemon", प्रॉन: "prawn", प्रॉन्स: "prawns", चंक्स: "chunks", ऑयल: "oil", ऑइल: "oil", ऑलिव: "olive",
+  कोक: "coke", स्प्राइट: "sprite", बियर: "beer", वाइन: "wine", व्हिस्की: "whisky", रम: "rum",
+  लाटे: "latte", कैपुचीनो: "cappuccino", कैपेचीनो: "cappuccino", एस्प्रेसो: "espresso", स्मूदी: "smoothie",
+  हॉर्लिक्स: "horlicks", बॉर्नविटा: "bournvita", इलेक्ट्रॉल: "electral",
+  कुकी: "cookie", कुकीज: "cookies", पेस्ट्री: "pastry", ब्राउनी: "brownie", डोनट: "donut", पॉपकॉर्न: "popcorn",
+  नगेट्स: "nuggets", फ्राइज: "fries", फ्राईज: "fries", रैप: "wrap", रैप्स: "wraps", रोल: "roll",
+  मोमोज: "momos", मोमोस: "momos", चाउमीन: "chowmein", चौमीन: "chowmein", मंचूरियन: "manchurian",
+  म्यूसली: "muesli", मूसली: "muesli", टोस्ट: "toast", जैम: "jam", पैनकेक: "pancake",
+  सॉस: "sauce", केचप: "ketchup", मेयोनीज: "mayonnaise", मेयो: "mayo", क्रीम: "cream",
+  व्हाइट: "white", ग्रिल: "grill", ग्रिल्ड: "grilled", बॉयल: "boil", बॉइल: "boil", बॉयल्ड: "boiled", बॉइल्ड: "boiled",
+  रोस्ट: "roast", रोस्टेड: "roasted", स्टीम्ड: "steamed", बेक्ड: "baked", प्लेन: "plain", स्पाइसी: "spicy",
+  वेज: "veg", नॉनवेज: "nonveg", वेजिटेरियन: "vegetarian", वेजीटेरियन: "vegetarian", वीगन: "vegan", विगन: "vegan",
+  लंच: "lunch", डिनर: "dinner", ब्रेकफास्ट: "breakfast", स्नैक: "snack", स्नैक्स: "snacks", वीकेंड: "weekend",
+  विद: "with", विथ: "with", विदाउट: "without", एंड: "and", प्लस: "plus", हाफ: "half", फुल: "full", डबल: "double",
+  सिंगल: "single", एक्स्ट्रा: "extra", लार्ज: "large", मीडियम: "medium", स्मॉल: "small", रेगुलर: "regular",
+  होममेड: "homemade", मिक्स: "mix", होल: "whole", व्हीट: "wheat", गार्लिक: "garlic", डाइजेस्टिव: "digestive",
+  रस्क: "rusk", हेल्दी: "healthy", चीट: "cheat", प्री: "pre",
+  // Units, and short forms said letter by letter.
+  स्कूप: "scoop", स्कूप्स: "scoops", कप्स: "cups", प्लेट्स: "plates", पीसेस: "pieces", स्लाइसेस: "slices",
+  टेबलस्पून: "tablespoon", टीस्पून: "teaspoon", पैकेट: "packet", बॉटल: "bottle", मग: "mug",
+  एमएल: "ml", मिलीलीटर: "ml", केजी: "kg", एमजी: "mg", एमसीजी: "mcg", आईयू: "IU", ओआरएस: "ORS",
+  // Gym, health and app words said in English.
+  वर्कआउट: "workout", वर्क: "work", आउट: "out", क्रिएटिन: "creatine", क्रिएटीन: "creatine", क्रेटिन: "creatine",
+  ट्रेनिंग: "training", कार्डियो: "cardio", वॉक: "walk", वॉकिंग: "walking", रन: "run", रनिंग: "running",
+  साइकलिंग: "cycling", साइक्लिंग: "cycling", स्विमिंग: "swimming", एक्सरसाइज: "exercise", डेडलिफ्ट: "deadlift",
+  स्क्वाट: "squat", स्क्वैट: "squat", पुशअप: "pushup", पुशअप्स: "pushups", मैराथन: "marathon", रेस: "race",
+  मसल: "muscle", मसल्स: "muscles", गेन: "gain", लॉस: "loss", वेट: "weight", सेफ: "safe", हाई: "high",
+  रिकवरी: "recovery", इंजरी: "injury", कार्ब: "carb", कार्बोहाइड्रेट: "carbohydrate", मेडिसिन: "medicine",
+  प्रेग्नेंट: "pregnant", प्रेगनेंट: "pregnant", प्रेग्नेंसी: "pregnancy", प्रेगनेंसी: "pregnancy",
+  पीरियड: "period", पीरियड्स: "periods", पीसीओडी: "PCOD", पीसीओएस: "PCOS", बीएमआई: "BMI", एचबी: "Hb",
+  सीबीसी: "CBC", ईसीजी: "ECG",
+  ऐप: "app", स्टैक: "stack", अपलोड: "upload", कंट्रोल: "control", फ्यूल: "fuel", लॉगिन: "login",
+  सेटिंग्स: "settings", पेमेंट: "payment",
 };
 
 // Two words read together, where one of them means something else alone (वे is "they", सी
-// "like", बार "times"). Written as they come, with one space; none has a nukta or ँ.
+// "like", बार "times", लो "take", करी "did", पाव the bread). Keys are written like word-list
+// keys, with one space and no nukta or ँ; they match with or without them.
 const PHRASES: Record<string, string> = {
   "वे प्रोटीन": "whey protein",
   "प्रोटीन बार": "protein bar",
@@ -241,18 +289,62 @@ const PHRASES: Record<string, string> = {
   "विटामिन ए": "vitamin A",
   "विटामिन सी": "vitamin C",
   "विटामिन ई": "vitamin E",
+  // Letters said one by one.
+  "एम एल": "ml",
+  "एम जी": "mg",
+  // पाव as a quarter, not the bread.
+  "पाव किलो": "paav kilo",
+  "पाव भर": "paav bhar",
+  "पाव लीटर": "paav litre",
+  "लो कार्ब": "low carb",
+  "लो फैट": "low fat",
+  "लो शुगर": "low sugar",
+  "लो कैलोरी": "low calorie",
+  "लो बीपी": "low BP",
+  "चिकन करी": "chicken curry",
+  "एग करी": "egg curry",
+  "अंडा करी": "anda curry",
+  "मटन करी": "mutton curry",
+  "फिश करी": "fish curry",
+  "वेज करी": "veg curry",
+  "पनीर करी": "paneer curry",
+  "करी पत्ता": "curry patta",
+  "करी पत्ते": "curry patte",
+  "चीज सैंडविच": "cheese sandwich",
+  "चीज टोस्ट": "cheese toast",
+  "चीज पिज्जा": "cheese pizza",
+  "चीज बर्गर": "cheese burger",
+  "चीज स्लाइस": "cheese slice",
+  // मील alone is a mile.
+  "वर्कआउट मील": "workout meal",
+  "चीट मील": "cheat meal",
+  "हेल्दी मील": "healthy meal",
+  "मील प्लान": "meal plan",
+  "मील प्रेप": "meal prep",
 };
 
 // A Devanagari word: letters and signs, and joiners inside them, but not dandas or digits.
 const LETTERS = "ऀ-ॣॱ-ॿ‌‍";
 const WORD = new RegExp(`[${LETTERS}]+`, "g");
-// Any of the phrases as whole words, with any spacing between them.
+
+const lookupKey = (word: string) => word.replaceAll(CHANDRABINDU, ANUSVARA).replaceAll(NUKTA, "").replace(/[‌‍]/g, "");
+
+// A phrase key as a pattern: any spacing between its words, a nukta allowed after any
+// consonant, and ँ wherever it has ं, so "चीज़ सैंडविच" finds "चीज सैंडविच" as word lookups do.
+const loose = (key: string) =>
+  [...key].map((c) => (c === " " ? "\\s+" : c === ANUSVARA ? `[${ANUSVARA}${CHANDRABINDU}]` : c in CONSONANTS ? `${c}${NUKTA}?` : c)).join("");
+// Any of the phrases as whole words, longest first.
 const PHRASE = new RegExp(
-  `(?<![${LETTERS}])(?:${Object.keys(PHRASES).map((p) => p.split(" ").join("\\s+")).join("|")})(?![${LETTERS}])`,
+  `(?<![${LETTERS}])(?:${Object.keys(PHRASES)
+    .sort((a, b) => b.length - a.length)
+    .map(loose)
+    .join("|")})(?![${LETTERS}])`,
   "g",
 );
 
-const lookupKey = (word: string) => word.replaceAll(CHANDRABINDU, ANUSVARA).replaceAll(NUKTA, "").replace(/[‌‍]/g, "");
+/** The word list and the phrases, for tests: no value may hold a digit or Devanagari. */
+export const ROMAN_WORDS: Readonly<Record<string, string>> = WORDS;
+export const ROMAN_PHRASES: Readonly<Record<string, string>> = PHRASES;
 
 /** True when the text has any Devanagari in it. */
 export const hasDevanagari = (text: string) => /[ऀ-ॿ]/.test(text);
@@ -267,8 +359,9 @@ export function romanize(text: string): string {
   return (
     text
       // NFC splits क़, ज़, फ़ (and the rest of U+0958–U+095F) into a letter and a nukta.
-      .normalize("NFC")
-      .replace(PHRASE, (phrase) => PHRASES[phrase.replace(/\s+/g, " ")])
+      // Only Devanagari is normalized, so Latin text keeps every code point it came with.
+      .replace(/[ऀ-ॿ‌‍]+/g, (run) => run.normalize("NFC"))
+      .replace(PHRASE, (phrase) => PHRASES[lookupKey(phrase).replace(/\s+/g, " ")])
       .replace(WORD, (word) => WORDS[lookupKey(word)] ?? spellWord(word))
       .replace(/[०-९]/g, (d) => String(d.charCodeAt(0) - 0x0966))
       .replace(/\s*[।॥]+/g, ".")

@@ -69,10 +69,10 @@ describe("voice memory", () => {
   it("a pick that listens clears every pick sharing its engine from the can't list", () => {
     P.noteCantListen("hinglish");
     P.noteCantListen("ta");
-    P.noteListened("en");
-    assert.deepEqual(P.voiceRecord(), { ok: ["en"], off: ["ta"] }, "Hinglish and English both listen in en-IN");
-    P.noteListened("en");
-    assert.deepEqual(P.voiceRecord(), { ok: ["en"], off: ["ta"] });
+    P.noteListened("hi");
+    assert.deepEqual(P.voiceRecord(), { ok: ["hi"], off: ["ta"] }, "Hinglish and हिंदी both listen in hi-IN");
+    P.noteListened("hi");
+    assert.deepEqual(P.voiceRecord(), { ok: ["hi"], off: ["ta"] });
   });
 
   it("survives broken storage", () => {
