@@ -260,7 +260,21 @@ export async function mealHistory(userId: string, tz: string | null | undefined,
 
 export async function deleteMeal(userId: string, id: string) {
   const d = await db();
-  await d.delete(schema.foodLogs).where(and(eq(schema.foodLogs.userId, userId), eq(schema.foodLogs.id, id)));
+  await d.transaction(async (tx) => {
+    const gone = await tx
+      .delete(schema.foodLogs)
+      .where(and(eq(schema.foodLogs.userId, userId), eq(schema.foodLogs.id, id)))
+      .returning({ id: schema.foodLogs.id });
+    // A deleted meal still counts (lib/domain/plan.ts), but its use moves off the meal's id. Left
+    // under it, the try's key sent again would find a claim with no meal: a wait that ends in
+    // "still reading", then (once stale) the meal logged again for free (takeTry in
+    // app/api/food/route.ts). Only a meal that was there: a try still being read keeps its claim.
+    if (gone.length)
+      await tx
+        .update(schema.usage)
+        .set({ refId: newId() })
+        .where(and(eq(schema.usage.kind, "meal"), eq(schema.usage.refId, id), eq(schema.usage.userId, userId)));
+  });
 }
 
 export type Totals = { kcal: number; proteinG: number; carbsG: number; fatG: number; fibreG: number; micros: Micros };

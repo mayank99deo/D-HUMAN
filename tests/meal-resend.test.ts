@@ -45,6 +45,7 @@ const { and, eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
 const { POST: foodRoute } = await import("../app/api/food/route.ts");
 const { POST: typicalRoute } = await import("../app/api/food/typical/route.ts");
+const { DELETE: deleteRoute } = await import("../app/api/food/[id]/route.ts");
 const { mealIdFor, waitForMeal, MEAL_KEY } = await import("../lib/platform/food.ts");
 const { claimMealTry, planView } = await import("../lib/platform/plan.ts");
 
@@ -248,6 +249,70 @@ describe("the meal route with a key", () => {
     assert.equal(a.status, 200);
     assert.notEqual(a.body.log?.id, b.body.log?.id, "without a key every send is a new meal, as before");
     assert.equal((await rows(user.id)).meals.length, 2);
+  });
+});
+
+// QA, 2026-11-22: a deleted meal kept its use under the meal's id, so its key sent again (Try
+// again or Log this meal after a delete, or a script) looked like a try still being read: it hung
+// 55 s and said "We're still reading this meal", and once the use was 130 s old it was taken over
+// as stale and logged the meal again without counting a use. The use now stays counted under an
+// id of its own, so the key is a new meal that meets the plan.
+describe("a meal's key sent again after the meal was deleted", () => {
+  async function remove(user: { id: string; email: string }, id: string) {
+    g.__testUser = user;
+    const pending = deleteRoute(new Request(`http://localhost/api/food/${id}`, { method: "DELETE" }), { params: Promise.resolve({ id }) } as never);
+    g.__testUser = null;
+    return (await pending).status;
+  }
+
+  it("is a new meal at once, counted as one: not a wait, not a free re-log", async () => {
+    const user = await person();
+    const k = key();
+    const first = await send(user, { text: "chai and biscuits", key: k });
+    assert.equal(first.status, 200);
+    assert.equal(await remove(user, first.body.log!.id), 200);
+    const before = await rows(user.id);
+    assert.deepEqual([before.meals.length, before.uses.length], [0, 1], "the deleted meal's use still counts");
+    const started = Date.now();
+    const again = await send(user, { text: "chai and biscuits", key: k });
+    assert.ok(Date.now() - started < 5_000, `answered in ${Date.now() - started} ms, not after the 55 s wait`);
+    assert.equal(again.status, 200);
+    assert.equal(again.body.repeat, undefined, "a new meal, not the deleted one");
+    const { meals, uses } = await rows(user.id);
+    assert.deepEqual([meals.length, uses.length], [1, 2], "one meal now, and both logs count");
+    assert.equal((await planView(user.id, null)).meals.today, 2);
+  });
+
+  it("meets the day's limit like any new meal", async () => {
+    const user = await person();
+    const keys = Array.from({ length: 5 }, key);
+    const ids: string[] = [];
+    for (const k of keys) ids.push((await send(user, { text: "idli", key: k })).body.log!.id);
+    assert.equal(await remove(user, ids[0]), 200);
+    const again = await send(user, { text: "idli", key: keys[0] });
+    assert.equal(again.status, 402, "five logs today already");
+    assert.equal((await rows(user.id)).meals.length, 4);
+  });
+
+  it("a stale claim with no meal (a killed function) is still taken over and counted once", async () => {
+    const user = await person();
+    const k = key();
+    const d = await db();
+    await d.insert(schema.usage).values({ id: crypto.randomUUID(), userId: user.id, kind: "meal", refId: mealIdFor(user.id, k), localDate: "2026-11-22", createdAt: new Date(Date.now() - 10 * 60_000) });
+    // Deleting a meal that isn't there (the id of a try still in flight) leaves its claim alone.
+    assert.equal(await remove(user, mealIdFor(user.id, k)), 200);
+    const r = await send(user, { text: "upma", key: k });
+    assert.equal(r.status, 200);
+    assert.deepEqual([(await rows(user.id)).meals.length, (await rows(user.id)).uses.length], [1, 1]);
+  });
+
+  it("someone else's delete of this person's meal id touches nothing", async () => {
+    const owner = await person();
+    const other = await person();
+    const mine = await send(owner, { text: "dosa", key: key() });
+    assert.equal(await remove(other, mine.body.log!.id), 200);
+    const o = await rows(owner.id);
+    assert.deepEqual([o.meals.length, o.uses.length, o.uses[0].refId], [1, 1, mine.body.log!.id]);
   });
 });
 
