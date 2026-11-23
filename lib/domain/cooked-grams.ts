@@ -7,8 +7,13 @@
 // Before this, the model read these foods in grams as dry (200 g dal as 200 g dry dal, 680 kcal; 50 g
 // oats as 190 kcal). With the line it copied the raw grams in all 72 runs across 24 phrasings, and in
 // all 42 rice runs before that (live checks of 2026-11-22).
-// Oats are the one to watch: people who weigh oats mostly weigh them dry, and 50 g oats now reads as
-// cooked oats, 36 kcal. That is Mayank's rule; "dry", "packet" or "kachcha" keeps 190.
+//
+// Two calls of Mayank's on 2026-11-23:
+// - Oats are the exception: grams of oats are dry oats from the packet, as people weigh them, unless the
+//   same part says cooked, porridge, oatmeal, dalia-style or "pakaye hue" (OATS_COOKED). Plain "50 g
+//   oats" gets no line, so its request is what it was before any of this (190 kcal).
+// - Dal and pulse curries include the usual oil (TADKA in food-table.ts), unless the person says no oil,
+//   plain, boiled, bina tadka or bina tel (NO_OIL), or names the oil or ghee themselves.
 //
 // - Latin letters (English, Hinglish) and Devanagari, with digits in either script and the everyday
 //   Hindi number words for hundreds ("do sau", "ढाई सौ", "saadhe teen sau") and tens ("assi").
@@ -18,15 +23,20 @@
 // - Dishes and products aren't matched, and the model reads them as before: dal makhani, chana masala
 //   (both read as dishes already, about 0.3 dry, in the live check), dal chawal, khichdi, chole bhature,
 //   sprouts, chaat, besan, sattu, flours, oats cookies, and the like.
-// - How the grams turn raw: dal and pulse curries as served (a 150 g katori holds 30 g dry); whole
-//   pulses said to be boiled ("boiled chana", "uble chane") as drained; rice, quinoa, oats and daliya
-//   as cooked in water.
+// - How the grams turn raw: dal and pulse curries as served (a 150 g katori holds 30 g dry, and 4.5 g
+//   or 6.75 g oil); whole pulses said to be boiled ("boiled chana", "uble chane") as drained, with no
+//   oil; rice, quinoa, cooked oats and daliya as cooked in water.
 // - Raw: a raw word (raw, uncooked, dry, kachcha, कच्चा, packet, soaked, "before cooking", "पकाने से
 //   पहले") anywhere in the same part of the sentence, or in a part of its own right after it
 //   ("80 g kabuli chana, dry weight"). Parts end at commas, full stops and "and", "aur", "और", "with".
-import { rawFor, type CookedWay, type FoodCode } from "./food-table";
+import { rawFor, tadkaFor, type CookedWay, type FoodCode } from "./food-table";
 
-export type CookedAmount = { grams: number; code: FoodCode; way: CookedWay; label: string; raw: boolean };
+/**
+ * - raw: read as raw or dry, so the request gets no line for it.
+ * - oil, for dal and curries: "tadka" adds the usual oil, "none" when they said there's none, "own"
+ *   when they named oil, ghee or butter themselves.
+ */
+export type CookedAmount = { grams: number; code: FoodCode; way: CookedWay; label: string; raw: boolean; oil?: "tadka" | "none" | "own" };
 
 const set = (...words: string[]) => new Set(words.map((w) => w.normalize("NFC")));
 const map = <T>(entries: Record<string, T>) => new Map(Object.entries(entries).map(([k, v]) => [k.normalize("NFC"), v]));
@@ -61,6 +71,22 @@ const BROWN = set("brown", "ब्राउन");
 const KALA = set("kala", "kale", "kaala", "kaale", "काला", "काले");
 const KABULI = set("kabuli", "safed", "काबुली", "सफ़ेद", "सफेद");
 const BOILED = set("boiled", "ubla", "uble", "ubli", "ubale", "उबला", "उबले", "उबली");
+// Oats in grams are dry oats from the packet unless one of these says they're cooked (Mayank, 2026-11-23).
+const OATS_COOKED = set(
+  "cooked", "boiled", "steamed", "porridge", "oatmeal", "dalia", "daliya", "dalliya", "pakaye", "pakaya", "pakaaye", "pakaaya", "pake", "paka", "paki",
+  "ubla", "uble", "ubli", "ubale", "दलिया", "पकाए", "पकाये", "पकाया", "पके", "पका", "पकी", "उबले", "उबला", "उबली", "पॉरिज", "पोरिज", "ओटमील",
+);
+const PORRIDGE = set("porridge", "पॉरिज", "पोरिज");
+// No oil in the dal or curry. "boiled" and "plain" count; for whole pulses, boiled is drained anyway.
+const NO_OIL = set("plain", "sada", "saada", "sadi", "saadi", "boiled", "ubla", "uble", "ubli", "ubali", "ubale", "सादा", "सादी", "उबला", "उबले", "उबली");
+const NO_OIL_PHRASES = [
+  "no oil", "without oil", "oil free", "zero oil", "no tadka", "without tadka", "no ghee", "without ghee", "bina tel", "bina tadka", "bina tadke",
+  "bina ghee", "bina ghi", "tel ke bina", "tadke ke bina", "बिना तेल", "बिना तड़का", "बिना तड़के", "बिना घी", "तेल के बिना", "तड़के के बिना",
+].map((p) => p.normalize("NFC"));
+// Words of a no-oil phrase that can sit before the food: "200 g oil-free dal", "200 g bina tel ki dal".
+const NO_OIL_LEAD = set("no", "zero", "without", "oil", "free", "bina", "tel", "ghee", "tadka", "tadke", "बिना", "तेल", "घी", "तड़का", "तड़के");
+// Oil, ghee or butter they named themselves: the line then adds none of its own.
+const FAT = set("oil", "ghee", "ghi", "butter", "tel", "makhan", "makkhan", "घी", "तेल", "मक्खन", "मखन");
 
 const RAW = set(
   "raw", "uncooked", "dry", "kachcha", "kacha", "kachha", "kaccha", "kachche", "kache", "kachhe", "kacche", "kachchi", "kachi", "kachhi", "kacchi",
@@ -74,11 +100,11 @@ const RAW_PHRASES = [
 // Words that can sit between the amount and the food, or among the food's own words.
 const BETWEEN = set(
   "of", "cooked", "boiled", "steamed", "plain", "white", "brown", "sona", "masoori", "masuri", "kolam", "jeera", "jira", "zeera", "ponni", "parboiled",
-  "sela", "long", "grain", "regular", "normal", "simple", "ka", "ki", "ke", "wala", "wale", "wali", "paka", "pake", "paki", "pakaya", "pakaye",
+  "sela", "long", "grain", "regular", "normal", "simple", "ka", "ki", "ke", "wala", "wale", "wali", "paka", "pake", "paki", "pakaya", "pakaye", "pakaaye", "sadi", "saadi",
   "ubla", "uble", "ubli", "ubale", "hua", "hue", "sada", "saada",
   "kala", "kale", "kaala", "kaale", "kabuli", "safed", "sabut", "whole", "dhuli", "chilka", "chilke", "split", "yellow", "peeli", "pili", "hari", "green",
-  "rolled", "steel", "cut", "quick", "instant",
-  "का", "की", "के", "वाला", "वाले", "वाली", "उबला", "उबले", "उबली", "पका", "पके", "पकी", "हुआ", "हुए", "सादा", "सफ़ेद", "सफेद", "ब्राउन", "जीरा",
+  "rolled", "steel", "cut", "quick", "instant", "style", "jaisa", "jaise", "jaisi", "type",
+  "का", "की", "के", "जैसा", "जैसे", "स्टाइल", "सादी", "पकाए", "पकाये", "वाला", "वाले", "वाली", "उबला", "उबले", "उबली", "पका", "पके", "पकी", "हुआ", "हुए", "सादा", "सफ़ेद", "सफेद", "ब्राउन", "जीरा",
   "काला", "काले", "काबुली", "साबुत", "धुली", "छिलका", "छिलके", "पीली", "हरी",
 );
 // Right after the food's words: it's a dish or a product, not the food. "masala" and "makhani": the live
@@ -150,7 +176,7 @@ function numberAt(t: string[], i: number): { value: number; next: number } | nul
 }
 
 const isFoodWord = (w: string) => RICE.has(w) || DAL.has(w) || DAL_KIND.has(w) || PULSE.has(w) || GRAIN.has(w) || WHEAT.has(w);
-const canSit = (w: string) => BETWEEN.has(w) || RAW.has(w) || BROKEN.has(w);
+const canSit = (w: string) => BETWEEN.has(w) || RAW.has(w) || BROKEN.has(w) || NO_OIL_LEAD.has(w);
 
 type Food = Omit<CookedAmount, "grams" | "raw">;
 
@@ -161,6 +187,8 @@ function nameOf(run: string[]): Food | null {
   const rice = food.some((w) => RICE.has(w));
   const pulse = food.some((w) => DAL.has(w) || DAL_KIND.has(w) || PULSE.has(w));
   const grains = new Set(food.filter((w) => GRAIN.has(w)).map((w) => GRAIN.get(w)!.code));
+  // "oats dalia", "dalia style oats": oats cooked like daliya.
+  if (grains.has("oats") && grains.has("dalia")) return { ...GRAIN.get("oats")! };
   const wheat = food.some((w) => WHEAT.has(w));
   // Two foods ("dal chawal", "rajma chawal", "quinoa rice") are a dish, left to the model.
   if ([rice, pulse, grains.size > 0, wheat].filter(Boolean).length > 1 || grains.size > 1) return null;
@@ -192,9 +220,12 @@ function foodAt(t: string[], j: number): (Food & { end: number }) | null {
   // at its last food word, so "chawal ka atta" still sees "atta".
   while (end > j && !isFoodWord(t[end - 1])) end--;
   if (end === j) return null;
-  if (NOT_FOOD.has(t[end]) || (OF.has(t[end]) && NOT_FOOD.has(t[end + 1]))) return null;
   const name = nameOf(t.slice(j, end));
-  return name && { ...name, end };
+  if (!name) return null;
+  // Oats porridge is oats, cooked; every other dish word ends the match.
+  if (name.code === "oats" && PORRIDGE.has(t[end])) return { ...name, end: end + 1 };
+  if (NOT_FOOD.has(t[end]) || (OF.has(t[end]) && NOT_FOOD.has(t[end + 1]))) return null;
+  return { ...name, end };
 }
 
 function amountsIn(t: string[]): (Food & { grams: number })[] {
@@ -216,23 +247,63 @@ function amountsIn(t: string[]): (Food & { grams: number })[] {
   return found;
 }
 
-/** Every amount in grams of a food on the list, in the person's words, and whether they said it's raw. */
+const hasPhrase = (t: string[], phrases: string[]) => {
+  const joined = ` ${t.join(" ")} `;
+  return phrases.some((p) => joined.includes(` ${p} `));
+};
+
+/**
+ * Every amount in grams of a food on the list, in the person's words: whether it's read as raw, and for
+ * dal and curries, the oil. Oats are dry unless the same part says they're cooked.
+ */
 export function cookedAmounts(text: string): CookedAmount[] {
+  const parts = normalize(text)
+    .split(PART_BREAK)
+    .map((part) => {
+      const t = part.split(WORD_BREAK).filter(Boolean);
+      const saidNoOil = hasPhrase(t, NO_OIL_PHRASES);
+      const noOil = saidNoOil || t.some((w) => NO_OIL.has(w));
+      return {
+        part, t, noOil, saidNoOil,
+        raw: t.some((w) => RAW.has(w)) || RAW_PHRASES.some((p) => part.includes(p)),
+        oatsCooked: t.some((w) => OATS_COOKED.has(w)),
+        fat: !noOil && t.some((w) => FAT.has(w)),
+      };
+    });
+  const ownFat = parts.some((p) => p.fat);
   const found: CookedAmount[] = [];
-  let previous: CookedAmount[] = [];
-  for (const part of normalize(text).split(PART_BREAK)) {
-    const t = part.split(WORD_BREAK).filter(Boolean);
-    const raw = t.some((w) => RAW.has(w)) || RAW_PHRASES.some((p) => part.includes(p));
-    const here = amountsIn(t).map((a) => ({ ...a, raw }));
-    // "80 g kabuli chana, dry weight": a raw word in a part of its own belongs to the food before it.
-    if (!here.length && raw && !/\d/.test(part)) for (const a of previous) a.raw = true;
-    found.push(...here);
+  let previous: { amount: CookedAmount; saidRaw: boolean }[] = [];
+  for (const { part, t, raw, oatsCooked, noOil, saidNoOil } of parts) {
+    const here = amountsIn(t).map((a) => {
+      const oil: CookedAmount["oil"] = a.way === "dal" || a.way === "curry" ? (noOil ? "none" : ownFat ? "own" : "tadka") : undefined;
+      const amount: CookedAmount = { ...a, raw: raw || (a.code === "oats" && !oatsCooked), ...(oil ? { oil } : {}) };
+      return { amount, saidRaw: raw };
+    });
+    // A part of its own right after the food: "80 g kabuli chana, dry weight" is raw; "200 g oats, cooked" is cooked.
+    if (!here.length && !/\d/.test(part)) {
+      for (const p of previous) {
+        if (raw) p.amount.raw = true;
+        else if (oatsCooked && t.every((w) => OATS_COOKED.has(w) || BETWEEN.has(w)) && p.amount.code === "oats" && !p.saidRaw) p.amount.raw = false;
+        // Only a phrase ("no oil", "bina tel") reaches back: "200 g dal, boiled egg" keeps its oil.
+        if (saidNoOil && p.amount.oil) p.amount.oil = "none";
+      }
+    }
+    found.push(...here.map((h) => h.amount));
     previous = here;
   }
   return found.filter((a) => a.grams >= MIN_G && a.grams <= MAX_G);
 }
 
 const formatG = (g: number) => String(Math.round(g * 10) / 10);
+
+/** What the line says about oil, for dal and curries. */
+function oilWords(a: CookedAmount): string {
+  if (a.way !== "dal" && a.way !== "curry") return "";
+  if (a.oil === "none") return ", with no oil";
+  if (a.oil === "own") return a.way === "dal" ? " for the dal alone" : " for the beans alone";
+  const oil = tadkaFor(a.grams, a.way);
+  return `, plus ${formatG(oil.g)} g oil or ghee for the ${a.way === "dal" ? "tadka" : "masala"}, about ${oil.kcal} kcal`;
+}
 const isRice = (a: CookedAmount) => a.code === "rice_white" || a.code === "rice_brown";
 
 /** The line for the request when the words give cooked food in grams, or "" when they don't. */
@@ -242,8 +313,8 @@ export function cookedLine(text: string): string {
   const each = cooked.map((a) => {
     const raw = rawFor(a.grams, a.code, a.way);
     const state = isRice(a) || a.code === "quinoa" ? "raw" : "dry";
-    const alone = a.way === "dal" ? " for the dal alone" : a.way === "curry" ? " for the beans alone" : "";
-    return `their ${formatG(a.grams)} g of ${a.label} is ${raw.g} g ${state} ${a.code}, about ${raw.kcal} kcal${alone}`;
+    const label = a.code === "oats" ? "cooked oats" : a.label;
+    return `their ${formatG(a.grams)} g of ${label} is ${raw.g} g ${state} ${a.code}, about ${raw.kcal} kcal${oilWords(a)}`;
   });
   // Rice alone keeps the words it shipped with (150cedc), measured in 42 runs.
   const lead = cooked.every(isRice) ? "Rice in grams is cooked rice on the plate, not a raw amount" : "Food in grams is cooked food as served, not a raw amount";

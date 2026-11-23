@@ -276,6 +276,26 @@ export function rawFor(cookedG: number, code: FoodCode, way: CookedWay): { g: nu
   return { g: Math.round(g), kcal: Math.round((g * FOODS[code].kcal) / 100) };
 }
 
+/**
+ * The oil or ghee in a 150 g bowl of dal or pulse curry, for its tadka or masala (Mayank, 2026-11-23:
+ * dal and curries in grams include the usual oil unless the person says there's none).
+ * - Dal: 1 tsp (4.5 g; 1 tsp oil = 4.5 g, fdc 171410), as in the textbooks' plain tempered dals
+ *   (ASC151 washed moong dal, ASC154). Across ASC151-155 and BFP170-174 a bowl has 0-10 g (median 7.25 g:
+ *   ASC152, 153 and 155 2 tsp; BFP170 none; BFP171 5 g; BFP172 10 g; BFP174 7.25 g). 1 tsp is also what
+ *   the model already puts in "1 katori dal" when it adds oil (4.5-5 g, 2026-11-23).
+ * - Curry: 1.5 tsp (6.75 g), the textbooks' rajma, chole, kala chana and lobia curries (ASC161-163, ASC165).
+ */
+export const TADKA = {
+  dal: { g: 4.5, src: "ASC151, ASC154: 1 tsp fat a bowl" },
+  curry: { g: 6.75, src: "ASC161-163, ASC165: 1.5 tsp fat a bowl" },
+} as const;
+
+/** The oil for cooked grams of dal or curry, to the half gram, and its energy. */
+export function tadkaFor(cookedG: number, way: keyof typeof TADKA): { g: number; kcal: number } {
+  const g = Math.round(((cookedG * TADKA[way].g) / 150) * 2) / 2;
+  return { g, kcal: Math.round((g * FOODS.oil.kcal) / 100) };
+}
+
 const GROUP_NAMES: Record<FoodGroup, string> = {
   grain: "Grains and flours, raw or dry", pulse: "Pulses and soy, dry", dairy: "Milk and dairy", fat: "Fats", egg: "Eggs",
   meat: "Meat", fish: "Fish and seafood", veg: "Vegetables and greens", fruit: "Fruit", nut: "Nuts and seeds", sugar: "Sugar", drink: "Drinks",

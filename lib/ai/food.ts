@@ -24,7 +24,8 @@ import { DaySchema, MealSchema, type Day, type Meal, type SavedDay } from "./sch
 // 3), and 300 g biryani rose from 620-640 kcal to 640-755. So the rule goes only where it applies: when
 // the person's words give rice in grams, the request carries the raw grams worked out in code
 // (cookedLine, lib/domain/cooked-grams.ts), and every other meal's request is exactly as before.
-// The same day Mayank made dal, whole pulses, quinoa, oats and daliya in grams cooked too, the same way.
+// The same day Mayank made dal, whole pulses, quinoa and daliya in grams cooked too, the same way; on
+// 2026-11-23, oats in grams dry unless cooked is said, and dal and curries with their usual oil.
 const FOOD_RULES = `You estimate nutrition for Indian home and street food, and everything else people eat.
 - One item per dish or food the person names: "2 rotis, dal and curd" is three items.
 - For each item, first list its ingredients:

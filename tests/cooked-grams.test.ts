@@ -1,5 +1,6 @@
 // Food weighed in grams is the cooked food on the plate unless the person says it's raw (Mayank,
-// 2026-11-22): rice, dal, whole pulses, quinoa, oats and daliya. The amounts found in their words, in
+// 2026-11-22): rice, dal, whole pulses, quinoa and daliya; oats only when they say cooked, and dal and
+// curries with the usual oil (2026-11-23). The amounts found in their words, in
 // Latin letters, Hinglish and Devanagari; the raw grams worked out from USDA and the textbook bowl; and
 // the line in the meal and usual-day requests, which only those requests get: the system prompt, and
 // every other request, stay as they were.
@@ -9,7 +10,7 @@ import { allowAppImports } from "./support/app.ts";
 
 allowAppImports();
 const { cookedAmounts, cookedLine } = await import("../lib/domain/cooked-grams.ts");
-const { COOKED, FOODS, PORTIONS, rawFor } = await import("../lib/domain/food-table.ts");
+const { COOKED, FOODS, PORTIONS, TADKA, rawFor, tadkaFor } = await import("../lib/domain/food-table.ts");
 const { SYSTEM, mealPrompt, usualDayPrompt } = await import("../lib/ai/food.ts");
 const { mealWords } = await import("../lib/domain/speech.ts");
 
@@ -105,20 +106,83 @@ describe("dal, pulses, quinoa, oats and daliya in grams", () => {
       ["100 g boiled matki", 100, "moth", "moth_boiled"],
     ] as const) assert.deepEqual(read(text), [grams, code, way, false], text);
   });
-  it("finds quinoa, oats and daliya, as cooked in water", () => {
+  it("finds quinoa and daliya, as cooked in water", () => {
     for (const [text, grams, code] of [
       ["200 g quinoa", 200, "quinoa"],
       ["200 gram kinwa", 200, "quinoa"],
       ["200 ग्राम क्विनोआ", 200, "quinoa"],
-      ["50 g oats", 50, "oats"],
-      ["50 g rolled oats", 50, "oats"],
-      ["50 ग्राम ओट्स", 50, "oats"],
-      ["200 g oatmeal", 200, "oats"],
       ["200 g daliya", 200, "dalia"],
       ["200 gram dalia", 200, "dalia"],
       ["200 ग्राम दलिया", 200, "dalia"],
       ["200 g broken wheat", 200, "dalia"],
     ] as const) assert.deepEqual(read(text), [grams, code, code, false], text);
+  });
+});
+
+describe("oats: dry from the packet unless they say cooked (Mayank, 2026-11-23)", () => {
+  it("reads plain oats in grams as dry, so the request gets no line", () => {
+    for (const text of ["50 g oats", "50 gram oats", "50 ग्राम ओट्स", "50 g rolled oats", "40 g instant oats", "do sau gram oats", "200 g oats with milk", "50 g oats aur 1 banana"]) {
+      assert.deepEqual(read(text), [one(text).grams, "oats", "oats", true], text);
+      assert.equal(cookedLine(text), "", text);
+    }
+  });
+  it("reads oats as cooked when the person says so, in all three scripts", () => {
+    for (const text of [
+      "200 g cooked oats",
+      "200 g oats porridge",
+      "200 g oatmeal",
+      "200 g boiled oats",
+      "200 g oats dalia",
+      "200 g dalia style oats",
+      "200 gram pakaye hue oats",
+      "200 gram oats pake hue",
+      "200 g oats, cooked",
+      "200 ग्राम पके हुए ओट्स",
+      "200 ग्राम पकाए हुए ओट्स",
+      "200 ग्राम ओट्स दलिया",
+    ]) {
+      assert.deepEqual(read(text), [200, "oats", "oats", false], text);
+      assert.match(cookedLine(text), /their 200 g of cooked oats is 37 g dry oats, about 142 kcal\.$/, text);
+    }
+  });
+  it("lets a raw word win, and a cooked word reach back only from a part of its own", () => {
+    assert.equal(one("50 g dry oats porridge").raw, true);
+    assert.equal(one("50 g oats, cooked chicken").raw, true);
+  });
+});
+
+describe("oil in dal and curries (Mayank, 2026-11-23)", () => {
+  it("adds the usual oil by default", () => {
+    for (const text of ["200 g dal", "200 gram dal", "200 ग्राम दाल", "200 g dal tadka", "200 gram rajma", "250 g chole"]) assert.equal(one(text).oil, "tadka", text);
+  });
+  it("leaves it out when they say there's none, in all three scripts", () => {
+    for (const text of [
+      "200 g dal without oil",
+      "200 g dal, no oil",
+      "200 g oil-free dal",
+      "200 g zero oil dal",
+      "200 g plain moong dal",
+      "200 g sada dal",
+      "200 g boiled moong dal",
+      "200 gram dal bina tadka",
+      "200 gram dal bina tel",
+      "200 gram bina tel ki dal",
+      "200 gram dal tel ke bina",
+      "200 gram rajma bina tel",
+      "200 ग्राम दाल बिना तेल",
+      "200 ग्राम दाल बिना तड़के की",
+      "200 ग्राम सादी दाल",
+      "200 ग्राम उबली मूंग दाल",
+      "200 ग्राम राजमा तेल के बिना",
+    ]) assert.equal(one(text).oil, "none", text);
+  });
+  it("adds none of its own when they name the oil or ghee", () => {
+    for (const text of ["200 g dal aur 1 tsp ghee", "200 g dal with 5 g butter", "200 ग्राम दाल और एक चम्मच घी"]) assert.equal(cookedAmounts(text)[0].oil, "own", text);
+    // "200 g dal, boiled egg": a single word in another part doesn't reach back.
+    assert.equal(cookedAmounts("200 g dal, boiled egg")[0].oil, "tadka");
+  });
+  it("gives drained pulses and other foods no oil", () => {
+    for (const text of ["150 g boiled kala chana", "200 g quinoa", "300 g rice", "200 g daliya"]) assert.equal(one(text).oil, undefined, text);
   });
 });
 
@@ -212,7 +276,6 @@ describe("dishes, products and other foods", () => {
       "100 g chana atta",
       "50 g oats cookies",
       "50 g oats biscuits",
-      "200 g oats porridge",
       "50 g masala oats",
       "100 g oats chilla",
       "100 g wheat flour",
@@ -260,9 +323,16 @@ describe("cooked food to raw", () => {
     assert.deepEqual(rawFor(250, "rice_brown", "rice_brown"), { g: 84, kcal: 308 });
     assert.equal(rawFor(281, "rice_white", "rice_white").g, 100);
   });
-  it("makes 50 g cooked oats 9 g dry at 36 kcal; 50 g dry oats stays 190", () => {
-    assert.deepEqual(rawFor(50, "oats", "oats"), { g: 9, kcal: 36 });
+  it("makes 200 g cooked oats 37 g dry at 142 kcal; 50 g dry oats is 190", () => {
+    assert.deepEqual(rawFor(200, "oats", "oats"), { g: 37, kcal: 142 });
     assert.equal(Math.round((50 * FOODS.oats.kcal) / 100), 190);
+  });
+  it("gives a 150 g bowl the textbooks' oil: 1 tsp in dal, 1.5 tsp in a pulse curry", () => {
+    assert.deepEqual([TADKA.dal.g, TADKA.curry.g, FOODS.oil.kcal], [4.5, 6.75, 884]);
+    assert.deepEqual(tadkaFor(150, "dal"), { g: 4.5, kcal: 40 });
+    assert.deepEqual(tadkaFor(200, "dal"), { g: 6, kcal: 53 });
+    assert.deepEqual(tadkaFor(150, "curry"), { g: 7, kcal: 62 });
+    assert.deepEqual(tadkaFor(200, "curry"), { g: 9, kcal: 80 });
   });
   it("writes the raw grams for the request", () => {
     assert.equal(cookedLine("300 gram chawal aur chicken curry"), "Rice in grams is cooked rice on the plate, not a raw amount: their 300 g of rice is 107 g raw rice_white, about 390 kcal.");
@@ -271,15 +341,18 @@ describe("cooked food to raw", () => {
       cookedLine("200 g rice for lunch, 150 g rice for dinner"),
       "Rice in grams is cooked rice on the plate, not a raw amount: their 200 g of rice is 71 g raw rice_white, about 260 kcal; their 150 g of rice is 53 g raw rice_white, about 195 kcal.",
     );
-    assert.equal(cookedLine("200 g dal"), "Food in grams is cooked food as served, not a raw amount: their 200 g of dal is 40 g dry toor_dal, about 137 kcal for the dal alone.");
-    assert.equal(cookedLine("250 g chole"), "Food in grams is cooked food as served, not a raw amount: their 250 g of chole is 50 g dry chana, about 189 kcal for the beans alone.");
+    assert.equal(cookedLine("200 g dal"), "Food in grams is cooked food as served, not a raw amount: their 200 g of dal is 40 g dry toor_dal, about 137 kcal, plus 6 g oil or ghee for the tadka, about 53 kcal.");
+    assert.equal(cookedLine("200 g dal bina tel"), "Food in grams is cooked food as served, not a raw amount: their 200 g of dal is 40 g dry toor_dal, about 137 kcal, with no oil.");
+    assert.equal(cookedLine("200 g dal aur 1 tsp ghee"), "Food in grams is cooked food as served, not a raw amount: their 200 g of dal is 40 g dry toor_dal, about 137 kcal for the dal alone.");
+    assert.equal(cookedLine("250 g chole"), "Food in grams is cooked food as served, not a raw amount: their 250 g of chole is 50 g dry chana, about 189 kcal, plus 11.5 g oil or ghee for the masala, about 102 kcal.");
     assert.equal(cookedLine("150 g boiled kala chana"), "Food in grams is cooked food as served, not a raw amount: their 150 g of boiled kala chana is 65 g dry chana, about 246 kcal.");
     assert.equal(cookedLine("200 g quinoa"), "Food in grams is cooked food as served, not a raw amount: their 200 g of quinoa is 65 g raw quinoa, about 240 kcal.");
-    assert.equal(cookedLine("50 g oats"), "Food in grams is cooked food as served, not a raw amount: their 50 g of oats is 9 g dry oats, about 36 kcal.");
+    assert.equal(cookedLine("50 g oats"), "");
+    assert.equal(cookedLine("200 g oats porridge"), "Food in grams is cooked food as served, not a raw amount: their 200 g of cooked oats is 37 g dry oats, about 142 kcal.");
     assert.equal(cookedLine("200 g daliya"), "Food in grams is cooked food as served, not a raw amount: their 200 g of daliya is 49 g dry dalia, about 166 kcal.");
     assert.equal(
       cookedLine("300 g rice and 200 g moong dal"),
-      "Food in grams is cooked food as served, not a raw amount: their 300 g of rice is 107 g raw rice_white, about 390 kcal; their 200 g of moong dal is 40 g dry moong, about 139 kcal for the dal alone.",
+      "Food in grams is cooked food as served, not a raw amount: their 300 g of rice is 107 g raw rice_white, about 390 kcal; their 200 g of moong dal is 40 g dry moong, about 139 kcal, plus 6 g oil or ghee for the tadka, about 53 kcal.",
     );
     assert.equal(cookedLine("1 plate chawal"), "");
   });
@@ -300,7 +373,7 @@ describe("the line in the requests", () => {
     assert.match(spoken, /their 300 g of rice is 107 g raw rice_white/);
     const dal = mealPrompt({ words: mealWords({ text: "200 gram dal", spoken: "hinglish", appLanguage: "en" }), voice: true, context });
     assert.match(dal, /\nFood in grams is cooked food as served, not a raw amount: their 200 g of dal is 40 g dry toor_dal/);
-    for (const text of ["100 g raw rice", "80 gram kachcha chawal", "1 plate chawal", "1 katori dal", "1 bowl rajma chawal", "300 g chicken biryani", "200 g dal makhani", "50 g oats dry weight"]) {
+    for (const text of ["100 g raw rice", "80 gram kachcha chawal", "1 plate chawal", "1 katori dal", "1 bowl rajma chawal", "300 g chicken biryani", "200 g dal makhani", "50 g oats dry weight", "50 g oats"]) {
       assert.doesNotMatch(mealPrompt({ words: mealWords({ text, appLanguage: "en" }), voice: false, context }), /not a raw amount/, text);
     }
     const photo = mealPrompt({ image: { mime: "image/jpeg", bytes: Buffer.from("") }, words: mealWords({ appLanguage: "en" }), voice: false, context });
@@ -308,7 +381,9 @@ describe("the line in the requests", () => {
   });
   it("adds them to a usual day too", () => {
     assert.match(usualDayPrompt("Lunch: 300 g rice and dal. Dinner: 3 rotis", context), /"Lunch: 300 g rice and dal\. Dinner: 3 rotis"\nRice in grams is cooked rice on the plate, not a raw amount: their 300 g of rice is 107 g raw rice_white/);
-    assert.match(usualDayPrompt("Breakfast: 50 g oats. Lunch: 200 g rajma and 2 roti", context), /their 50 g of oats is 9 g dry oats, about 36 kcal; their 200 g of rajma is 40 g dry rajma/);
+    const day = usualDayPrompt("Breakfast: 50 g oats. Lunch: 200 g rajma and 2 roti", context);
+    assert.match(day, /not a raw amount: their 200 g of rajma is 40 g dry rajma, about 135 kcal, plus 9 g oil or ghee for the masala, about 80 kcal\./);
+    assert.doesNotMatch(day, /of oats/);
     assert.doesNotMatch(usualDayPrompt("dal chawal, roti sabzi, chai", context), /not a raw amount/);
   });
 });
