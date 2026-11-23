@@ -213,7 +213,6 @@ The running record of this project: where things stand, why they are the way the
 - [ ] **Decide (Mayank), from that round:**
   - Gallery photos: should the meal slot come from the photo's time? (A lunch photo logged at 8 pm guesses dinner.)
   - Should the countdown's big number pause instead of logging now?
-- [ ] **Decide (Mayank): dal, rajma, chana, quinoa and oats in grams as cooked?** Today they always read as dry (200 g dal = 680 kcal, about 6–7 bowls). It would need per-food cooked factors (USDA has them) and the same matcher as rice.
 - [ ] **Follow-ups from that round:**
   - Send the hi-IN Devanagari beside the romanized text for Hinglish voice meals.
   - `soundsLikeHindi` lacks mujhe, kitna and chahiye.
@@ -415,6 +414,35 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Not changed (Mayank to decide):** dal, rajma, quinoa and oats in grams always read as dry (200 g dal = 680 kcal).
     - **Not checked live:** the usual day (tests only).
   - **Before push, on main `150cedc`:** typecheck, lint, 1,449 tests, `next build` (second run).
+  - **Push `93ead00`** (`a43d9c7`, `150cedc` and memory): Vercel says "Deployment has completed". The landing and /signin give 200; /fuel 307s to sign-in; POST `/api/food` gives 401 signed out.
+  - **Mayank, after the push:** dal, rajma, chana, quinoa and oats in grams also mean cooked, "unless mentioned otherwise by the users". The AI efficiency lead is extending the rice matcher:
+    - **Factors:** as-served for dal and gravy dishes, consistent with 30 g dry dal per katori, against drained-cooked from USDA.
+    - **To measure and show Mayank:** "50 g oats" read as cooked (about 35 kcal) vs dry (about 190); gym users usually weigh oats dry.
+  - **`ae08522` (AI efficiency lead, cherry-picked, not pushed): dal, pulses, quinoa, oats and daliya in grams are cooked.**
+    - **The code:** `lib/domain/cooked-grams.ts` replaces `rice-grams.ts`, with `COOKED`/`rawFor` in `food-table.ts`.
+    - **Factors:**
+      - As served, 0.20, for dal and pulse curries (30 g dry per bowl, INDB ASC151–165).
+      - Drained USDA factors for pulses said to be boiled.
+      - Quinoa 0.326, oats 0.187, daliya 0.243 (USDA).
+    - **Dishes stay with the model:** dal makhani, chana masala, khichdi and the like.
+    - **Live, $0.13:**
+      - 200 g dal went from 680 to 137–173 kcal.
+      - 250 g chole went from 377–1,115 (inconsistent) to 260–300.
+      - The model copied the given grams in 72 of 72 runs.
+      - Tests: 1,454.
+  - **Mayank's calls:**
+    - Oats are the exception: grams mean dry oats unless he says cooked or porridge (cooked gave 36 kcal for "50 g oats" against 190).
+    - Dal and pulse curries in grams include typical tadka oil (about 5 g per 150 g) unless he says no oil or boiled.
+    - The AI efficiency lead is building both; the push waits for it.
+  - **`41a1bd8` (AI efficiency lead): oats dry, dal with its oil.**
+    - **Oats:** grams mean dry oats unless the same clause says cooked, porridge, oatmeal, "pakaye hue" or पके हुए. Plain "50 g oats" sends the same request as before any cooked-grams work (189–195 kcal); cooked oats 142 for 200 g.
+    - **Oil** (`TADKA`/`tadkaFor` in `food-table.ts`), scaled to the grams:
+      - Dal: 4.5 g per 150 g (1 tsp; INDB ASC151, ASC154). Curries: 6.75 g per 150 g (ASC161–165). Boiled pulses get none.
+      - No oil when the person says no oil, plain, boiled, bina tadka, बिना तेल and the like, or names their own oil or ghee.
+    - **Live, $0.064:** 200 g dal = 190 kcal, steady 6 of 6. 150 g arhar dal = 143, inside "1 katori dal"'s 103–149.
+    - **Found:** the model's own "1 katori dal" adds no oil in 4 of 6 runs (older behaviour, untouched).
+    - **Tests:** 1,462.
+  - **Before push, on main `41a1bd8`:** typecheck, lint, 1,462 tests, `next build` (second run).
 - **Voice language bugs (Mayank, iPhone, live site), crew running:**
   - **Fuel:** with Hinglish picked, Say transcribed and logged in full Devanagari ("दो रोटी और चने की सब्जी", tip in Hindi). Hinglish has listened with `hi-IN` since `93850a9`, and replies follow the transcript's script. His rule: the pick decides. Hinglish means Latin letters; हिंदी means Devanagari.
   - **Ask:** the co-founder's Hindi came out as Marathi. Confirmed: `looksMarathi` in `lib/domain/ask-language.ts` classes everyday Hindi as Marathi ("…फायदे होते हैं", "मैं क्या करू"), and Ask's prompt calls करू Marathi.
