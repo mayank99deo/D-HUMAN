@@ -346,6 +346,14 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Budget:** 57 left (so about 13 emails sent today).
     - **Would send:** welcome 0, "finish setting up" 1, weekly 0 (not Sunday), feedback 3. Sheet: nothing to copy.
     - **Housekeeping:** `ok` means it ran without a throw. The log line doesn't print its counts.
+- **Every email carries the brand (Mayank: the D-Human logo and the tagline, which is "Hack your health."):**
+  - **Before:** lifecycle emails had the white wordmark at the top (and the ink one on the welcome's bib) but no tagline. The sign-in code email had typed "D-HUMAN" and no tagline.
+  - **Now:**
+    - The shared footer (`footer()` in `lib/email/templates/parts.ts`, `TAGLINE`) opens with "Hack your health." in white, in HTML and plain text.
+    - The sign-in code email shows the ink wordmark image (`/email/wordmark-ink.png`) and "Hack your health." under the card.
+    - The sign-in email's parts are now a pure `signInCodeEmail()` in `lib/auth/email.ts`.
+  - **Tests:** `tests/email-brand.test.ts` (15 tests) checks every sample and the sign-in email. 1,498 tests and the build pass.
+  - **Samples for Mayank:** scratchpad `email-samples/send-samples.mts` renders all 14 (sign-in plus 13 lifecycle variants, 1.5–12.4 KB) and sends them to one inbox with `[Sample n/14: …]` subjects. The local `RESEND_API_KEY` is empty, so it waits for Mayank to add a sending-only key as `RESEND_SAMPLE_KEY` in `.env.local`.
 
 ### 2026-11-22
 - **Second iPhone round after `fdc28d5` (Mayank, Google app on his iPhone 17, 5G), crew running:**

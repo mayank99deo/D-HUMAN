@@ -446,6 +446,9 @@ export type FooterInput = {
  * tap targets (never dot-separated), why they got it, the disclaimer, and the postal
  * address when one is set. Returns the HTML row and the plain-text lines.
  */
+/** The brand's tagline (since 2026-10-30), the sign-off in every email. */
+export const TAGLINE = "Hack your health.";
+
 export function footer(o: FooterInput): { html: string; text: string[] } {
   const { frame } = o;
   if (o.stopLabel && !frame.stopUrl) throw new Error(`email footer: "${o.stopLabel}" needs frame.stopUrl`);
@@ -457,6 +460,8 @@ export function footer(o: FooterInput): { html: string; text: string[] } {
     `<a href="${esc(href)}" style="display:inline-block;padding:12px 0;${gap ? "margin-right:24px;" : ""}line-height:20px;color:${color};text-decoration:underline">${esc(label)}</a>`;
 
   const paras = [
+    // The brand's sign-off, in every email (Mayank, 2026-11-24): the tagline, "Hack your health."
+    { html: esc(TAGLINE), style: `font-size:15px;line-height:22px;font-weight:600;color:${EMAIL.paper}` },
     ...(o.top ?? []).map((t) => ({ html: esc(t), style: `font-size:15px;line-height:22px;color:${EMAIL.paper}` })),
     {
       html: [stop && o.stopLabel ? footLink(o.stopLabel, stop, EMAIL.paper, true) : "", footLink("Email settings", settings, EMAIL.graphite, false)].join(""),
@@ -472,6 +477,8 @@ ${paras.map((p, i) => `<p style="margin:0 0 ${i === paras.length - 1 ? 0 : 12}px
 
   const text = [
     "---",
+    TAGLINE,
+    "",
     ...(o.top ?? []),
     ...(stop && o.stopLabel ? [`${o.stopLabel}: ${stop}`] : []),
     `Email settings: ${settings}`,
