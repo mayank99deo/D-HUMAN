@@ -1,6 +1,6 @@
 # The D-Human crew
 
-Ten AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
+Thirteen AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
 
 | Agent | Role | Call them for |
 | --- | --- | --- |
@@ -14,6 +14,9 @@ Ten AI agents, each set up as a specialist with the working standards of a senio
 | `graphic-designer` | Visual and graphic designer | Tokens, type, icons, pictograms, data visuals, share cards, visual QA |
 | `qa-security-engineer` | QA and security test engineer | End-to-end testing, automated tests, security and privacy holes, fixes |
 | `seo-lead` | Principal SEO and organic growth lead | Search strategy and keyword research (India first), site architecture, technical SEO, structured data, health content that meets Google's bar, organic growth |
+| `mobile-architect` (Andrew) | Senior mobile app architect | The iOS and Android apps' architecture: framework choice, auth for native clients, offline and retries, push, deep links, store review rules, release pipeline |
+| `mobile-engineer` (Brig) | Senior staff mobile engineer | Building the apps in Dart/Flutter, Swift or Kotlin: screens, native speech, camera and gallery, payments, tests, performance, mobile code review |
+| `mobile-product-lead` (Crag) | Mobile product, design and growth lead | What the apps are and how they feel: mobile design system, onboarding and activation funnels, ethical notifications, store listings and store search, app metrics |
 
 ## How work flows
 
@@ -22,6 +25,7 @@ Ten AI agents, each set up as a specialist with the working standards of a senio
 3. **Designers go first** when a feature is new: `product-designer` specs it, and `ux-retention-designer` and `graphic-designer` shape how it feels and looks.
 4. **`seo-lead` shapes anything public** (pages, URLs, titles, copy meant to be found) before it's built.
 5. **Engineers build:** `staff-engineer` leads; `systems-data-engineer` owns data and infrastructure; `ai-efficiency-lead` signs off on any Claude call.
+   For the mobile apps (since 2026-11-24): `mobile-architect` sets the architecture, `mobile-product-lead` owns design and the funnel, and `mobile-engineer` builds; API changes go through `systems-data-engineer`.
 6. **`qa-security-engineer` tests and attacks it.**
 7. **`svp-product` reviews the integrated result** against the acceptance criteria, and `chief-of-staff` checks it's ready for users.
 8. **The main session (the orchestrator) logs it in `MEMORY.md`,** and commits and pushes only after Mayank agrees.

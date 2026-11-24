@@ -13,4 +13,4 @@
 
 ## The crew
 
-Ten specialist agents live in `.claude/agents/` (product and engineering lead, chief of staff, staff engineer, systems and data engineer, AI efficiency lead, product designer, UX and retention designer, graphic designer, QA and security engineer, SEO lead). `docs/team/CREW.md` says who does what and how work flows. The main session orchestrates: agents can't start other agents, so dispatch them from the plan, then log their work here and commit only after Mayank agrees.
+Thirteen specialist agents live in `.claude/agents/` (product and engineering lead, chief of staff, staff engineer, systems and data engineer, AI efficiency lead, product designer, UX and retention designer, graphic designer, QA and security engineer, SEO lead, and, for the mobile apps since 2026-11-24, the mobile architect Andrew, the mobile engineer Brig and the mobile product lead Crag). `docs/team/CREW.md` says who does what and how work flows. The main session orchestrates: agents can't start other agents, so dispatch them from the plan, then log their work here and commit only after Mayank agrees.

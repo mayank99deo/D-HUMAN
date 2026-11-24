@@ -217,7 +217,7 @@ The running record of this project: where things stand, why they are the way the
 - [ ] **Daily email job, after the 2026-11-24 fix:**
   - Mayank presses Run in Vercel → Cron Jobs (not `?dry=1`, which skips retries and housekeeping). Expect `[email] daily run : ok; …` and housekeeping counts.
   - Then a fresh dry week of `ok` runs, including a Sunday 19:30 IST weekly and the Monday morning run.
-  - Then `EMAIL_LIFECYCLE_LIVE=1` and `EMAIL_WEEKLY_LIVE=1`, and Redeploy.
+  - Done 2026-11-24 (Mayank set both switches; the first weekly sends Sunday 29 Nov about 19:30 IST). Still to see: a `live … sent N` log line after a Run.
   - Decide: keep the founders' failed-run note (`c295199`), and whether to add `embedded-postgres` as a dev dependency with `npm run test:pg` (about 100 MB per install).
 - [ ] **Follow-ups from that round:**
   - Send the hi-IN Devanagari beside the romanized text for Hinglish voice meals.
@@ -323,6 +323,16 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-24
+- **Mobile apps begin; three new crew members and a brief for a new chat (Mayank's request):**
+  - **The goal:** D-Human apps for the App Store and Google Play, built end to end on the same backend.
+  - **New agents in `.claude/agents/`:**
+    - `mobile-architect` (Andrew): architecture, native auth, offline, push, deep links, store rules, release.
+    - `mobile-engineer` (Brig): Dart/Flutter, Swift and Kotlin build, native speech, camera, tests.
+    - `mobile-product-lead` (Crag): the app's shape, mobile design system, funnels, ethical push, store listings and metrics.
+  - **On credentials:** Mayank described them as Apple-, Adobe-, Google- and Meta-grade leaders with Ivy League degrees and 10+ years each. Per the crew rule, the role files hold that bar but claim no real employers or degrees.
+  - **Docs:** `docs/team/CREW.md` and `CLAUDE.md` now say thirteen agents.
+  - **The brief:** `~/Downloads/D-Human-brief-for-new-chat.md` is the hand-over for a new Claude Code chat: product, stack, tables, features, the API with its guards, rules, gotchas, how we work, the crew, and the mobile kickoff decisions.
+  - **The key finding for mobile:** most screens read data in server components, so the apps need new JSON read endpoints reusing `lib/platform/*`. They also need a bearer-token auth path, because native apps send no Origin and some POSTs check it. Selling the ₹49 pass inside the apps must follow current store billing rules. Privacy and Terms pages, which both stores require, don't exist yet.
 - **The daily email job has failed on every live run since it shipped (found from Mayank's manual Run in Vercel, 08:35 UTC):**
   - **The error:** `sendsToRetry` (`lib/email/send.ts:528`) binds a JS Date through `lte(sql\`coalesce(sent_at, created_at)\`, settled)`. drizzle's postgres-js driver makes timestamp serializers transparent (column encoders stringify Dates first), so a Date with no column encoder reaches postgres.js and fails with `ERR_INVALID_ARG_TYPE`.
   - **Why it hid:** PGlite (local and tests) accepts Dates. The 2026-11-19 live check used `?dry=1`, which skips `retries()`.
@@ -354,6 +364,10 @@ Newest first. One entry per change; pushes carry their commit hash.
     - The sign-in email's parts are now a pure `signInCodeEmail()` in `lib/auth/email.ts`.
   - **Tests:** `tests/email-brand.test.ts` (15 tests) checks every sample and the sign-in email. 1,498 tests and the build pass.
   - **Samples for Mayank:** scratchpad `email-samples/send-samples.mts` renders all 14 (sign-in plus 13 lifecycle variants, 1.5–12.4 KB) and sends them to one inbox with `[Sample n/14: …]` subjects. The local `RESEND_API_KEY` is empty, so it waits for Mayank to add a sending-only key as `RESEND_SAMPLE_KEY` in `.env.local`.
+  - **Push `5bd2979`:** Vercel says "Deployment has completed". /signin gives 200, and `/email/wordmark-ink.png` and `/email/wordmark.png` give 200 live.
+  - **Mayank set `EMAIL_LIFECYCLE_LIVE=1` and `EMAIL_WEEKLY_LIVE=1`** in Vercel Production and redeployed (his word; the `live` log line isn't seen yet).
+  - **Samples sent:** all 14 to mayank29deo@gmail.com (14 of 14 accepted by Resend), with a sending-only key Mayank added as `RESEND_SAMPLE_KEY` in `.env.local`. He can delete that key in Resend afterwards; the script falls back to `RESEND_API_KEY`, which stays empty locally.
+  - **Also sent to the co-founder** at Mayank's request: 14 of 14 to dhumankumar2802@gmail.com. That's 28 sample sends today on Resend's free 100 a day, shared with codes and the lifecycle emails; the app's own budget doesn't count them.
 
 ### 2026-11-22
 - **Second iPhone round after `fdc28d5` (Mayank, Google app on his iPhone 17, 5G), crew running:**
