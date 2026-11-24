@@ -24,9 +24,7 @@ const { ASK_LIMITS } = await import("../lib/ask/types.ts");
 const { PLAN } = await import("../lib/domain/plan.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

@@ -41,9 +41,7 @@ const { targetsFor } = await import("../lib/domain/nutrition.ts");
 const { FOODS, FOOD_TABLE_VERSION } = await import("../lib/domain/food-table.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const live = () => {

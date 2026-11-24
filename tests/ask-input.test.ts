@@ -24,9 +24,7 @@ const { db, schema } = await import("../lib/db/index.ts");
 const { POST } = await import("../app/api/ask/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 // Characters by code point, so the test file itself holds no invisible characters.

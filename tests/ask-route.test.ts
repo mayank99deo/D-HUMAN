@@ -51,9 +51,7 @@ type AskReply = import("../lib/ask/types.ts").AskReply;
 const { askQuestion } = await import("../components/platform/ask-api.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const usage = { model: "claude-haiku-5-5", inputTokens: 4000, outputTokens: 200, costMicros: 500, ms: 1800 };
@@ -774,7 +772,10 @@ describe("the browser's resend, through the real route", () => {
     const me = await person();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
+    let entered!: () => void;
+    const answering = new Promise<void>((r) => (entered = r));
     g.__ask.answer = async () => {
+      entered();
       await gate;
       return { ok: true, reply: answerReply(), usage };
     };
@@ -782,6 +783,9 @@ describe("the browser's resend, through the real route", () => {
     // The first send reaches the route and is still being answered; its reply will be lost.
     signIn(me);
     const first = route.POST(postRequest(me, q));
+    // Wait until it is: on real Postgres (TEST_DATABASE_URL) the resend could otherwise claim
+    // first, and then the resend would be the one waiting on the gate.
+    await answering;
     const net = network(me, ["pass"]);
     const sendAgain = net.deps.send;
     let posts = 0;

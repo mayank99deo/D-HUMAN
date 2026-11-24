@@ -26,9 +26,7 @@ const { emailHash, isSuppressed } = await import("../lib/email/suppress.ts");
 const { getPrefs } = await import("../lib/email/prefs.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 // Signs the way Resend (Svix) does: base64 HMAC-SHA-256 of "id.timestamp.body" with the

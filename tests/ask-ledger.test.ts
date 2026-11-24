@@ -23,9 +23,7 @@ const { ASK_LIMITS } = await import("../lib/ask/types.ts");
 type AskReply = import("../lib/ask/types.ts").AskReply;
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 let n = 0;
@@ -302,8 +300,10 @@ describe("the IST day", () => {
 describe("query plans", () => {
   it("serve the thread, the in-flight check, client keys and the purge from indexes", async () => {
     const d = await db();
-    await d.execute(sql`set enable_seqscan = off`);
-    try {
+    // One transaction, so the setting and every explain share a connection on any driver
+    // (real Postgres through the pool too: TEST_DATABASE_URL in tests/support/app.ts).
+    await d.transaction(async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
       for (const [label, q] of [
         ["thread", sql`explain select * from ask_turns where user_id = 'u' and day = '2026-11-19' order by created_at`],
         ["thread or replay", sql`explain select * from ask_turns where user_id = 'u' and (day = '2026-11-19' or client_key = 'k')`],
@@ -313,13 +313,11 @@ describe("query plans", () => {
         ["counters", sql`explain select used from ask_days where user_id = 'u' and day = '2026-11-19'`],
         ["report delete", sql`explain update ask_turns set answer = null where user_id = 'u' and report_id is not null and removed_at is null`],
       ] as const) {
-        const result = (await d.execute(q)) as unknown as { rows: Record<string, string>[] };
-        const plan = result.rows.map((r) => r["QUERY PLAN"]).join(" | ");
+        const result = (await tx.execute(q)) as unknown as Record<string, string>[] | { rows: Record<string, string>[] };
+        const plan = (Array.isArray(result) ? result : result.rows).map((r) => r["QUERY PLAN"]).join(" | ");
         assert.match(plan, /Index|Bitmap/, `${label}: ${plan}`);
       }
-    } finally {
-      await d.execute(sql`set enable_seqscan = on`);
-    }
+    });
   });
 });
 

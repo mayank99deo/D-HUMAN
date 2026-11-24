@@ -21,9 +21,7 @@ const { saveSwitch, switchOn } = await import("../components/platform/email-pref
 const { emailTapFrom, firstTap } = await import("../components/platform/email-tap.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const SITE = "https://www.d-human.fit";

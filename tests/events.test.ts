@@ -18,9 +18,7 @@ type Profile = typeof schema.profiles.$inferSelect;
 type Persona = Parameters<typeof ensureEvents>[1];
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const persona = { archetype: "runner", eventSearch: "running races" } as unknown as Persona;

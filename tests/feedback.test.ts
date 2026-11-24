@@ -48,9 +48,7 @@ const route = await import("../app/api/feedback/route.ts");
 const deleteRoute = await import("../app/api/account/delete/route.ts");
 
 afterAll(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 beforeEach(() => {

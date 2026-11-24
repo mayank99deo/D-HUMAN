@@ -20,9 +20,7 @@ const ask = await import("../lib/platform/ask.ts");
 const { POST: deleteAccount } = await import("../app/api/account/delete/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const DAY = ask.istDay();

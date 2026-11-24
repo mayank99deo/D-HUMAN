@@ -50,9 +50,7 @@ const { mealIdFor, waitForMeal, MEAL_KEY } = await import("../lib/platform/food.
 const { claimMealTry, planView } = await import("../lib/platform/plan.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 let n = 0;

@@ -22,9 +22,7 @@ const prefsRoute = await import("../app/api/email/prefs/route.ts");
 const tapRoute = await import("../app/api/email/tap/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const SITE = "https://www.d-human.fit";

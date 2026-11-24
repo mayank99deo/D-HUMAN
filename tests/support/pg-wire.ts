@@ -20,14 +20,62 @@ export type WireServer = { port: number; db: PGlite; close(): Promise<void> };
 export async function pgWireServer(given?: PGlite): Promise<WireServer> {
   const db = given ?? new PGlite();
   await db.waitReady;
-  // PGlite is one session: every connection's messages run one batch at a time.
-  let turn: Promise<unknown> = Promise.resolve();
+  // PGlite is one session, shared by every connection. So one connection at a time holds
+  // it, from its first message until Postgres says it's idle again (ReadyForQuery "I"):
+  // postgres.js often sends Parse and Describe, waits for the answer, then Bind and
+  // Execute, and a transaction spans many exchanges. Another connection's messages wait,
+  // so they can't land in the middle and take over its statement or its transaction.
+  // Code that waits on a second connection inside a transaction would wait here until its
+  // query deadline; real Postgres would run that second query.
   const sockets = new Set<net.Socket>();
+  const queue: { socket: net.Socket; batch: Buffer[] }[] = [];
+  let owner: net.Socket | null = null;
+  let busy = false;
+
+  function pump() {
+    if (busy) return;
+    const i = queue.findIndex((q) => !owner || q.socket === owner);
+    if (i < 0) return;
+    const [{ socket, batch }] = queue.splice(i, 1);
+    busy = true;
+    owner = socket;
+    let tail = Buffer.alloc(0);
+    db.runExclusive(async () => {
+      for (const message of batch) {
+        await db.execProtocolRawStream(new Uint8Array(message), {
+          onRawData: (data) => {
+            tail = Buffer.concat([tail, Buffer.from(data)]).subarray(-6);
+            if (socket.writable) socket.write(Buffer.from(data));
+          },
+        });
+      }
+    })
+      .catch(() => socket.destroy())
+      .finally(() => {
+        // ReadyForQuery ("Z", length 5, status) ends every exchange; "I" means idle.
+        const idle = tail.length === 6 && tail[0] === 0x5a && tail.readInt32BE(1) === 5 && tail[5] === 0x49;
+        if (idle || socket.destroyed) owner = null;
+        busy = false;
+        pump();
+      });
+  }
+
+  async function release(socket: net.Socket) {
+    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].socket === socket) queue.splice(i, 1);
+    if (owner !== socket) return;
+    // Gone in the middle of a transaction: end it, as Postgres does when a connection drops.
+    if (!busy) await db.runExclusive(() => db.exec("ROLLBACK")).catch(() => {});
+    owner = null;
+    pump();
+  }
 
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.setNoDelay(true);
-    socket.on("close", () => sockets.delete(socket));
+    socket.on("close", () => {
+      sockets.delete(socket);
+      void release(socket);
+    });
     socket.on("error", () => {});
     let buffer = Buffer.alloc(0);
     let started = false;
@@ -58,23 +106,20 @@ export async function pgWireServer(given?: PGlite): Promise<WireServer> {
         if (buffer.length < 5) break;
         const length = 1 + buffer.readInt32BE(1);
         if (buffer.length < length) break;
+        // Terminate ("X"): Postgres closes the connection, and the client waits for that.
+        if (buffer[0] === 0x58) {
+          buffer = Buffer.alloc(0);
+          if (batch.length) queue.push({ socket, batch: batch.splice(0) });
+          pump();
+          socket.end();
+          return;
+        }
         batch.push(buffer.subarray(0, length));
         buffer = buffer.subarray(length);
       }
       if (!batch.length) return;
-      turn = turn
-        .then(() =>
-          db.runExclusive(async () => {
-            for (const message of batch) {
-              await db.execProtocolRawStream(new Uint8Array(message), {
-                onRawData: (data) => {
-                  if (socket.writable) socket.write(Buffer.from(data));
-                },
-              });
-            }
-          }),
-        )
-        .catch(() => socket.destroy());
+      queue.push({ socket, batch });
+      pump();
     });
   });
 

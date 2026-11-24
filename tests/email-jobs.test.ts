@@ -49,9 +49,7 @@ const { suppress } = await import("../lib/email/suppress.ts");
 const { GET } = await import("../app/api/cron/daily/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 beforeEach(async () => {
   g.__fake.calls = [];

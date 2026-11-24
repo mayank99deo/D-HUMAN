@@ -18,9 +18,7 @@ const { loggedDays, markWrapFinished } = await import("../lib/platform/wrap-view
 const finishedRoute = await import("../app/api/wraps/finished/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 describe("?week=", () => {

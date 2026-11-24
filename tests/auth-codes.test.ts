@@ -22,9 +22,7 @@ const { db, schema } = await import("../lib/db/index.ts");
 const { POST: deleteAccount } = await import("../app/api/account/delete/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const wrongFor = (code: string) => (code === "000000" ? "111111" : "000000");

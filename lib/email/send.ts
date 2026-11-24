@@ -3,6 +3,7 @@ import { and, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-
 import type { CreateEmailOptions, ErrorResponse } from "resend";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema, type Db } from "@/lib/db";
+import { at } from "@/lib/db/params";
 import { absoluteUrl } from "@/lib/site-url";
 import { lifecycleLeft, utcDayStart } from "./budget";
 import { emailMode, fromAddress, replyToFor, resend, sendingAllowed, whereRunning } from "./client";
@@ -274,7 +275,7 @@ async function record(d: Db, claimed: Claimed[], answer: Answer, now: Date): Pro
           .set({
             status: sql`case when ${stillSending} then 'sent' else ${sends.status} end`,
             providerId: sql`coalesce(${sends.providerId}, ${answer.ids[i]})`,
-            sentAt: sql`case when ${stillSending} then ${now.toISOString()}::timestamptz else ${sends.sentAt} end`,
+            sentAt: sql`case when ${stillSending} then ${at(now)} else ${sends.sentAt} end`,
             error: sql`case when ${stillSending} then null else ${sends.error} end`,
           })
           .where(eq(sends.id, c.sendId)),
@@ -525,7 +526,8 @@ export async function sendsToRetry(now = new Date(), limit = 200): Promise<strin
         inArray(sends.status, ["sending", "failed"]),
         or(
           and(eq(sends.status, "failed"), sql`${sends.attempts} < ${MAX_ATTEMPTS}`),
-          and(eq(sends.status, "sending"), lte(sql`coalesce(${sends.sentAt}, ${sends.createdAt})`, settled)),
+          // at(): a bare Date here has no column to convert it and fails in production's driver (lib/db/params.ts).
+          and(eq(sends.status, "sending"), lte(sql`coalesce(${sends.sentAt}, ${sends.createdAt})`, at(settled))),
         ),
       ),
     )

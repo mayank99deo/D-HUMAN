@@ -28,9 +28,7 @@ const { dietPicture } = await import("../lib/platform/food.ts");
 const { wrapStats } = await import("../lib/platform/wraps.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 let n = 0;

@@ -27,9 +27,7 @@ const { DELETE: deleteAllRoute } = await import("../app/api/reports/route.ts");
 const { DELETE: deleteOneRoute } = await import("../app/api/reports/[id]/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 let n = 0;

@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { and, asc, eq, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
+import { at } from "@/lib/db/params";
 import { activePass } from "@/lib/platform/plan";
 import { absoluteUrl } from "@/lib/site-url";
 import { appendFeedback, forgetRespondent, sheetsConfigured, type FeedbackSheetRow } from "@/lib/waitlist/sheets";
@@ -324,10 +325,14 @@ export async function syncFeedback({ userId, limit = SYNC_BATCH, now = new Date(
 
   let marked = 0;
   for (const r of rows) {
+    // "Unless it changed": updated_at still what was read. Compared to the millisecond, as a
+    // JS Date holds it: Postgres keeps microseconds, so a row whose updated_at came from the
+    // database clock (its default) would never match exactly. PGlite's clock has only
+    // milliseconds, which is why only real Postgres showed it.
     const done = await d
       .update(fa)
       .set({ sheetSyncedAt: now })
-      .where(and(eq(fa.id, r.id), eq(fa.updatedAt, r.updatedAt), isNull(fa.sheetSyncedAt)))
+      .where(and(eq(fa.id, r.id), sql`date_trunc('milliseconds', ${fa.updatedAt}) = ${at(r.updatedAt)}`, isNull(fa.sheetSyncedAt)))
       .returning({ id: fa.id });
     marked += done.length;
   }

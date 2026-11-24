@@ -19,9 +19,7 @@ const { stackInputs } = await import("../lib/platform/stack.ts");
 type Profile = import("../lib/db/schema.ts").Profile;
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 const NOW = new Date();

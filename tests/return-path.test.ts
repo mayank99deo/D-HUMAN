@@ -23,9 +23,7 @@ const { SESSION_COOKIE } = await import("../lib/auth/cookie.ts");
 const { db, schema } = await import("../lib/db/index.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 describe("safeNext", () => {

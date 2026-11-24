@@ -59,9 +59,7 @@ const { POST: verifyRoute } = await import("../app/api/billing/verify/route.ts")
 const { POST: webhookRoute } = await import("../app/api/billing/webhook/route.ts");
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 
 let n = 0;

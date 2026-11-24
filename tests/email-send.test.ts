@@ -61,9 +61,7 @@ const { sendWelcomeEmail } = await import("../lib/waitlist/email.ts");
 type Frame = import("../lib/email/types.ts").EmailFrame;
 
 after(async () => {
-  const d = await db();
-  await (d as unknown as { $client: { close(): Promise<void> } }).$client.close();
-  removeDatabase();
+  await removeDatabase();
 });
 beforeEach(() => {
   g.__fake.calls = [];

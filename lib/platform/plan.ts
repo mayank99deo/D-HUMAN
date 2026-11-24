@@ -3,6 +3,7 @@ import { and, desc, eq, gt, inArray, lte, max, sql } from "drizzle-orm";
 import { newId } from "@/lib/auth/crypto";
 import { keyMode, paymentsOn } from "@/lib/billing/razorpay";
 import { db, schema, type Db } from "@/lib/db";
+import { at } from "@/lib/db/params";
 import { PLAN, REFUSAL_MESSAGES, canBuy, refusalFor, type Counts, type Pass, type PlanView, type Refusal, type UseKind } from "@/lib/domain/plan";
 import { json } from "./http";
 import { localDate } from "./profile";
@@ -34,7 +35,7 @@ export async function coveredUntil(q: Db, userId: string): Promise<Date | null> 
 
 async function countsFor(q: Db, userId: string, pass: Pass | null, today: string): Promise<Counts> {
   const inPass = pass
-    ? sql<number>`count(*) filter (where ${u.kind} = 'read' and ${u.createdAt} >= ${pass.startsAt.toISOString()}::timestamptz and ${u.createdAt} < ${pass.endsAt.toISOString()}::timestamptz)`
+    ? sql<number>`count(*) filter (where ${u.kind} = 'read' and ${u.createdAt} >= ${at(pass.startsAt)} and ${u.createdAt} < ${at(pass.endsAt)})`
     : sql<number>`0`;
   const [c] = await q
     .select({

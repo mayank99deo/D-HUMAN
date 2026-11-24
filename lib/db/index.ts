@@ -36,8 +36,11 @@ async function connect(): Promise<Db> {
   const dir = process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite");
   const { mkdirSync } = await import("node:fs");
   mkdirSync(path.dirname(dir), { recursive: true });
-  const client = new PGlite(dir);
-  const db = drizzle(client, { schema });
+  // Refuses what production's driver refuses (a Date outside a column, an object where
+  // jsonb goes), so dev and the tests fail where production would: lib/db/params.ts.
+  const { productionParamCheck, productionSerializers } = await import("./params");
+  const client = new PGlite(dir, { serializers: productionSerializers() });
+  const db = drizzle(client, { schema, logger: productionParamCheck });
   await migrate(db, { migrationsFolder: MIGRATIONS });
   return db as unknown as Db;
 }
