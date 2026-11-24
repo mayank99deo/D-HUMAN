@@ -428,3 +428,37 @@ describe("the other email paths, through production's driver", () => {
     assert.equal(await send.recordTap(a.id, "no-such-send", SUNDAY_EVENING), false);
   });
 });
+
+describe("a run whose email step fails", () => {
+  it("still runs housekeeping and the Sheet, and tells the founders once a day, with no details", async () => {
+    const d = await db();
+    const a = await person();
+    await meals(a.id, WEEK);
+    await d.insert(schema.loginCodes).values({ id: "old-code", email: "x@example.com", codeHash: "h", expiresAt: new Date("2026-11-01T00:10:00Z"), createdAt: new Date("2026-11-01T00:00:00Z") });
+    await d.insert(schema.askTurns).values({ id: "yesterday", userId: a.id, clientKey: "k", day: "2026-11-21", status: "answered", question: "How much protein?", answer: "About 100 g." });
+    // The weekly step reads email_prefs: without it, that step throws, as the retry sweep did.
+    await d.execute(sql`alter table email_prefs rename to email_prefs_away`);
+    let first, second;
+    try {
+      first = await run(SUNDAY_EVENING);
+      second = await run(new Date(SUNDAY_EVENING.getTime() + 60_000));
+    } finally {
+      await d.execute(sql`alter table email_prefs_away rename to email_prefs`);
+    }
+    assert.deepEqual([first.status, first.failedAt, first.failureAlert], ["error", "weekly", "sent"]);
+    assert.match(first.error ?? "", /^Failed query: /, "the error is kept for the logs and job_runs");
+    assert.deepEqual([first.housekeeping?.loginCodes, first.housekeeping?.askTurns], [1, 1], "Ask's questions from before today went anyway");
+    assert.deepEqual(first.sheet, { forgotten: 0, forgetsPending: 0, sync: { status: "not_configured" } });
+    assert.deepEqual([second.status, second.failureAlert], ["error", "already_sent"]);
+
+    const notes = g.__fake.calls.filter((c) => kindOf(c) === "founder_alert");
+    assert.equal(notes.length, 1, "one note a day");
+    assert.deepEqual(notes[0].payload.to, ["founders@example.com"]);
+    assert.match(notes[0].payload.text, /"weekly" step/);
+    assert.doesNotMatch(notes[0].payload.text, /email_prefs|relation|select|@/, "no error text, query or address in the email");
+
+    const [job] = await d.select().from(schema.jobRuns).where(eq(schema.jobRuns.job, "daily"));
+    assert.equal(job.leaseUntil, null, "the lease is free for the next run");
+    assert.equal((job.lastResult as { failedAt?: string }).failedAt, "weekly");
+  });
+});

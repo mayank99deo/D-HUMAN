@@ -11,7 +11,7 @@ import { langTag } from "@/lib/domain/speech";
 import { purgeAsks } from "@/lib/platform/ask";
 import { personaFor } from "@/lib/platform/profile";
 import { makeWrap, reportDay, wrapDays, wrapStatsFrom, wrapTargets, type WrapLog } from "@/lib/platform/wraps";
-import { dailyCap, shouldAlert } from "./budget";
+import { dailyCap, shouldAlert, utcDay } from "./budget";
 import { sendingAllowed } from "./client";
 import { feedbackEmailOptions, syncFeedbackSheet, type SheetCatchUp } from "./feedback";
 import { pauseWeekly } from "./prefs";
@@ -60,7 +60,11 @@ import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type E
 //      questions and counts from before today (IST; lib/platform/ask.ts purgeAsks).
 //   5. The feedback Sheet's catch-up (lib/email/feedback.ts): forgets for deleted accounts
 //      that the Sheet missed ("sheet-forget:" rows), then answers that didn't arrive.
-//   6. Counts (never addresses) in job_runs.last_result; the lease is released.
+//   6. Counts (never addresses) in job_runs.last_result; the lease is released. A run
+//      that failed anywhere tells the founders, once a UTC day (the step's name, no details).
+// Steps 4 and 5 keep promises of their own (Ask's questions are kept for the day only), so
+// they run even when a step before them throws. From 2026-11-19 to 11-24 the retry sweep
+// threw on every live run and nothing after it ran, housekeeping included.
 //
 // Switches (Vercel env, both off by default, so Mayank can watch a dry week first):
 //   EMAIL_WEEKLY_LIVE=1     the weekly email sends; unset, the Sunday run is a dry run
@@ -139,6 +143,10 @@ export type RunResult = {
   sheet: SheetCatchUp | "skipped" | "error" | null;
   stoppedEarly: "time" | "not_production" | "no_api_key" | "no_link_secret" | null;
   error?: string;
+  /** The step that threw. A throw in an email step stops the run's emails; housekeeping and the Sheet still run. */
+  failedAt?: string;
+  /** The founders' note about a failed run: "sent", or why it didn't go. */
+  failureAlert?: string;
   ms: number;
 };
 
@@ -530,21 +538,43 @@ export async function runDaily(opts: RunOptions = {}): Promise<RunResult> {
     return { ...result, status: "busy", ms: Date.now() - started };
   }
   const ctx: Ctx = { d, now, started, readOnly, live, dry: new DryLedger(!readOnly && sendingAllowed()), dryLeft: 0, result, opts };
-  try {
-    const [budget] = await Promise.all([budgetToday(now), ctx.dry.load(d)]);
-    result.budget = budget;
-    ctx.dryLeft = budget.left;
-    if (!readOnly) await retries(ctx);
-    await welcomes(ctx);
-    await unfinished(ctx);
-    await weekly(ctx);
-    await feedback(ctx);
-    if (!readOnly) result.housekeeping = await housekeeping(d, now);
-    if (!readOnly) result.sheet = await feedbackSheet(ctx);
-  } catch (error) {
+  let step = "budget";
+  const failed = (error: unknown) => {
     result.status = "error";
-    result.error = (error instanceof Error ? error.message : String(error)).slice(0, 300);
-    console.error("[email] daily run failed:", error);
+    result.error ??= (error instanceof Error ? error.message : String(error)).slice(0, 300);
+    result.failedAt ??= step;
+    console.error(`[email] daily run failed at ${step}:`, error);
+  };
+  try {
+    try {
+      const [budget] = await Promise.all([budgetToday(now), ctx.dry.load(d)]);
+      result.budget = budget;
+      ctx.dryLeft = budget.left;
+      if (!readOnly) {
+        step = "retries";
+        await retries(ctx);
+      }
+      step = "welcome";
+      await welcomes(ctx);
+      step = "welcome_unfinished";
+      await unfinished(ctx);
+      step = "weekly";
+      await weekly(ctx);
+      step = "feedback";
+      await feedback(ctx);
+    } catch (error) {
+      failed(error);
+    }
+    if (!readOnly) {
+      try {
+        step = "housekeeping";
+        result.housekeeping = await housekeeping(d, now);
+      } catch (error) {
+        failed(error);
+      }
+      result.sheet = await feedbackSheet(ctx);
+      if (result.status === "error") result.failureAlert = await failureAlert(ctx);
+    }
   } finally {
     result.ms = Date.now() - started;
     if (!readOnly) await releaseLease(d, result, now).catch((error) => console.error("[email] releasing the lease failed:", error));
@@ -560,7 +590,39 @@ function summary(r: RunResult): string {
     const live = k === "weekly" ? r.live.weekly : r.live.lifecycle;
     return `${k} ${live ? "live" : "dry"} due ${t.due} ${live ? `sent ${t.sent}` : `would ${t.wouldSend}`} capped ${t.capped} over-budget ${t.overBudget}${t.failed ? ` failed ${t.failed}` : ""}`;
   });
-  return [`${r.status}`, `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, sheetSummary(r.sheet), r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
+  return [`${r.status}`, r.failedAt ? `failed at ${r.failedAt}` : "", `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, sheetSummary(r.sheet), r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
+}
+
+/**
+ * Tells the founders a run failed: once a UTC day (Resend's idempotency key), the step's
+ * name only. The error itself stays in Vercel's logs and job_runs: a query error can carry
+ * its parameters, and an email must never carry anyone's data. Goes whether or not the
+ * live switches are on, since a broken job matters most during the dry week. Never throws.
+ */
+async function failureAlert(ctx: Ctx): Promise<string> {
+  const { d, now, result } = ctx;
+  const day = utcDay(now);
+  // Once a day, like the weekly-cap alert: a marker row, freed again if the note doesn't go.
+  const key = `alert:daily-failed:${day}`;
+  const lines = [
+    `The daily email job failed on ${day} (UTC), in its "${result.failedAt}" step.`,
+    result.failedAt === "housekeeping"
+      ? "Old sign-in codes and Ask's questions from before today may not have been deleted this run."
+      : "Emails after that step wait for the next run. Housekeeping (old sign-in codes, Ask's questions from before today) still ran.",
+    `The error is in Vercel's logs: search for "[email] daily run failed". The next run is at about 10:30 or 19:30 IST.`,
+    "",
+    "Sent at most once a day by the daily email job. No addresses or health data.",
+  ];
+  try {
+    const [won] = await d.insert(jobRuns).values({ job: key, lastStartedAt: now }).onConflictDoNothing().returning({ job: jobRuns.job });
+    if (!won) return "already_sent";
+    const outcome = await sendFounderAlert({ key: `daily-failed:${day}`, subject: "D-Human: the daily email job failed", text: lines.join("\n") }, now);
+    if (outcome.status !== "sent") await d.delete(jobRuns).where(eq(jobRuns.job, key));
+    return outcome.status === "sent" ? "sent" : outcome.status === "failed" ? "failed" : outcome.reason;
+  } catch (error) {
+    console.error("[email] the failed-run note didn't go:", error instanceof Error ? error.message : error);
+    return "failed";
+  }
 }
 
 // ── 2. Retries ──────────────────────────────────────────────────────────────
