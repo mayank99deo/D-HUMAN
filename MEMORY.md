@@ -200,6 +200,7 @@ The running record of this project: where things stand, why they are the way the
   - bom1 serves HTTP/2 only, PINGs idle connections every 60 s and sends GOAWAY at 300 s.
 - **iPhone's `service-not-allowed` isn't always the language (2026-11-22):** WebKit also sends it when Apple's speech service can't be reached (a weak signal). Never remember a language as unusable from it unless the rules in `micProblemOf` say so: before the start, online, outside en/hinglish/hi, and that language hasn't listened this visit.
 - **Rules in the meal system prompt reach every meal (2026-11-22):** a rice-only rule there moved rajma and biryani. Put a rule only some meals need in the request, triggered by code (as `cookedRiceLine` does), and keep the system prompt stable for caching.
+- **Dates in raw SQL fail only in production (2026-11-24):** drizzle's postgres-js driver passes Dates through untouched (transparent timestamp serializers), and only column encoders stringify them. A Date inside `sql\`…\`` or compared to a `sql` expression works on PGlite and in every test, then throws `ERR_INVALID_ARG_TYPE` on Supabase. Use `at(date)` from `lib/db/params.ts`; local PGlite now refuses a raw Date the same way. PGlite's clock also has milliseconds where Postgres has microseconds, so never compare a stored timestamp to a JS Date exactly. For paths that never ran live, run `TEST_DATABASE_URL=… npm test` on real Postgres (runner: scratchpad `email-cron/run-pg.mjs`).
 - **Git identity:** not configured on this Mac, so commits are authored `Mayank Narayan <mayanknarayan@Mayanks-MacBook.local>`, which GitHub doesn't link to the account.
 
 ## Open items
@@ -213,6 +214,11 @@ The running record of this project: where things stand, why they are the way the
 - [ ] **Decide (Mayank), from that round:**
   - Gallery photos: should the meal slot come from the photo's time? (A lunch photo logged at 8 pm guesses dinner.)
   - Should the countdown's big number pause instead of logging now?
+- [ ] **Daily email job, after the 2026-11-24 fix:**
+  - Mayank presses Run in Vercel → Cron Jobs (not `?dry=1`, which skips retries and housekeeping). Expect `[email] daily run : ok; …` and housekeeping counts.
+  - Then a fresh dry week of `ok` runs, including a Sunday 19:30 IST weekly and the Monday morning run.
+  - Then `EMAIL_LIFECYCLE_LIVE=1` and `EMAIL_WEEKLY_LIVE=1`, and Redeploy.
+  - Decide: keep the founders' failed-run note (`c295199`), and whether to add `embedded-postgres` as a dev dependency with `npm run test:pg` (about 100 MB per install).
 - [ ] **Follow-ups from that round:**
   - Send the hi-IN Devanagari beside the romanized text for Hinglish voice meals.
   - `soundsLikeHindi` lacks mujhe, kitna and chahiye.
@@ -315,6 +321,26 @@ The running record of this project: where things stand, why they are the way the
 ## Log
 
 Newest first. One entry per change; pushes carry their commit hash.
+
+### 2026-11-24
+- **The daily email job has failed on every live run since it shipped (found from Mayank's manual Run in Vercel, 08:35 UTC):**
+  - **The error:** `sendsToRetry` (`lib/email/send.ts:528`) binds a JS Date through `lte(sql\`coalesce(sent_at, created_at)\`, settled)`. drizzle's postgres-js driver makes timestamp serializers transparent (column encoders stringify Dates first), so a Date with no column encoder reaches postgres.js and fails with `ERR_INVALID_ARG_TYPE`.
+  - **Why it hid:** PGlite (local and tests) accepts Dates. The 2026-11-19 live check used `?dry=1`, which skips `retries()`.
+  - **Effect:** every run died at step one, before welcomes, weekly, feedback, `housekeeping()` and the Sheet sync. No email went out wrongly, because the live switches are off. But Ask questions ("kept for today only") and other housekeeping purges haven't run since 2026-11-19.
+  - **Vercel Hobby keeps runtime logs for 1 hour,** so Sunday's weekly dry run can't be read; Mayank's manual Run is the way to see a run.
+  - **The systems and data engineer** is fixing every Date-in-raw-SQL site and testing `runDaily` live against real Postgres through the real driver, plus the webhook, stop and feedback paths. Hold the `EMAIL_*_LIVE` switches until the fix is deployed and a Run is clean.
+  - **Paused by Mayank (2026-11-24):** the systems and data engineer was stopped mid-run. Its worktree (branch `worktree-agent-ac9c420155fa04acb`) keeps whatever it committed or left uncommitted. On "resume", restart it from that worktree with the same brief. Nothing is pushed; main is at `c69ea68` plus this memory edit.
+  - **Resumed the same day** at Mayank's "resume": the engineer continues from its worktree.
+  - **Fixed (systems and data engineer), cherry-picked as `68e2dbd` and `c295199`:**
+    - **`lib/db/params.ts`:** `at(date)` gives a timestamptz parameter, used in `sendsToRetry` (the bug), `record()` and the pass read count.
+    - **A type-checker sweep** of 139 raw parameters found no other Date.
+    - **A second, latent bug:** `syncFeedback` compared `updated_at` to a JS Date exactly. Postgres keeps microseconds and PGlite milliseconds, so it now compares to the millisecond.
+    - **Local PGlite now refuses what production's driver refuses:** a drizzle logger rejects Date parameters, and serializers reject non-text timestamp and json values. Dev and tests fail where production would; with the guard alone, 20+ old email tests failed.
+    - **`tests/email-driver.test.ts`** (13 tests, in normal `npm test`) runs production's driver against PGlite behind the wire stand-in (`tests/support/driver-db.ts`): a full live Sunday-then-Monday run, the webhook, stop, prefs, feedback and the budget.
+    - **Real Postgres:** with `TEST_DATABASE_URL` set, every test file runs on real Postgres. 1,483 of 1,483 pass on Postgres 17.10; the runner is in scratchpad `email-cron/run-pg.mjs`.
+    - **`c295199`:** housekeeping and the Sheet catch-up run even when an email step throws. A failed run emails the founders (ALERT_EMAILS, else BLOG_OWNER_EMAILS) at most once a UTC day, naming only the step. `failedAt` appears in the log line and in `job_runs`.
+    - **Housekeeping catch-up:** every rule deletes everything past its cutoff. 176k codes and 20k Ask rows took 143 ms on real Postgres, so no batching for now.
+  - **Before push, on main `c295199`:** typecheck, lint, 1,483 tests, `next build` (second run).
 
 ### 2026-11-22
 - **Second iPhone round after `fdc28d5` (Mayank, Google app on his iPhone 17, 5G), crew running:**
@@ -443,6 +469,7 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Found:** the model's own "1 katori dal" adds no oil in 4 of 6 runs (older behaviour, untouched).
     - **Tests:** 1,462.
   - **Before push, on main `41a1bd8`:** typecheck, lint, 1,462 tests, `next build` (second run).
+  - **Push `c69ea68`** (`ae08522`, `41a1bd8` and memory): Vercel says "Deployment has completed". The landing and /signin give 200; /fuel 307s to sign-in; POST `/api/food` gives 401 signed out.
 - **Voice language bugs (Mayank, iPhone, live site), crew running:**
   - **Fuel:** with Hinglish picked, Say transcribed and logged in full Devanagari ("दो रोटी और चने की सब्जी", tip in Hindi). Hinglish has listened with `hi-IN` since `93850a9`, and replies follow the transcript's script. His rule: the pick decides. Hinglish means Latin letters; हिंदी means Devanagari.
   - **Ask:** the co-founder's Hindi came out as Marathi. Confirmed: `looksMarathi` in `lib/domain/ask-language.ts` classes everyday Hindi as Marathi ("…फायदे होते हैं", "मैं क्या करू"), and Ask's prompt calls करू Marathi.
@@ -757,7 +784,7 @@ Newest first. One entry per change; pushes carry their commit hash.
   - **Apps Script v2 deployed:** the same web app URL, which the local `.env.local` URL matches. `setupFeedback` made Feedback (14 columns) and Replies (6 columns); `WEBHOOK_SECRET` is set; the web app GET answers `{"ok":true,"feedback":true}`.
   - **DNS for dhuman.fit skipped (Mayank, 2026-11-19):** email will later move to @d-human.fit, and SPF, DKIM and DMARC get set up there then. dhuman.fit today has MX (Workspace), a Search Console TXT and Resend's DKIM and SPF on `send.dhuman.fit`. App email is authenticated by Resend; founders' Workspace replies lack SPF, DKIM and DMARC and may land in spam.
   - **Still to do:** bios and the first posts; after the dry week, `EMAIL_LIFECYCLE_LIVE=1` and `EMAIL_WEEKLY_LIVE=1`.
-  - **The secret copy:** the orchestrator keeps `CRON_SECRET` in the session scratchpad (mode 600) until Sunday's weekly dry run is read, then deletes it.
+  - **The secret copy:** the orchestrator kept `CRON_SECRET` in the session scratchpad (mode 600). On 2026-11-24 it was found already gone (the scratchpad's `secrets/` was empty), so Sunday's weekly dry run was never read from here; read it in Vercel's logs (`[email] daily run`).
 - **Push `260313a`:** the editorial policy's corrections line now names hello@dhuman.fit and mayank99deo@gmail.com (both read by Mayank). Live after Vercel success.
 - **Note for Mayank's setup:** `RESEND_WEBHOOK_SECRET` is new and not yet set (the webhook gave 503 live). It's distinct from `RESEND_API_KEY` (sending, already set), `GOOGLE_SHEETS_WEBHOOK_SECRET` (waitlist to Sheet) and `RAZORPAY_WEBHOOK_SECRET` (payments). It comes from Resend's Webhooks page when the endpoint is added.
 - **Push `b8ad0e0`:** 13 commits, from `11594de` to `b8ad0e0`: the blog, the lifecycle emails and their fixes. Vercel's GitHub status reads success after about 100 s, so Supabase took migration `0010`. Checked live:
