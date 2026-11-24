@@ -341,6 +341,11 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **`c295199`:** housekeeping and the Sheet catch-up run even when an email step throws. A failed run emails the founders (ALERT_EMAILS, else BLOG_OWNER_EMAILS) at most once a UTC day, naming only the step. `failedAt` appears in the log line and in `job_runs`.
     - **Housekeeping catch-up:** every rule deletes everything past its cutoff. 176k codes and 20k Ask rows took 143 ms on real Postgres, so no batching for now.
   - **Before push, on main `c295199`:** typecheck, lint, 1,483 tests, `next build` (second run).
+  - **Push `2ab3c56`:** Vercel says "Deployment has completed". The landing and /signin give 200; /fuel 307s to sign-in; `/api/cron/daily` without the secret gives 401. Mayank to press Run.
+  - **Mayank's manual Run, 14:15 UTC:** `ok` in 294 ms.
+    - **Budget:** 57 left (so about 13 emails sent today).
+    - **Would send:** welcome 0, "finish setting up" 1, weekly 0 (not Sunday), feedback 3. Sheet: nothing to copy.
+    - **Housekeeping:** `ok` means it ran without a throw. The log line doesn't print its counts.
 
 ### 2026-11-22
 - **Second iPhone round after `fdc28d5` (Mayank, Google app on his iPhone 17, 5G), crew running:**
