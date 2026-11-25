@@ -12,6 +12,7 @@ The running record of this project: where things stand, why they are the way the
   - **The emails:** a welcome when onboarding finishes, a "finish setting up" reminder, the Sunday-evening weekly wrap, and a day-10 feedback quiz whose answers go to the Sheet's Feedback tab.
   - **How they run:** two daily crons, dry until `EMAIL_WEEKLY_LIVE` / `EMAIL_LIFECYCLE_LIVE` are set. A daily budget keeps room for sign-in codes on Resend's free plan. One-click unsubscribe and Settings → Emails.
   - **Sign-in:** returns people to the page they came from (`/signin?next=`, via `proxy.ts`, signed-out app screens only).
+- **Mobile apps (started 2026-11-24):** native iPhone (SwiftUI) first, then Android (Kotlin), in the separate repo `mayank99deo/d-human_mobile-app`. They call this repo's API. Wave 1 (analysis and design) is in `docs/team/mobile/`; no app code yet. Packd Technologies Pvt Ltd publishes; no Apple or Google developer account yet.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
 - **Live:** https://www.d-human.fit, the main address since 2026-11-13 (Mayank's pick). https://www.dhuman.fit, dhuman.fit, d-human.fit and https://d-human.vercel.app serve the same deployment and send page visits there. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
@@ -32,6 +33,14 @@ The running record of this project: where things stand, why they are the way the
 - **Mobile:** installable as a home-screen web app (`app/manifest.ts`, icons in `public/icons`, Apple web-app tags). Lighthouse mobile on 2026-10-28 (with the phone loop): Performance 93–95, Accessibility, Best Practices and SEO 100; blocking time 50–70 ms, LCP 2.9 s, CLS 0, 347 KiB on load (the video loads only near the screen). No overflow and no tap target under 44 px at 320, 375 or 430 px.
 
 ## Decisions
+
+- **Mobile apps (2026-11-24, Mayank):**
+  - **Two native apps,** each built for its own platform: SwiftUI for iPhone, Kotlin/Compose for Android.
+  - **Order:** iPhone first.
+  - **The repo:** all mobile code lives in https://github.com/mayank99deo/d-human_mobile-app.git (public: no secrets or signing keys in it ever). This repo keeps the web and the API, which the apps share.
+  - **Builds:** in the cloud for now, tested on Mayank's iPhone 17; a 1 TB Mac later for in-house builds.
+  - **The publisher:** Packd Technologies Pvt Ltd (registered in India) publishes D-Human, so the Apple and Google developer accounts are organization accounts under Packd. Neither exists yet (2026-11-24).
+  - **Kickoff docs:** in `docs/team/mobile/`.
 
 - **The crew (2026-11-11; the SEO lead joined 2026-11-13):** ten role agents in `.claude/agents/`, run by the main session as orchestrator (agents can't start agents). They are AI roles, not people; medical review, legal and money decisions stay with Mayank and qualified humans.
 
@@ -322,7 +331,98 @@ The running record of this project: where things stand, why they are the way the
 
 Newest first. One entry per change; pushes carry their commit hash.
 
+### 2026-11-25
+- **Funnel queries in one run (mobile kickoff):** Supabase's SQL editor shows only the last result when a whole file runs, so Mayank's first paste was query 17 alone.
+  - **New file:** `docs/team/mobile/funnel-all-in-one.sql` wraps all 17 queries into one statement: 17 rows, each with its result as single-line JSON. It has one EXCLUDE list for founder and test emails. It's generated from `funnel-queries.sql` by the scratchpad's `funnel/combine.mjs`, and tested read-only on a PGlite copy, with and without an exclusion.
+  - **First production numbers** (query 17, founders included):
+    - **Week of 9 Nov:** 4 people logged a meal; 2 of them on 3+ days.
+    - **Week of 16 Nov:** 8 logged; 2 on 3+ days.
+    - **Week of 23 Nov, still running on Wednesday:** 8 logged; 0 on 3+ days yet.
+    - **Caveat:** with numbers this small, the 3+ day loggers may be the founders. Re-run with founders excluded.
+  - **All 17 queries, run by Mayank the same day:** written up in `docs/team/mobile/FUNNEL-DATA-2026-11-25.md`.
+    - **Size:** 24 accounts, with the founders probably included.
+    - **The real bottleneck is habit after the first meal:**
+      - 67% log a first meal (71% within 24 h lately);
+      - the median logger logs 1 meal a day, 1 day a week;
+      - day-1 return is 0–14%, day-7 0%;
+      - nobody has logged 3 full days, so a stack from meals is effectively unreachable.
+    - **The email sign-in step loses about 1 in 4** (3 of 11 in 48 h).
+    - **Not bottlenecks:** onboarding (96% finish in about 2–3 minutes) and the free limits (1 person hit the meal wall, after 14.5 days). That overturns the audit's #3 and #4.
+    - **Voice is the main input:** 47% of meals. Dinner is 11% of logs.
+    - **Report uploads are near the limit:** median 3.46 MB against the 4 MB cap; reads take 61 s median, 140 s p90.
+    - **Emails:** no taps yet.
+  - **Resumed at Mayank's "resume" (2026-11-25):** the graphic designer is finishing the boards. `svp-product` is writing `docs/team/plans/2026-11-24-ios-app.md`, told that the funnel data beats the audit's guesses and to plan around the habit loop.
+- **No welcome emails for two new users, and the Users tab in the Sheet (Mayank), crew running:**
+  - **How the welcome works:** it goes from `/api/profile` in `after()` when onboarding first finishes (`sendWelcome`), and the daily job catches up for 48 h. Dry-ledger rows only skip a send while the switch is off, so they don't block a live one.
+  - **Possible causes:** the switch isn't effective (no `live` log line seen yet); the users haven't finished onboarding ("finish setting up" waits 24 h); a send failure inside `after()`; spam. Vercel logs last 1 hour, so there's no evidence yet.
+  - **Lanes:**
+    - **Staff engineer:** ranks and tests the causes, and builds `/write/status`, a founders-only page showing switches, the last job results, recent sign-ups with their welcome status (emails masked), recent sends, the budget and the Sheet sync.
+    - **Systems and data engineer:** a `Users` tab upserted by user id, on sign-up, onboarding and profile change, plus a daily sync that backfills everyone. A row is forgotten when the account is deleted. The default columns hold no health data (no weight, height, medicines, conditions, pregnancy, markers, meals or Ask). Mayank must paste the new Code.gs, run `setupUsers` and deploy a new version.
+  - **Asked of Mayank:** press Run and paste the `[email] daily run` line, and check Resend → Emails for today.
+  - **Answered: the welcomes went.**
+    - **Run at 14:15 UTC:** `ok`, every kind `live`, everything due 0, budget 56 left.
+    - **Resend → Emails:** both new users got their code, then "You're in, <name>. Here's your number." within a minute, both Delivered. This morning's run sent 4 "Two taps to shape D-Human" feedback emails and 1 "Your bib is half printed", all Delivered.
+    - **So:** the live switches work, and `sendWelcome` in `after()` works.
+    - **The staff engineer** was told to drop the diagnosis and focus on `/write/status`.
+  - **Resend shows "Pro" with an unpaid-invoice banner** ("pay it to avoid disruption"). Sign-in codes depend on Resend, so Mayank should pay it or move back to the free plan.
+  - **Deliverability:** the other chat's funnel data (`docs/team/mobile/FUNNEL-DATA-2026-11-25.md`) says about 1 in 4 people drop at the email step. DMARC for dhuman.fit is still missing; recommended again.
+  - **`/write/status` (staff engineer, cherry-picked as one commit): a founders-only email status page.**
+    - **Access:** `writerAccess`; a non-founder gets 404, and the page is `no-store`.
+    - **New people, last 14 days:** a masked address; sign-up and onboarding times; the welcome and "finish setting up" status with the reason, from Delivered through Waits for onboarding, Not yet (with the due time), Due, Failed (Resend's reason) and Never sent.
+    - **Also shown:** the switches (On/Off/"Not read as on"; secrets as Set/Missing only), today's budget, the daily job's last result, the last 50 sends, the founders' alert markers, and any `job_runs` key starting `sheet` or `users`.
+    - **Code:** `lib/email/status.ts`, `status-view.ts`, `switches.ts` (`isOn` moved there), `components/write/EmailStatus.tsx`.
+    - **Delivered:** `email.delivered` webhooks now mark a send `delivered` (`suppress.ts`); a late delivered never hides a bounce or complaint. Mayank must add `email.delivered` to the Resend webhook, or delivered emails show as "Sent".
+    - **Latent, not fixed:** a missing `EMAIL_LINK_SECRET` would hold welcomes too (`jobs.ts:487`).
+    - **Before push:** 1,514 tests, lint, typecheck, build (second run).
+
 ### 2026-11-24
+- **Blog post 3: HYROX's impact on Indian fitness (Mayank's request), crew running:**
+  - **His asks:** professional photos in this and every future post ("no slop"), and graphs readers can interact with.
+  - **The blog today:** it supports photos (black and white by default, `keepColour` to opt out), keyNumber, table, note, quote, doctor and tryIt blocks. There's no chart.
+  - **Lanes:**
+    - **The SEO lead:** research and draft (`docs/team/blog/drafts/2026-11-24-hyrox-india.md`, plus `~/Downloads/D-Human-blog-hyrox-india.html`), with 2–3 chart tables marked `<table data-chart="bar|line">` and 4–6 photo slots.
+    - **The graphic designer:** 5–6 licensed photos (Unsplash, Pexels, or Wikimedia CC0/BY/BY-SA, or a press kit only with explicit terms; no AI or watermarked images) in `~/Downloads/D-Human-blog-hyrox-photos/` with `CREDITS.md`, and a data-drawn cover from the race's 16-segment structure.
+    - **The staff engineer, in a worktree:** an optional `chart: "bar"|"line"` on table blocks. Import reads `data-chart`; the editor gets a toggle; the renderer is a server-rendered SVG with tap and keyboard values and a Show table toggle, with the real table always in the HTML; a source is required.
+  - **Next:** an independent fact-check after the draft. Then Mayank imports in /write, uploads photos and cover, and the co-founder's "Looks good" lets him publish.
+  - **The graphic designer delivered** 10 licensed photos (6 recommended) in `~/Downloads/D-Human-blog-hyrox-photos/` with `CREDITS.md`. No licensed photo of an Indian HYROX race exists; official race photos are sold by Sportograf. The cover is a switchback course of 8 runs and 8 numbered stations (`docs/team/blog/covers/2026-11-24-hyrox/`, master `~/Downloads/D-Human-blog-cover-hyrox.png`), checked by the orchestrator.
+  - **The orchestrator sent photo 1 back:** large MYPROTEIN banners, a supplement brand, which can't appear on public pages. The designer was replacing it (leaning to Pexels 39704640) and re-checking the rest for brand banners.
+  - **Paused by Mayank (2026-11-24, "resume tomorrow"),** with all three stopped mid-run:
+    - **The SEO lead:** it was trimming the draft. A first paste-ready version exists at `~/Downloads/D-Human-blog-hyrox-india.html` (22 KB, 22:13 IST); the `docs/team/blog/drafts/` copy isn't saved yet. Resuming it continues from its own context.
+    - **The staff engineer:** the chart feature was built and its tests were being written, in worktree branch `worktree-agent-a70b4eead1c764edb`.
+    - **The graphic designer:** the photo 1 replacement.
+    - **On "resume":** SendMessage each to carry on. Then the fact-check, merge the chart feature with QA, push, and hand Mayank the paste-ready post.
+- **Mobile apps kickoff, wave 1: analysis and design (Mayank: users keep asking for an app; Apple first; "the very best design in this domain"; find every funnel bottleneck first):**
+  - **Two apps in their own repo:** an Apple app and an Android app, with all mobile code in https://github.com/mayank99deo/d-human_mobile-app.git (public, empty at kickoff). This repo keeps the web and the API.
+  - **Found on this Mac:** no Xcode (Command Line Tools only, Swift 6.3), no simulators, about 16 GB free; no production database access (`.env.local` has no `DATABASE_URL`); the web records no product analytics events, only Vercel page views.
+  - **Eight lanes running in parallel, documents only, in `docs/team/mobile/`:**
+    - Andrew: `ARCHITECTURE.md`, with the framework and App Review rules.
+    - Brig: `CLIENT-LOGIC.md`, the client logic to port or share.
+    - Crag: `FUNNEL-AUDIT.md`, `funnel-queries.sql` and `PHASE-1-SCOPE.md`.
+    - Graphic designer: `VISUAL-SYSTEM.md` and the icon concepts.
+    - Systems and data engineer: `API.md`, native auth and the read endpoints.
+    - UX designer: `INTERACTION.md`.
+    - Chief of staff: `LAUNCH-PATH.md`.
+    - QA: `THREAT-MODEL.md`.
+  - **The shared brief:** `docs/team/mobile/KICKOFF.md`, and the handover brief as `BRIEF.md`.
+  - **Mayank's answers during the kickoff:**
+    - Two native apps: SwiftUI first, Kotlin second.
+    - Cloud builds for now, tested on his iPhone 17; a 1 TB Mac later.
+    - The publisher is Packd Technologies Pvt Ltd, a registered Indian company; D-Human is its product.
+    - No Apple Developer account yet.
+    - All recorded in Decisions.
+  - **Seven of eight lanes finished;** their docs are complete in `docs/team/mobile/`. The headline findings:
+    - **The funnel** (Crag): about 25 taps, 6 things typed, a trip to the email app and 16 screens before the first meal. The top bottlenecks are the code sign-in (no DMARC, only the newest code works, fixed 30-day sessions), Resend's shared 100 a day, 12 onboarding screens, and the 20 free meals running out on day 4–7.
+    - **Andrew:** the ₹49 pass must be an Apple in-app purchase in the iPhone app (about ₹35 kept against ₹47.84). The stack's doses risk Guideline 1.4.2 (dosage calculators). iPhone dictation covers only en-IN and hi-IN of the 12 languages, and only English works offline.
+    - **QA** (live on the web today): profile saves that change the event trigger paid event searches (about $0.13 each, limited only to 30 an hour in memory), and deleting an account resets the free reads.
+  - **Paused by Mayank (2026-11-24, about 22:15 IST), to resume tomorrow:**
+    - **The graphic designer** was stopped while re-rendering the bib pins on the visual boards (`docs/team/mobile/assets/boards/`). `VISUAL-SYSTEM.md`, the app-icon concepts and the icons are written; its final report wasn't received.
+    - **`svp-product`** was stopped at the start of reconciling everything into `docs/team/plans/2026-11-24-ios-app.md` (no file written yet).
+    - **On "resume":**
+      1. Restart the graphic designer to finish the boards and report.
+      2. Restart `svp-product` with the same brief (conflicts to settle, ranked web fixes, build waves, one decision list).
+      3. Bring Mayank the combined plan for approval.
+    - **Nothing is committed** (`docs/team/mobile/` is untracked).
+  - **Asked of Mayank meanwhile:** run `docs/team/mobile/funnel-queries.sql` in Supabase and paste the results; add DMARC on `dhuman.fit`; set a monthly spend limit in the Anthropic Console; look up Packd in Apple's D-U-N-S tool.
 - **Mobile apps begin; three new crew members and a brief for a new chat (Mayank's request):**
   - **The goal:** D-Human apps for the App Store and Google Play, built end to end on the same backend.
   - **New agents in `.claude/agents/`:**
@@ -333,6 +433,7 @@ Newest first. One entry per change; pushes carry their commit hash.
   - **Docs:** `docs/team/CREW.md` and `CLAUDE.md` now say thirteen agents.
   - **The brief:** `~/Downloads/D-Human-brief-for-new-chat.md` is the hand-over for a new Claude Code chat: product, stack, tables, features, the API with its guards, rules, gotchas, how we work, the crew, and the mobile kickoff decisions.
   - **The key finding for mobile:** most screens read data in server components, so the apps need new JSON read endpoints reusing `lib/platform/*`. They also need a bearer-token auth path, because native apps send no Origin and some POSTs check it. Selling the ₹49 pass inside the apps must follow current store billing rules. Privacy and Terms pages, which both stores require, don't exist yet.
+  - **Push `a2dcf85`:** the three agent files, CREW.md, CLAUDE.md and this entry. Docs and config only, so nothing on the site changes.
 - **The daily email job has failed on every live run since it shipped (found from Mayank's manual Run in Vercel, 08:35 UTC):**
   - **The error:** `sendsToRetry` (`lib/email/send.ts:528`) binds a JS Date through `lte(sql\`coalesce(sent_at, created_at)\`, settled)`. drizzle's postgres-js driver makes timestamp serializers transparent (column encoders stringify Dates first), so a Date with no column encoder reaches postgres.js and fails with `ERR_INVALID_ARG_TYPE`.
   - **Why it hid:** PGlite (local and tests) accepts Dates. The 2026-11-19 live check used `?dry=1`, which skips `retries()`.
