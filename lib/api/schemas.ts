@@ -27,11 +27,12 @@ export const ErrorResponse = z
 
 // ── Sign-in ──────────────────────────────────────────────────────────────────
 
-export const TokenRequest = z.strictObject({
+// Requests are lenient, as the routes are: a key that isn't here is ignored, never an error.
+export const TokenRequest = z.object({
   email: z.email(),
   code: S.describe("Six digits, or the App Review account's 12 or more. Spaces and dashes are ignored."),
   key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("A random key for this try. Send it again with a resend: the same email, code and key within 10 minutes get the same token."),
-  device: z.strictObject({ label: S.max(40).optional().describe("The hardware model, e.g. iPhone18,1. Never the phone's name."), os: S.max(16).optional() }).optional(),
+  device: z.object({ label: S.max(40).optional().describe("The hardware model, e.g. iPhone18,1. Never the phone's name."), os: S.max(16).optional() }).optional(),
 });
 
 export const TokenResponse = z.strictObject({
@@ -43,10 +44,10 @@ export const TokenResponse = z.strictObject({
   isNew: z.boolean(),
 });
 
-export const SignOutRequest = z.strictObject({ others: z.boolean().optional().describe("true: end every other session, the web's included, and keep this one.") });
+export const SignOutRequest = z.object({ others: z.boolean().optional().describe("true: end every other session, the web's included, and keep this one.") });
 export const SignOutResponse = z.union([z.strictObject({ status: z.literal("signed_out") }), z.strictObject({ status: z.literal("signed_out_others"), ended: Int })]);
 
-export const DeleteAccountRequest = z.strictObject({ confirm: z.literal("DELETE") });
+export const DeleteAccountRequest = z.object({ confirm: z.literal("DELETE") });
 export const DeleteAccountResponse = z.strictObject({ status: z.literal("deleted") });
 
 export const DeviceView = z.strictObject({
@@ -59,6 +60,12 @@ export const DeviceView = z.strictObject({
 });
 export const SessionsResponse = z.strictObject({ sessions: z.array(DeviceView) });
 export const EndSessionResponse = z.strictObject({ status: z.literal("signed_out") });
+export const AppleSignInRequest = z.object({
+  identityToken: S,
+  authorizationCode: S,
+  nonce: S,
+  fullName: z.object({ givenName: S.optional(), familyName: S.optional() }).optional(),
+});
 
 // ── Me ───────────────────────────────────────────────────────────────────────
 
