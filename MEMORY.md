@@ -374,6 +374,30 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Delivered:** `email.delivered` webhooks now mark a send `delivered` (`suppress.ts`); a late delivered never hides a bounce or complaint. Mayank must add `email.delivered` to the Resend webhook, or delivered emails show as "Sent".
     - **Latent, not fixed:** a missing `EMAIL_LINK_SECRET` would hold welcomes too (`jobs.ts:487`).
     - **Before push:** 1,514 tests, lint, typecheck, build (second run).
+    - **Push `1acbdb4`** (`d587142` and memory): Vercel says "Deployment has completed". Signed out, `/write/status` 307s to `/signin?next=%2Fwrite%2Fstatus`, and the landing gives 200.
+  - **The Users tab in the Sheet (systems and data engineer, cherry-picked as one commit):**
+    - **Columns** (`lib/sheets/user-row.ts`):
+      - **Who and when:** User ID (`u_` plus the last 12 characters of the id, unlinkable to feedback codes), Founder, Name, Email, Signed up, Onboarding finished and Last active (all IST).
+      - **Profile:** Language, City, Age (from birth year), Sex, Main activity, Level, Goals, Diet.
+      - **Use:** Plan ("Free" or "Pass until …"), Payments (a count), Meals logged, Reports uploaded, Weekly email.
+      - **Synced (IST).**
+    - **Never in the Sheet:** weight, height, medicines, conditions, supplements, budget, markers, reads, stacks, meals, Ask, feedback, payment ids, amounts, or the "known deficiency" goal.
+    - **When rows go:**
+      - One row in `after()` on sign-up (`/api/auth/verify`), onboarding finish, and a Settings change to a shown field.
+      - The daily job (`lib/sheets/users.ts`, after housekeeping, even if an email step failed): forgets first, then changed accounts, then a full rewrite once an IST day, which is the backfill.
+      - 200 rows a request, resumable at the time limit; counts in 4 grouped queries.
+    - **Deletes:** `/api/account/delete` records `sheet-forget-user:u_…` in its own transaction and retries until the Sheet confirms. Full rewrites also drop rows of accounts that no longer exist.
+    - **Safety:** an old script (it answers `missing_email`) shows as `outdated`, and an unset URL as `not_configured`; neither fails the job. Only production writes the tab, or local with `SHEET_USERS_LOCAL=1`, because `.env.local` holds the real Sheet's URL and secret.
+    - **Status:** `job_runs` `sheet-users` holds `status`, `mode` and `sent`, and `/write/status` shows it.
+    - **Code.gs:** actions `users`, `users-forget`, `users-ids`, plus `setupUsers()`. It refuses to write if the headers were moved, and keeps founders' notes to the right.
+    - **Tests:** 21 users-sheet and 21 Apps Script tests. Main: 1,555 tests, build (second run).
+    - **Mayank's steps:** paste Code.gs, run `setupUsers`, Deploy → Manage deployments → Edit → New version, then open the web app URL and look for `"users": true`.
+    - **Decisions for Mayank:**
+      - DPDP consent naming Google Sheets as a processor.
+      - Keep the Diet ("Jain") and Sex columns?
+      - Show the deficiency goal?
+      - Local dev already writes waitlist and feedback to the real Sheet; remove those two values from `.env.local` or use a test Sheet.
+      - Move feedback deletes to the same in-transaction promise.
 
 ### 2026-11-24
 - **Blog post 3: HYROX's impact on Indian fitness (Mayank's request), crew running:**
