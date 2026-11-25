@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { newId } from "@/lib/auth/crypto";
 import { startSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -27,6 +28,8 @@ const PEOPLE = {
 
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production") return new Response("Not found", { status: 404 });
+  // Never for the apps (A6).
+  if (carriesAppToken(request)) return refuseAppToken();
   const params = new URL(request.url).searchParams;
   const who = (params.get("as") ?? "ankit") as keyof typeof PEOPLE;
   const to = params.get("to");

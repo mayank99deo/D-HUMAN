@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { saveContact, sendWelcomeEmail } from "@/lib/waitlist/email";
 import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
 import { joinSchema } from "@/lib/waitlist/schema";
@@ -6,6 +7,8 @@ import { appendSignup, SheetsConfigError } from "@/lib/waitlist/sheets";
 import { signEmail } from "@/lib/waitlist/token";
 
 export async function POST(request: Request) {
+  // Never for the apps (A6).
+  if (carriesAppToken(request)) return refuseAppToken();
   if (!allowRequest(`join:${clientIp(request.headers)}`, 5, 60_000)) {
     return Response.json({ error: "rate_limited" }, { status: 429 });
   }

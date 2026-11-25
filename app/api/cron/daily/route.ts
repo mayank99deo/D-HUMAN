@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { runDaily } from "@/lib/email/jobs";
 import { json } from "@/lib/platform/http";
 
@@ -18,6 +19,8 @@ function authorised(header: string | null, secret: string): boolean {
 }
 
 export async function GET(request: Request) {
+  // Never for the apps (A6). The cron's own `Bearer <CRON_SECRET>` isn't an app token.
+  if (carriesAppToken(request)) return refuseAppToken();
   const auth = request.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
   if (!secret) return json({ error: "not_configured" }, 503);

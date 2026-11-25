@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { saveContact, sendWelcomeEmail } from "@/lib/waitlist/email";
 import { formSignupSchema } from "@/lib/waitlist/schema";
 import { verifyWebhookSecret } from "@/lib/waitlist/token";
@@ -6,6 +7,8 @@ import { verifyWebhookSecret } from "@/lib/waitlist/token";
 // Called by the Apps Script trigger after it saves a new Google Form signup, so
 // form signups get the same welcome email and Resend contact as website ones.
 export async function POST(request: Request) {
+  // Never for the apps (A6). The Apps Script's own `Bearer <secret>` isn't an app token.
+  if (carriesAppToken(request)) return refuseAppToken();
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!verifyWebhookSecret(token)) {
     return Response.json({ error: "forbidden" }, { status: 403 });

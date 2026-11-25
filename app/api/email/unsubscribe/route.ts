@@ -1,3 +1,4 @@
+import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { setPrefs } from "@/lib/email/prefs";
 import { readStopToken } from "@/lib/email/tokens";
 
@@ -9,6 +10,8 @@ import { readStopToken } from "@/lib/email/tokens";
 const noStore = { "cache-control": "no-store" };
 
 export async function POST(request: Request) {
+  // Never for the apps (A6): the signed link is the only authority here.
+  if (carriesAppToken(request)) return refuseAppToken();
   const token = readStopToken(new URL(request.url).searchParams.get("t"));
   if (!token) return new Response(null, { status: 400, headers: noStore });
   try {
@@ -26,6 +29,7 @@ export async function POST(request: Request) {
 // Opening the link (a person, a mail scanner, a prefetcher) never unsubscribes: it goes to
 // the stop page, where the person taps to stop it (a POST).
 export async function GET(request: Request) {
+  if (carriesAppToken(request)) return refuseAppToken();
   const url = new URL(request.url);
   const t = url.searchParams.get("t") ?? "";
   const target = new URL("/email/stop", url.origin);
