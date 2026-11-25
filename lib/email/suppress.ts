@@ -55,12 +55,16 @@ function address(value: string | undefined): string | null {
   return trimmed.includes("@") ? trimmed : null;
 }
 
-// A later event never undoes a stronger one: a "failed" that arrives late can't hide a spam report.
-const OVERWRITABLE: Record<"bounced" | "complained" | "suppressed" | "failed", SendStatus[]> = {
-  complained: ["sending", "sent", "failed", "unknown", "bounced", "suppressed"],
-  bounced: ["sending", "sent", "failed", "unknown", "suppressed"],
+// A later event never undoes a stronger one: a "failed" that arrives late can't hide a spam
+// report, and a late "delivered" can't hide a bounce. A bounce or spam report can follow a
+// delivery (mail servers bounce some mail after taking it), so those overwrite "delivered".
+const OVERWRITABLE: Record<"delivered" | "bounced" | "complained" | "suppressed" | "failed", SendStatus[]> = {
+  complained: ["sending", "sent", "delivered", "failed", "unknown", "bounced", "suppressed"],
+  bounced: ["sending", "sent", "delivered", "failed", "unknown", "suppressed"],
   suppressed: ["sending", "sent", "failed", "unknown"],
   failed: ["sending", "sent", "unknown"],
+  // "sending": the event beat our own write of Resend's answer (record() then keeps it).
+  delivered: ["sending", "sent", "unknown"],
 };
 
 /**
@@ -98,7 +102,7 @@ async function userIdByEmail(email: string): Promise<string | null> {
   return row?.id ?? null;
 }
 
-export type WebhookResult = "bounced" | "bounced_soft" | "complained" | "suppressed" | "failed" | "suppression_added" | "suppression_removed" | "ignored";
+export type WebhookResult = "delivered" | "bounced" | "bounced_soft" | "complained" | "suppressed" | "failed" | "suppression_added" | "suppression_removed" | "ignored";
 
 /**
  * Applies one verified Resend event. Every write is an upsert or a guarded update, so
@@ -107,6 +111,12 @@ export type WebhookResult = "bounced" | "bounced_soft" | "complained" | "suppres
  */
 export async function handleResendEvent(event: WebhookEventPayload): Promise<WebhookResult> {
   switch (event.type) {
+    // The receiving server took it: what the founders' status page shows as "Delivered".
+    // Sign-in codes have no send of ours, so for them this changes nothing.
+    case "email.delivered": {
+      await markSend(event.data.email_id, event.data.tags?.send_id, "delivered");
+      return "delivered";
+    }
     case "email.bounced": {
       const to = address(event.data.to?.[0]);
       // Only a "Permanent" bounce is a hard bounce, the kind Resend suppresses. A full

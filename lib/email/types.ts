@@ -34,8 +34,12 @@ export const DEFAULT_EMAIL_PREFS: Record<EmailCategory, boolean> = { weekly: tru
 export const PREFS_UPDATED_VIA = ["settings", "stop_link", "one_click", "complaint"] as const;
 export type PrefsUpdatedVia = (typeof PREFS_UPDATED_VIA)[number];
 
-/** email_sends.status. "unknown": no answer from Resend and too old to retry safely; never resent. */
-export const SEND_STATUSES = ["sending", "sent", "failed", "unknown", "bounced", "complained", "suppressed"] as const;
+/**
+ * email_sends.status. "sent": Resend took it. "delivered": the receiving mail server took it
+ * (Resend's email.delivered webhook). "unknown": no answer from Resend and too old to retry
+ * safely; never resent.
+ */
+export const SEND_STATUSES = ["sending", "sent", "delivered", "failed", "unknown", "bounced", "complained", "suppressed"] as const;
 export type SendStatus = (typeof SEND_STATUSES)[number];
 
 export const SUPPRESSION_REASONS = ["bounce", "complaint", "resend"] as const;

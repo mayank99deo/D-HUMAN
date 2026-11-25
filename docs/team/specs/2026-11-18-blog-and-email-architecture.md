@@ -368,6 +368,7 @@ The purpose is inside the signed payload, so a stop token can't be used as a fee
 
 | Event | We do |
 | --- | --- |
+| `email.delivered` | Mark the send `delivered` (added 2026-11-25 for the founders' status page, `/write/status`). It never hides a bounce or spam report, which can still follow it |
 | `email.bounced` | Mark the send `bounced`; a `Permanent` bounce also upserts `email_suppressions` (SHA-256 of the lowercase address, `bounce`). A `Transient` or `Undetermined` one doesn't, since Resend doesn't suppress those |
 | `email.complained` | Suppression (`complaint`); turn off weekly and questions for that person (`updated_via = 'complaint'`); mark the send |
 | `email.suppressed` | Mark the send `suppressed`; upsert the suppression |
@@ -539,7 +540,7 @@ Then these run in parallel. Each lane owns its files; no file appears in two lan
 
 **Resend:**
 
-1. Webhooks → Add endpoint `https://www.d-human.fit/api/email/webhook` with six events: `email.bounced`, `email.complained`, `email.suppressed`, `email.failed`, `suppression.added` and `suppression.removed` (the last two keep our suppression list in step with Resend's dashboard). Copy its signing secret into `RESEND_WEBHOOK_SECRET`.
+1. Webhooks → Add endpoint `https://www.d-human.fit/api/email/webhook` with seven events: `email.delivered` (for "Delivered" on `/write/status`; added 2026-11-25), `email.bounced`, `email.complained`, `email.suppressed`, `email.failed`, `suppression.added` and `suppression.removed` (the last two keep our suppression list in step with Resend's dashboard). Copy its signing secret into `RESEND_WEBHOOK_SECRET`.
 2. Domains → `dhuman.fit` → open and click tracking off.
 3. Stay on the free plan for now (Mayank). Upgrade to Pro when revenue starts or the weekly cap alert arrives, then raise `EMAIL_DAILY_CAP`.
 

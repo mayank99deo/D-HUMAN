@@ -5,9 +5,10 @@ import { json } from "@/lib/platform/http";
 export const maxDuration = 30;
 const MAX_BYTES = 256 * 1024;
 
-// Resend webhooks (set up in Resend → Webhooks, events email.bounced, email.complained,
-// email.suppressed and email.failed, plus suppression.added and suppression.removed so our
-// mirror follows Resend's list). The signature is checked over the exact bytes Resend sent,
+// Resend webhooks (set up in Resend → Webhooks, events email.delivered, email.bounced,
+// email.complained, email.suppressed and email.failed, plus suppression.added and
+// suppression.removed so our mirror follows Resend's list). email.delivered only feeds the
+// founders' status page (/write/status); without it, a delivered email shows as "Sent". The signature is checked over the exact bytes Resend sent,
 // before anything is parsed, with the SDK's own check. Every effect is an upsert or a
 // guarded update, so Resend's retries and replays are harmless.
 export async function POST(request: Request) {

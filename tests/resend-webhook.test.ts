@@ -140,6 +140,45 @@ describe("events", () => {
     assert.equal(await isSuppressed(p.email), true);
   });
 
+  it("marks a send delivered; a later bounce or spam report still counts, and a late 'delivered' can't hide one", async () => {
+    const p = await personWithSend();
+    const delivered = emailEvent("email.delivered", { email_id: p.providerId, to: [p.email] });
+    assert.equal((await post(delivered, signed(delivered))).status, 200);
+    assert.equal((await sendRow(p.sendId)).status, "delivered");
+    assert.equal(await isSuppressed(p.email), false, "a delivery touches no list");
+
+    // Mail servers can take a message and bounce it later.
+    const bounce = emailEvent("email.bounced", { email_id: p.providerId, to: [p.email], bounce: { type: "Permanent", subType: "General", message: "gone" } });
+    assert.equal((await post(bounce, signed(bounce))).status, 200);
+    assert.equal((await sendRow(p.sendId)).status, "bounced");
+    assert.equal((await post(delivered, signed(delivered))).status, 200, "a replayed delivery");
+    assert.equal((await sendRow(p.sendId)).status, "bounced");
+
+    const q = await personWithSend();
+    const qDelivered = emailEvent("email.delivered", { email_id: q.providerId, to: [q.email] });
+    await post(qDelivered, signed(qDelivered));
+    const complaint = emailEvent("email.complained", { email_id: q.providerId, to: [q.email] });
+    await post(complaint, signed(complaint));
+    assert.equal((await sendRow(q.sendId)).status, "complained");
+  });
+
+  it("a delivery that beats our own write of Resend's answer is kept, found by its send_id tag", async () => {
+    const p = await personWithSend("sending");
+    const d = await db();
+    await d.update(schema.emailSends).set({ providerId: null }).where(eq(schema.emailSends.id, p.sendId));
+    const body = emailEvent("email.delivered", { email_id: "re_early", to: [p.email], tags: { kind: "weekly", send_id: p.sendId } });
+    assert.equal((await post(body, signed(body))).status, 200);
+    const r = await sendRow(p.sendId);
+    assert.deepEqual([r.status, r.providerId], ["delivered", "re_early"]);
+  });
+
+  it("a delivered sign-in code (no send of ours) changes nothing", async () => {
+    const p = await personWithSend();
+    const body = emailEvent("email.delivered", { email_id: "re_code_only", to: ["someone@example.com"] });
+    assert.equal((await post(body, signed(body))).status, 200);
+    assert.equal((await sendRow(p.sendId)).status, "sent");
+  });
+
   it("records a failed send with Resend's reason", async () => {
     const p = await personWithSend();
     const body = emailEvent("email.failed", { email_id: p.providerId, to: [p.email], failed: { reason: "reached_daily_quota" } });

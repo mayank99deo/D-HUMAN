@@ -45,6 +45,7 @@ import {
   type LifecycleEmail,
   type SendOutcome,
 } from "./send";
+import { isOn } from "./switches";
 import { renderEmail, type EmailToRender } from "./templates/index";
 import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type EmailKind, type FeedbackData, type FeedbackPath, type SendStatus, type WelcomeData } from "./types";
 
@@ -96,7 +97,6 @@ const EXPIRED_SESSIONS_KEEP_DAYS = 7;
 
 // ── Switches ────────────────────────────────────────────────────────────────
 
-const isOn = (value: string | undefined) => /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
 /** EMAIL_WEEKLY_LIVE: the weekly email sends. Off by default: the Sunday run is a dry run. */
 export const weeklyLive = () => isOn(process.env.EMAIL_WEEKLY_LIVE);
 /** EMAIL_LIFECYCLE_LIVE: welcome, "didn't finish" and feedback emails send. Off by default. */
