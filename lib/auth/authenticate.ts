@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { BEARER_HEADER, clientHeader, fromBrowser, refuseAppToken } from "./app-token";
 import { dueForTouch, findBearerSession, touchAppSession, type BearerSession } from "./bearer";
 import { sameOrigin } from "./origin";
+import { scrubTokens } from "./scrub";
 import { getSessionUser, type SessionUser } from "./session";
 
 // One resolver for every route the apps use (the mobile repo's docs/API.md §2.4; QA's A2–A5).
@@ -29,7 +30,7 @@ export async function authenticate(request: Request): Promise<Actor | null> {
     // Sliding expiry, off the critical path and at most once an hour per phone.
     if (dueForTouch(session)) {
       const client = clientHeader(request);
-      after(() => touchAppSession(session, client).catch((error) => console.error("[auth] couldn't record app use:", error instanceof Error ? error.message : error)));
+      after(() => touchAppSession(session, client).catch((error) => console.error(`[auth] couldn't record app use: ${scrubTokens(error instanceof Error ? error.message : String(error))}`)));
     }
     return { via: "bearer", user: session.user, session };
   }

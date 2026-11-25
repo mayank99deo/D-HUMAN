@@ -60,7 +60,7 @@ const { writeGuard, isFresh } = await import("../lib/auth/author.ts");
 const { APP_SESSION, carriesAppToken, NOT_FOR_APP_WORDS } = await import("../lib/auth/app-token.ts");
 const { reviewAccount } = await import("../lib/auth/review.ts");
 const { SIGN_IN_WORDS } = await import("../lib/auth/sign-in-words.ts");
-const { installLogScrubber, scrubTokens } = await import("../lib/auth/scrub.ts");
+const { scrubTokens } = await import("../lib/auth/scrub.ts");
 const token = (await import("../app/api/auth/token/route.ts")).POST as Handler;
 const apple = (await import("../app/api/auth/apple/route.ts")).POST as Handler;
 const verify = (await import("../app/api/auth/verify/route.ts")).POST as Handler;
@@ -814,7 +814,7 @@ describe("caching, cookies, CORS and logs", () => {
 
   it("22: no source sends an Access-Control-Allow-* header", () => {
     const files = [...readdirRecursive(path.join(ROOT, "app")), ...readdirRecursive(path.join(ROOT, "lib")), ...readdirRecursive(path.join(ROOT, "components"))]
-      .concat(["next.config.ts", "proxy.ts", "vercel.json", "instrumentation.ts"].map((f) => path.join(ROOT, f)))
+      .concat(["next.config.ts", "proxy.ts", "vercel.json"].map((f) => path.join(ROOT, f)))
       .filter((f) => /\.(ts|tsx|mjs|js|json)$/.test(f));
     const offenders = files.filter((f) => /access-control-allow/i.test(readFileSync(f, "utf8")));
     assert.deepEqual(offenders, []);
@@ -848,21 +848,13 @@ describe("caching, cookies, CORS and logs", () => {
     assert.deepEqual(logged.filter((l) => l.includes("dht_")), []);
   });
 
-  it("37: the log scrubber redacts tokens in text, errors and objects, and leaves every other line alone", () => {
-    const seen: unknown[][] = [];
-    const fake = { log: (...a: unknown[]) => seen.push(a), info: () => {}, warn: () => {}, error: (...a: unknown[]) => seen.push(a), debug: () => {}, trace: () => {} } as unknown as Console;
-    installLogScrubber(fake);
-    installLogScrubber(fake); // once only
+  it("37: our log lines scrub tokens, and nothing wraps the runtime's console (the web runs as before)", () => {
     const t = `dht_${"a".repeat(43)}`;
-    const plain = { n: 1 };
-    fake.log("plain line", plain, 3);
-    fake.log(`got ${t}`);
-    fake.error(new Error(`bad ${t}`));
-    fake.log(new Headers({ authorization: `Bearer ${t}` }));
-    assert.equal(seen[0][1], plain, "untouched objects pass through as themselves");
-    assert.deepEqual(seen[0], ["plain line", plain, 3]);
-    for (const line of seen.slice(1)) assert.ok(!String(line[0]).includes(t), String(line[0]));
     assert.equal(scrubTokens(`a ${t} b`), "a dht_[redacted] b");
+    assert.equal(scrubTokens("plain line"), "plain line");
+    assert.equal(statSync(path.join(ROOT, "instrumentation.ts"), { throwIfNoEntry: false }), undefined, "no instrumentation file");
+    const wrapping = readdirRecursive(path.join(ROOT, "lib")).concat(readdirRecursive(path.join(ROOT, "app"))).filter((f) => /\.(ts|tsx)$/.test(f) && /console\[[^\]]+\]\s*=|console\.\w+\s*=[^=]/.test(readFileSync(f, "utf8")));
+    assert.deepEqual(wrapping.map((f) => path.relative(ROOT, f)), []);
   });
 });
 
