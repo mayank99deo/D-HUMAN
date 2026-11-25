@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { saveTypicalDay } from "@/lib/platform/food";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -11,6 +12,8 @@ export const maxDuration = 120;
 const body = z.object({ description: z.string().trim().min(10).max(2000) });
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`typical:${user.id}`, 10, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

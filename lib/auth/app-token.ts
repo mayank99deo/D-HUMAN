@@ -37,13 +37,22 @@ export function fromBrowser(request: Request): boolean {
 
 /**
  * Whether the request carries an app token, well-formed or not. The routes that must never
- * serve the apps refuse it (A6). Only `dht_` tokens: the daily cron and the Sheets form send
- * their own `Bearer <secret>` and are unaffected.
+ * serve the apps refuse it (A6) by this header check alone, with no database lookup. Only
+ * `dht_` tokens: the daily cron and the Sheets form send their own `Bearer <secret>` and are
+ * unaffected.
  */
 export const carriesAppToken = (request: Request) => /^\s*bearer\s+dht_/i.test(request.headers.get("authorization") ?? "");
 
-/** The refusal for an app token where apps don't belong. 401, per the contract; nothing else runs. */
-export const refuseAppToken = () => Response.json({ error: "app_token_refused" }, { status: 401, headers: { "cache-control": "private, no-store" } });
+/** What the apps read when a route isn't theirs. */
+export const NOT_FOR_APP_WORDS = "The app can't do this yet. You can do it at d-human.fit.";
+
+/**
+ * The refusal for an app token where apps don't belong, or don't yet: 403 not_for_app, and
+ * nothing else runs. Never 401: only a missing, malformed, expired or revoked token gets that,
+ * because a 401 makes the app wipe its sign-in, and the token is fine; the route isn't open to it.
+ */
+export const refuseAppToken = () =>
+  Response.json({ error: "not_for_app", message: NOT_FOR_APP_WORDS }, { status: 403, headers: { "cache-control": "private, no-store" } });
 
 /**
  * The X-DHuman-Client header (`ios/1.0.0 (42)`), kept only for version counts (A13): never

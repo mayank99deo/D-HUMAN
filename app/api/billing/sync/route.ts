@@ -1,3 +1,4 @@
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { reconcileOrders } from "@/lib/platform/billing";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -5,7 +6,9 @@ import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 // While a bank confirms a payment, the Pay button asks here every few seconds:
 // it checks this person's unpaid orders with Razorpay and grants any that were paid.
-export async function POST() {
+export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`sync:${user.id}`, 30, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

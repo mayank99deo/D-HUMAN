@@ -1,11 +1,14 @@
 import { and, eq } from "drizzle-orm";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { READ_MESSAGES, isStale, settleStaleRead } from "@/lib/platform/analyze";
 import { json, unauthorized } from "@/lib/platform/http";
 import { deleteReports } from "@/lib/platform/reports";
 
-export async function GET(_request: Request, ctx: RouteContext<"/api/reports/[id]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]">) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   const { id } = await ctx.params;
@@ -23,7 +26,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/reports/[id
   return json({ status: r.status, stage: r.stage, error: r.error });
 }
 
-export async function DELETE(_request: Request, ctx: RouteContext<"/api/reports/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/reports/[id]">) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   const { id } = await ctx.params;

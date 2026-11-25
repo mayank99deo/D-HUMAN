@@ -136,7 +136,7 @@ describe("a stack before any report", () => {
     const me = await person();
     assert.equal((await startStack(me.id)).kind, "no_data");
     g.__testUser = me;
-    const res = await stackRoute();
+    const res = await stackRoute(new Request("https://www.d-human.fit/api/stack", { method: "POST" }));
     assert.equal(res.status, 409);
     assert.deepEqual(await res.json(), { error: "no_data", message: STACK_MESSAGES.no_data });
   });

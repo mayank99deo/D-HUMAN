@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { z } from "zod";
+import { notForApp } from "@/lib/auth/authenticate";
 import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { saveFeedbackAnswer, syncFeedback } from "@/lib/email/feedback";
@@ -88,6 +89,8 @@ async function save(
 }
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const type = request.headers.get("content-type") ?? "";
   const isForm = type.startsWith("application/x-www-form-urlencoded") || type.startsWith("multipart/form-data");
 

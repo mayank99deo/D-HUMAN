@@ -134,7 +134,7 @@ async function ask(p: Person, question = "What should I eat before a 10K?", extr
 }
 async function thread(p: Person): Promise<Res> {
   signIn(p);
-  return read(await route.GET());
+  return read(await route.GET(new Request("https://www.d-human.fit/api/ask")));
 }
 async function counts(p: Person) {
   const d = await db();
@@ -588,7 +588,7 @@ describe("logs", () => {
 describe("GET /api/ask", () => {
   it("is no-store, signed in only, gated, and never 409 for the notice", async () => {
     signIn(null);
-    assert.equal((await read(await route.GET())).status, 401);
+    assert.equal((await read(await route.GET(new Request("https://www.d-human.fit/api/ask")))).status, 401);
     const stranger = await person({ founder: false });
     assert.deepEqual([(await thread(stranger)).status, (await thread(stranger)).body.error], [403, "not_allowed"]);
     const notYet = await person({ askConsent: false });
@@ -720,7 +720,7 @@ describe("the browser's resend, through the real route", () => {
       calls.push(method);
       signIn(p);
       if (method === "GET") {
-        const res = await route.GET();
+        const res = await route.GET(new Request("https://www.d-human.fit/api/ask"));
         return { ok: res.ok, status: res.status, offline: false, data: await res.json() };
       }
       const step = posts.shift() ?? "pass";

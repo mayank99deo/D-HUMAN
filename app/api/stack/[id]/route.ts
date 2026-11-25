@@ -1,10 +1,13 @@
 import { and, eq } from "drizzle-orm";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { json, unauthorized } from "@/lib/platform/http";
 import { STACK_MESSAGES, isStaleBuild, settleStaleStack } from "@/lib/platform/stack";
 
-export async function GET(_request: Request, ctx: RouteContext<"/api/stack/[id]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/stack/[id]">) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   const { id } = await ctx.params;

@@ -34,9 +34,9 @@ allowAppImports({
       delete: (...a) => { globalThis.__cookieWrites.push(["delete", ...a]); },
     });`,
   "next/server": "export const after = (fn) => { globalThis.__after.push(fn); }; export const connection = async () => {};",
-  "@/lib/email/send": "export const sendFounderAlert = async (a) => { globalThis.__alerts.push(a); return { status: 'sent' }; };",
+  "@/lib/email/send": "export const sendFounderAlert = async (a) => { globalThis.__alerts.push(a); return { status: 'sent' }; }; export const recordTap = async () => {}; export const sendReviewRequest = async () => {};",
   // The daily job itself is tested elsewhere; here only whether the cron's own call gets through.
-  "@/lib/email/jobs": "export const runDaily = async () => { globalThis.__cronRuns = (globalThis.__cronRuns ?? 0) + 1; return { status: 'ok' }; };",
+  "@/lib/email/jobs": "export const runDaily = async () => { globalThis.__cronRuns = (globalThis.__cronRuns ?? 0) + 1; return { status: 'ok' }; }; export const sendWelcome = async () => {};",
 });
 const removeDatabase = tempDatabase();
 
@@ -57,7 +57,7 @@ const { sha256 } = await import("../lib/auth/crypto.ts");
 const { authenticate } = await import("../lib/auth/authenticate.ts");
 const { apiUser } = await import("../lib/auth/session.ts");
 const { writeGuard, isFresh } = await import("../lib/auth/author.ts");
-const { APP_SESSION, carriesAppToken } = await import("../lib/auth/app-token.ts");
+const { APP_SESSION, carriesAppToken, NOT_FOR_APP_WORDS } = await import("../lib/auth/app-token.ts");
 const { reviewAccount } = await import("../lib/auth/review.ts");
 const { SIGN_IN_WORDS } = await import("../lib/auth/sign-in-words.ts");
 const { installLogScrubber, scrubTokens } = await import("../lib/auth/scrub.ts");
@@ -395,7 +395,7 @@ describe("using tokens (A3, A4)", () => {
     delete process.env.BLOG_OWNER_EMAILS;
   });
 
-  it("a route not yet open to the apps treats a request with a token as signed out, never by its cookie (A4)", async () => {
+  it("apiUser, under every route not yet open to the apps, never reads the cookie of a request with a token (A4)", async () => {
     const web = await webSignIn("unconverted@example.com");
     g.__cookie = web.cookie;
     g.__headers = new Headers({ authorization: bearer(good) });
@@ -535,7 +535,7 @@ describe("revoking (A9)", () => {
 });
 
 describe("where app tokens are refused (A6)", () => {
-  it("17: the blog's writer, cron, dev routes, both webhooks, unsubscribe and the waitlist answer 401 before anything runs", async () => {
+  it("17: the blog's writer, cron, dev routes, both webhooks, unsubscribe and the waitlist answer 403 not_for_app before anything runs", async () => {
     const t = (await appSignIn("refused@example.com")).token;
     process.env.CRON_SECRET = "cron-secret-for-tests";
     const routes: [string, Handler, string][] = [
@@ -553,8 +553,10 @@ describe("where app tokens are refused (A6)", () => {
     for (const [url, handler, method] of routes) {
       for (const auth of [bearer(t), "bearer dht_whatever"]) {
         const r = await handler(request(method, `${url}?t=x`, { auth, body: method === "POST" ? {} : undefined }));
-        assert.equal(r.status, 401, `${method} ${url}`);
-        assert.deepEqual(await r.json(), { error: "app_token_refused" }, `${method} ${url}`);
+        // Never 401: the app would wipe a sign-in that's fine (QA's call, 2026-11-26).
+        assert.equal(r.status, 403, `${method} ${url}`);
+        assert.deepEqual(await r.json(), { error: "not_for_app", message: NOT_FOR_APP_WORDS }, `${method} ${url}`);
+        assert.equal(r.headers.get("cache-control"), "private, no-store", `${method} ${url}`);
       }
     }
     // Their own secrets are not app tokens: the cron still checks its own, and Vercel Cron's call gets through.
@@ -572,7 +574,7 @@ describe("where app tokens are refused (A6)", () => {
     g.__cookie = web.cookie;
     for (const mutation of [true, false]) {
       const guard = await writeGuard(request("POST", "/api/write/posts", { auth: bearer(t), cookie: web.cookie, origin: SITE }), { mutation });
-      assert.ok(!guard.ok && guard.response.status === 401);
+      assert.ok(!guard.ok && guard.response.status === 403);
     }
     const plain = await writeGuard(request("POST", "/api/write/posts", { cookie: web.cookie, origin: SITE }));
     assert.ok(plain.ok, "the writer's own cookie request is unchanged");
@@ -597,6 +599,86 @@ describe("where app tokens are refused (A6)", () => {
     const r = await call("token", token, request("POST", "/api/auth/token", { cookie: web.cookie }));
     assert.equal(r.status, 400);
     assert.ok(!JSON.stringify(r.body).includes("dht_"));
+  });
+});
+
+// QA's call (2026-11-26): a route the apps can't use yet answers a live token 403 not_for_app,
+// never 401, because a 401 makes the app wipe a sign-in that's fine. Only a missing, malformed,
+// expired or revoked token gets 401. The web never sends Authorization, so it never meets this.
+describe("routes not open to the apps yet (not_for_app)", () => {
+  // Sign-in itself: no session is read, so an app token changes nothing there.
+  const SIGN_IN = ["app/api/auth/code/route.ts", "app/api/auth/verify/route.ts"];
+  const HANDLER = /export async function (GET|POST|PUT|PATCH|DELETE)\(/g;
+  const GUARDED = /export async function (GET|POST|PUT|PATCH|DELETE)\((\w+)[^)]*\)[^{]*\{\s*const refused = await notForApp\(\2\);[^\n]*\n\s*if \(refused\) return refused;/g;
+
+  async function notOpen() {
+    const { APP_ROUTES } = await import("../lib/api/openapi.ts");
+    const open = new Set(APP_ROUTES.map((r) => r.file));
+    return readdirRecursive(path.join(ROOT, "app/api"))
+      .filter((f) => f.endsWith("route.ts"))
+      .map((f) => path.relative(ROOT, f))
+      .filter((f) => !open.has(f) && !SIGN_IN.includes(f))
+      .filter((f) => {
+        const src = readFileSync(path.join(ROOT, f), "utf8");
+        return !/if \(carriesAppToken\(request\)\) return refuseAppToken\(\);/.test(src) && !/writeGuard\(request/.test(src);
+      });
+  }
+
+  it("every /api route is open to the apps, refuses their tokens outright (A6), is sign-in itself, or checks notForApp first in every handler", async () => {
+    const rest = await notOpen();
+    assert.ok(rest.length >= 21, `${rest.length} routes`);
+    for (const f of rest) {
+      const src = readFileSync(path.join(ROOT, f), "utf8");
+      const handlers = src.match(HANDLER)?.length ?? 0;
+      assert.ok(handlers > 0, f);
+      assert.equal(src.match(GUARDED)?.length ?? 0, handlers, `${f}: every handler must start with notForApp(request)`);
+    }
+    for (const f of SIGN_IN) assert.doesNotMatch(readFileSync(path.join(ROOT, f), "utf8"), /apiUser|getSessionUser|cookies\(\)/, `${f} reads no session`);
+  });
+
+  it("each answers a live token 403 not_for_app and does nothing; a dead, malformed or page-sent token 401; the web's request never meets it", async () => {
+    const email = "notyet@example.com";
+    const live = (await appSignIn(email)).token;
+    const dead = (await appSignIn(email)).token;
+    const d = await db();
+    await d.delete(schema.sessions).where(eq(schema.sessions.id, sha256(dead)));
+    const uid = (await userId(email))!;
+    const before = JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid)));
+    const ctx = { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }) };
+    let checked = 0;
+    for (const f of await notOpen()) {
+      const mod = (await import(`../${f}`)) as Record<string, Handler>;
+      for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((m) => typeof mod[m] === "function")) {
+        const url = `/${f.replace(/^app\//, "").replace(/\/route\.ts$/, "")}`;
+        const body = method === "GET" ? undefined : { name: "CHANGED", confirm: "DELETE", eventId: "x", text: "dal" };
+        const sent = async (o: Opts) => {
+          g.__after = [];
+          return call(`not-open ${method} ${url}`, mod[method], request(method, url, { body, ...o }), ctx);
+        };
+        const ok = await sent({ auth: bearer(live) });
+        assert.deepEqual([ok.status, ok.body], [403, { error: "not_for_app", message: NOT_FOR_APP_WORDS }], `${method} ${url}`);
+        assert.equal(ok.res.headers.get("cache-control"), "private, no-store", `${method} ${url}`);
+        assert.equal(ok.res.headers.get("set-cookie"), null, `${method} ${url}`);
+        for (const auth of [bearer(dead), "Bearer dht_x", `Basic ${Buffer.from("a:b").toString("base64")}`]) {
+          const r = await sent({ auth });
+          assert.deepEqual([r.status, r.body], [401, { error: "signed_out" }], `${method} ${url} ${auth.slice(0, 12)}`);
+        }
+        const page = await sent({ auth: bearer(live), origin: SITE });
+        assert.equal(page.status, 401, `${method} ${url}: a token with a page's Origin`);
+        checked++;
+      }
+    }
+    assert.ok(checked >= 26, `${checked} handlers`);
+    assert.equal(JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid))), before, "nothing ran");
+
+    // Without Authorization it's nothing at all, cookie or none, and the route runs as before.
+    const { notForApp: check } = await import("../lib/auth/authenticate.ts");
+    const web = await webSignIn(email);
+    for (const o of [{}, { cookie: web.cookie }, { cookie: web.cookie, origin: SITE }, { cookie: dead }]) assert.equal(await check(request("POST", "/api/profile", o)), null);
+    const tour = (await import("../app/api/profile/tour/route.ts")).POST as Handler;
+    const r = await call("tour-web", tour, request("POST", "/api/profile/tour", { cookie: web.cookie, body: {} }));
+    assert.notEqual(r.body?.error, "not_for_app");
+    assert.equal(r.res.headers.get("cache-control"), null, "the web's answers keep their own headers");
   });
 });
 
@@ -747,8 +829,8 @@ describe("caching, cookies, CORS and logs", () => {
   });
 
   it("34, 36: every answer of the new routes is private, no-store, and none sets a cookie", () => {
-    // The web's own calls (its verify, sign-out and delete) are checked unchanged in their tests.
-    const fresh = answers.filter((a) => !["verify", "signout-web", "delete-web"].includes(a.route));
+    // The web's own calls (its verify, sign-out, delete and a tour save) are checked unchanged in their tests.
+    const fresh = answers.filter((a) => !["verify", "signout-web", "delete-web", "tour-web"].includes(a.route));
     assert.ok(fresh.length > 50, `${fresh.length} answers checked`);
     for (const a of fresh) {
       assert.equal(a.headers.get("cache-control"), "private, no-store", `${a.route} ${a.status}`);

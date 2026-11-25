@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AiUnavailableError } from "@/lib/ai/client";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { json, unauthorized } from "@/lib/platform/http";
 import { getProfile, localDate } from "@/lib/platform/profile";
@@ -11,6 +12,8 @@ export const maxDuration = 120;
 const body = z.object({ period: z.enum(["week", "month", "year"]), offset: z.number().int().min(-60).max(0) });
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`wrap:${user.id}`, 12, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

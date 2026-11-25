@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { newId } from "@/lib/auth/crypto";
 import type { FoodLog } from "@/lib/db/schema";
@@ -65,6 +66,8 @@ async function takeTry(userId: string, id: string, today: string): Promise<{ own
 }
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`food:${user.id}`, 40, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

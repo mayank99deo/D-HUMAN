@@ -1,4 +1,5 @@
 import type { AskConsentOk } from "@/lib/ask/types";
+import { notForApp } from "@/lib/auth/authenticate";
 import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { acceptAskConsent, askFail, askGateError, askJson, dayFields, errorClass, istDay } from "@/lib/platform/ask";
@@ -9,6 +10,8 @@ import { getProfile } from "@/lib/platform/profile";
 // consent_needed. People who agree at onboarding now get it set there (app/api/profile).
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   if (!sameOrigin(request)) return askFail("bad_origin");
   const user = await apiUser();
   if (!user) return askFail("signed_out");

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.1.0",
-    "description": "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
+    "version": "0.2.0",
+    "description": "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
   },
   "servers": [
     {
@@ -770,7 +770,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in.",
+            "description": "Refused, but still signed in: keep the token. bearer_required means a web cookie was sent instead of the token.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -896,7 +896,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in.",
+            "description": "Refused, but still signed in: keep the token. bearer_required means a web cookie was sent instead of the token.",
             "headers": {
               "Cache-Control": {
                 "schema": {

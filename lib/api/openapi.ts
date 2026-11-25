@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.1.0";
+export const CONTRACT_VERSION = "0.2.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -108,7 +108,7 @@ const STATUS_WORDS: Record<number, string> = {
   304: "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
   400: "Refused: the error code says why.",
   401: "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
-  403: "Not for this kind of sign-in.",
+  403: "Refused, but still signed in: keep the token. bearer_required means a web cookie was sent instead of the token.",
   404: "Not found (another person's id looks the same).",
   409: "Not onboarded yet.",
   429: "Too many tries. Retry-After says when to come back.",
@@ -153,7 +153,7 @@ export function openapi() {
       title: "D-Human app API",
       version: CONTRACT_VERSION,
       description:
-        "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
+        "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
     },
     servers: [{ url: "https://www.d-human.fit" }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "dht_ followed by 43 base64url characters." } } },
