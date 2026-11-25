@@ -112,6 +112,11 @@ describe("the apps' contract", () => {
     const homeFirst = await call("get", "/api/home", { token: t });
     await call("get", "/api/home", { token: t, etag: homeFirst.etag });
     await call("get", "/api/home");
+    // A web cookie on the apps' reads: 403, still signed in.
+    const webCookie = randomUUID();
+    await d.insert(schema.sessions).values({ id: sha256(webCookie), userId: user, expiresAt: new Date(Date.now() + 86_400_000) });
+    await call("get", "/api/me", { cookie: webCookie });
+    await call("get", "/api/home", { cookie: webCookie });
 
     // Devices: 200, 304, 401, 403 (a web cookie), 404, and ending one.
     const second = await signIn("contract@example.com");

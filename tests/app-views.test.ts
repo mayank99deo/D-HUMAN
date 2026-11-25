@@ -180,7 +180,11 @@ describe("GET /api/me", () => {
     const d = await db();
     await d.update(schema.profiles).set({ consentAt: new Date() }).where(eq(schema.profiles.userId, p.id));
     assert.equal(((await call(me, { token: p.token })).body!.consent as { current: boolean }).current, true);
-    assert.equal((await call(me, { cookie: p.cookie })).status, 200, "the web's cookie works too");
+    // Apps only: the web reads its own pages, so these JSON reads add nothing a cookie can reach.
+    for (const handler of [me, home]) {
+      const r = await call(handler, { cookie: p.cookie });
+      assert.deepEqual([r.status, r.body, r.res.headers.get("cache-control")], [403, { error: "bearer_required" }, "private, no-store"]);
+    }
   });
 });
 

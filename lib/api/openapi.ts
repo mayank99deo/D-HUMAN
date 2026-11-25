@@ -89,7 +89,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/me/route.ts",
     summary: "Who is signed in: onboarding, consent, persona and the whole profile. Works before onboarding.",
     auth: "bearer",
-    responses: { 200: s.MeResponse, 304: null, 401: refusal },
+    responses: { 200: s.MeResponse, 304: null, 401: refusal, 403: refusal },
     etag: true,
   },
   {
@@ -98,7 +98,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/home/route.ts",
     summary: "Home, as the web's /home shows it: bib, verdict, markers that matter, today's fuel, events, the stack line.",
     auth: "bearer",
-    responses: { 200: s.HomeResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.HomeResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
 ];
