@@ -94,6 +94,29 @@ async function assertCurrentShape(pg: PGlite) {
   assert.ok(askIdx.rows[2].def.includes("(user_id, day, created_at)"), askIdx.rows[2].def);
   const consentCol = await pg.query(`select 1 from information_schema.columns where table_name = 'profiles' and column_name = 'ask_consent_at' and data_type = 'timestamp with time zone'`);
   assert.equal(consentCol.rows.length, 1, "profiles.ask_consent_at exists");
+
+  // 0012: the apps' sessions beside the web's, in the same table.
+  const sessionCols = await pg.query<{ c: string; t: string; nullable: string; d: string | null }>(`select column_name as c, data_type as t, is_nullable as nullable, column_default as d
+    from information_schema.columns where table_name = 'sessions' order by column_name`);
+  assert.deepEqual(
+    sessionCols.rows.map((r) => `${r.c} ${r.t} ${r.nullable}`),
+    [
+      "absolute_expires_at timestamp with time zone YES",
+      "client text YES",
+      "created_at timestamp with time zone NO",
+      "device_label text YES",
+      "expires_at timestamp with time zone NO",
+      "id text NO",
+      "kind text NO",
+      "last_used_at timestamp with time zone YES",
+      "public_id text NO",
+      "user_id text NO",
+    ],
+  );
+  assert.match(sessionCols.rows.find((r) => r.c === "kind")?.d ?? "", /'cookie'/);
+  assert.match(sessionCols.rows.find((r) => r.c === "public_id")?.d ?? "", /gen_random_uuid\(\)/);
+  const publicIdx = await one<{ def: string }>(pg, `select indexdef as def from pg_indexes where indexname = 'sessions_public_id_idx'`);
+  assert.ok(publicIdx?.def.includes("UNIQUE INDEX") && publicIdx.def.includes("(public_id)"), publicIdx?.def);
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -210,6 +233,48 @@ describe("migrations", () => {
     assert.equal((await one<{ c: string | null }>(pg, `select ask_consent_at::text as c from profiles`)).c, null, "existing people see the one-time notice");
     await pg.close();
   });
+
+  // Production with 0011 and live web sessions; 0012 run by the deploy or pasted into Supabase
+  // first, either way, twice. Existing sessions stay web cookies, each with its own handle, and
+  // the web's own insert (id, user_id, expires_at only) keeps working unchanged.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0012 on production's sessions (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0012_"));
+      assert.ok(at > 0, "0012 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      await pg.exec(`
+        insert into users (id, email) values ('u1', 'a@x'), ('u2', 'b@x');
+        insert into sessions (id, user_id, expires_at) values ('h1', 'u1', now() + interval '30 days'), ('h2', 'u1', now() + interval '1 day'), ('h3', 'u2', now() + interval '2 days');
+      `);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      const rows = (await pg.query<{ id: string; kind: string; public_id: string; last: string | null; cap: string | null }>(
+        `select id, kind, public_id, last_used_at::text as last, absolute_expires_at::text as cap from sessions order by id`,
+      )).rows;
+      assert.deepEqual(rows.map((r) => [r.id, r.kind, r.last, r.cap]), [["h1", "cookie", null, null], ["h2", "cookie", null, null], ["h3", "cookie", null, null]]);
+      assert.equal(new Set(rows.map((r) => r.public_id)).size, 3, "every existing session gets its own handle");
+      const handles = rows.map((r) => r.public_id).join();
+      await pg.exec(files[at]);
+      assert.equal((await pg.query<{ public_id: string }>(`select public_id from sessions order by id`)).rows.map((r) => r.public_id).join(), handles, "running it again keeps the handles");
+
+      // startSession's insert, as the web runs it today.
+      await pg.exec(`insert into sessions (id, user_id, expires_at) values ('h4', 'u2', now() + interval '30 days')`);
+      assert.deepEqual(await one(pg, `select kind, public_id is not null as handle from sessions where id = 'h4'`), { kind: "cookie", handle: true });
+      await assert.rejects(pg.query(`insert into sessions (id, user_id, expires_at, public_id) values ('h5', 'u2', now(), $1)`, [rows[0].public_id]), /sessions_public_id_idx/);
+      await pg.exec(`delete from users where id = 'u1'`);
+      assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from sessions`)).n, 2, "an account's sessions still go with it");
+      await pg.close();
+    });
+  }
 
   it("0011's keys: one question per client key a person, deletes cascade with the account, nobody but the owner reads Ask", async () => {
     const pg = new PGlite();

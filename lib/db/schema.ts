@@ -51,7 +51,10 @@ export const loginCodes = pgTable(
   (t) => [index("login_codes_email_idx").on(t.email, t.createdAt)],
 ).enableRLS();
 
-// The cookie holds a random token; the table holds its SHA-256.
+// The cookie holds a random token; the table holds its SHA-256. The apps' bearer tokens
+// (dht_…, lib/auth/bearer.ts) live here too, hashed the same way, with kind 'bearer': a
+// token works only the way it was issued. created_at is when the code was entered and
+// never changes (the fresh-session rule for /write reads it).
 export const sessions = pgTable(
   "sessions",
   {
@@ -61,8 +64,15 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: created(),
+    kind: text("kind").notNull().default("cookie"), // cookie (the web) | bearer (the apps)
+    // The handle the device list and remote sign-out use, so the hash never leaves the server.
+    publicId: text("public_id").notNull().default(sql`gen_random_uuid()::text`),
+    deviceLabel: text("device_label"), // the hardware model the app sends ("iPhone18,1"), never the phone's name
+    client: text("client"), // the last X-DHuman-Client header seen, for version counts only
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }), // apps only, written at most once an hour
+    absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }), // apps only: the 365-day cap
   },
-  (t) => [index("sessions_user_idx").on(t.userId)],
+  (t) => [index("sessions_user_idx").on(t.userId), uniqueIndex("sessions_public_id_idx").on(t.publicId)],
 ).enableRLS();
 
 export const profiles = pgTable("profiles", {
