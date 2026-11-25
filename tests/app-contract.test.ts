@@ -21,6 +21,8 @@ allowAppImports({
     export const cookies = async () => ({ get: (name) => (globalThis.__cookie ? { name, value: globalThis.__cookie } : undefined), set: () => {}, delete: () => {} });`,
   "next/server": "export const after = (fn) => { globalThis.__after.push(fn); }; export const connection = async () => {};",
   "@/lib/email/send": "export const sendFounderAlert = async () => ({ status: 'sent' });",
+  // The code route's email: sent, except to down@ (Resend failing).
+  "@/lib/auth/email": "export const sendSignInCode = async (email) => !email.startsWith('down@');",
 });
 const removeDatabase = tempDatabase();
 
@@ -61,7 +63,8 @@ async function call(method: "get" | "post" | "delete", p: string, o: { token?: s
   const schema = route.responses[res.status];
   if (schema) schema.parse(JSON.parse(text));
   else assert.equal(text, "", `${label}: no body`);
-  assert.equal(res.headers.get("cache-control"), "private, no-store", label);
+  // The apps' routes are private, no-store; the web's own route keeps the web's headers, unchanged.
+  assert.equal(res.headers.get("cache-control"), route.web ? null : "private, no-store", label);
   seen.add(`${method} ${p} ${res.status}`);
   return { status: res.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : null, etag: res.headers.get("etag") ?? "" };
 }
@@ -91,6 +94,16 @@ describe("the apps' contract", () => {
   });
 
   it("each route's answers, for every status it gives, are what the contract says", async () => {
+    // The code: 200 (and the suppressed notice), 400, 429, 503.
+    await call("post", "/api/auth/code", { body: { email: "code@example.com" } });
+    const { suppress } = await import("../lib/email/suppress.ts");
+    await suppress("bounced@example.com", "bounce");
+    const suppressed = await call("post", "/api/auth/code", { body: { email: "bounced@example.com" } });
+    assert.equal(suppressed.body?.notice, "suppressed");
+    await call("post", "/api/auth/code", { body: { email: "not an email" }, bad: true });
+    await call("post", "/api/auth/code", { body: { email: "down@example.com" } });
+    for (let i = 0; i < 9; i++) await call("post", "/api/auth/code", { ip: "203.0.113.10", body: { email: `ip${i}@example.com` } });
+
     // Sign-in: 200, 400 and 429.
     const t = await signIn("contract@example.com", { key: "contract-key-0123456789" });
     await call("post", "/api/auth/token", { body: { email: "contract@example.com", code: "000000" } });

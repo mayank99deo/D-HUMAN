@@ -21,6 +21,8 @@ export type AppRoute = {
   summary: string;
   /** bearer: the app's token; open: no sign-in (sign-in itself). */
   auth: "bearer" | "open";
+  /** The web's own route, used by the apps as it is: its answers keep the web's headers (no Cache-Control). */
+  web?: true;
   request?: z.ZodType;
   /** A schema per status; ErrorResponse for every refusal. 304 has no body. */
   responses: Record<number, z.ZodType | null>;
@@ -30,6 +32,16 @@ export type AppRoute = {
 const refusal = s.ErrorResponse;
 
 export const APP_ROUTES: AppRoute[] = [
+  {
+    method: "post",
+    path: "/api/auth/code",
+    file: "app/api/auth/code/route.ts",
+    summary: "Email a 6-digit sign-in code, then exchange it at POST /api/auth/token. The web's own route, unchanged: no token needed, and its answers carry no Cache-Control.",
+    auth: "open",
+    web: true,
+    request: s.CodeRequest,
+    responses: { 200: s.CodeResponse, 400: refusal, 429: refusal, 503: refusal },
+  },
   {
     method: "post",
     path: "/api/auth/token",
@@ -102,7 +114,8 @@ const STATUS_WORDS: Record<number, string> = {
   403: "Refused, but still signed in: keep the token. bearer_required means a web cookie was sent instead of the token.",
   404: "Not found (another person's id looks the same).",
   409: "Not onboarded yet.",
-  429: "Too many tries. Retry-After says when to come back.",
+  429: "Too many tries. Retry-After says when to come back, when it's sent.",
+  503: "The code couldn't be sent just now. Try again in a minute.",
 };
 
 function json(schema: z.ZodType, io: "input" | "output") {
@@ -122,9 +135,9 @@ export function openapi() {
     const responses: Record<string, unknown> = {};
     for (const [status, schema] of Object.entries(r.responses)) {
       const headers = {
-        "Cache-Control": { schema: { type: "string", const: "private, no-store" } },
+        ...(r.web ? {} : { "Cache-Control": { schema: { type: "string", const: "private, no-store" } } }),
         ...(r.etag && (status === "200" || status === "304") ? { ETag: { schema: { type: "string" } } } : {}),
-        ...(status === "429" ? { "Retry-After": { schema: { type: "integer" } } } : {}),
+        ...(status === "429" && !r.web ? { "Retry-After": { schema: { type: "integer" } } } : {}),
       };
       responses[status] = { description: STATUS_WORDS[Number(status)] ?? "", headers, ...(schema ? { content: { "application/json": { schema: json(schema, "output") } } } : {}) };
     }
@@ -143,7 +156,7 @@ export function openapi() {
       title: "D-Human app API",
       version: CONTRACT_VERSION,
       description:
-        "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
+        "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
     },
     servers: [{ url: "https://www.d-human.fit" }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "dht_ followed by 43 base64url characters." } } },

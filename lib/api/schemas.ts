@@ -28,6 +28,14 @@ export const ErrorResponse = z
 // ── Sign-in ──────────────────────────────────────────────────────────────────
 
 // Requests are lenient, as the routes are: a key that isn't here is ignored, never an error.
+export const CodeRequest = z.object({ email: z.email().describe("Where the 6-digit code goes. Lower-cased and trimmed by the server.") });
+export const CodeResponse = z.union([
+  z.strictObject({ status: z.literal("sent") }),
+  z
+    .strictObject({ status: z.literal("sent"), notice: z.literal("suppressed"), message: S })
+    .describe("Sent, but this address bounced or reported spam before, so it may not arrive: show the message."),
+]);
+
 export const TokenRequest = z.object({
   email: z.email(),
   code: S.describe("Six digits, or the App Review account's 12 or more. Spaces and dashes are ignored."),
