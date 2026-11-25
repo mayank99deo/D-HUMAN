@@ -1,7 +1,7 @@
 // Sign-in for the native apps, against a real database (PGlite, or Postgres with
 // TEST_DATABASE_URL): bearer tokens from the emailed code, the one resolver, revocation,
 // the routes that refuse app tokens, the App Review account, headers and logs. Numbers in
-// the names are QA's must-pass tests (the mobile repo's docs/private/THREAT-MODEL.md §4.1).
+// the names are QA's must-pass test numbers for the native apps.
 // The web's own sign-in, cookie and origin rule are checked unchanged alongside.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
