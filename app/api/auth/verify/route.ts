@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
+import { after } from "next/server";
 import { z } from "zod";
 import { verifyCode } from "@/lib/auth/codes";
 import { afterSignIn, safeNext } from "@/lib/auth/next-path";
 import { startSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
+import { pushUserRow } from "@/lib/sheets/users";
 import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
 
 const body = z.object({
@@ -25,6 +27,8 @@ export async function POST(request: Request) {
   if (!result.ok) return Response.json({ error: result.reason }, { status: 400 });
 
   await startSession(result.userId);
+  // A new account gets its row in the founders' Sheet after the response (lib/sheets/users.ts).
+  if (result.isNew) after(() => pushUserRow(result.userId));
   const d = await db();
   const [profile] = await d
     .select({ onboardedAt: schema.profiles.onboardedAt })

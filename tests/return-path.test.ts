@@ -14,7 +14,8 @@ const nextServer = pathToFileURL(require.resolve("next/server.js")).href;
 allowAppImports({
   "@/lib/auth/codes": "export const verifyCode = async () => ({ ok: true, userId: globalThis.__verifiedUser });",
   "@/lib/auth/session": "export const startSession = async () => {};",
-  "next/server": `import m from ${JSON.stringify(nextServer)}; export const { NextRequest, NextResponse } = m;`,
+  // after(): the verify route copies a new account to the founders' Sheet after the response; not run here.
+  "next/server": `import m from ${JSON.stringify(nextServer)}; export const { NextRequest, NextResponse } = m; export const after = () => {};`,
 });
 const removeDatabase = tempDatabase();
 

@@ -1,5 +1,22 @@
 /**
- * D-Human waitlist and feedback webhook for Google Sheets.
+ * D-Human waitlist, feedback and users webhook for Google Sheets.
+ *
+ * NEW (2026-11-25): the Users tab, one row per D-Human account. To switch it on, Mayank:
+ *   1. Opens the Sheet > Extensions > Apps Script, selects everything in Code.gs, pastes
+ *      this whole file over it and clicks Save.
+ *   2. Picks "setupUsers" in the function menu and clicks Run. It adds and formats the
+ *      Users tab. Safe to run again: it never deletes data, and it stops if the tab's
+ *      headers differ and there is data below them.
+ *   3. Deploy > Manage deployments > selects the web app > Edit (pencil icon) > Version:
+ *      New version > Deploy. The URL stays the same, so nothing changes in Vercel.
+ *   4. Checks: opening the web app URL in a browser shows "users": true.
+ * The website then adds or updates a row when someone signs up, finishes onboarding or
+ * changes their profile, and its daily job (about 10:30 and 19:30 IST) updates every row
+ * that changed, rewrites them all once a day (the first run fills in everyone who signed
+ * up before this) and removes rows of deleted accounts. Rows are matched by User ID, so
+ * sorting or filtering the tab is safe. Add your own columns only to the right of the
+ * last one ("Synced (IST)"): the site rewrites the columns up to it. The tab holds names
+ * and email addresses: keep the Sheet shared with the founding team only.
  *
  * NEW (2026-11-18): the Feedback tab. To switch it on, Mayank:
  *   1. Opens the Sheet > Extensions > Apps Script, selects everything in Code.gs,
@@ -110,6 +127,43 @@ const RESPONDENT = /^r_[0-9a-f]{12}$/;
 const MAX_FEEDBACK_ROWS = 200;
 const TEXT_MAX = 1000;
 
+// Accounts from the website (lib/sheets/users.ts). One row per account, matched by User ID.
+// What is deliberately never sent here: weight, height, medicines, health conditions
+// (pregnancy among them), current supplements, the "Fix a known deficiency" goal, blood
+// report markers, reads and stacks, what people ate, Ask questions and answers, feedback
+// answers (and the respondent code that would link them to a name), payment and order IDs
+// and amounts. Those are health or sensitive data, and the founders don't need them here.
+const USERS_TAB = 'Users';
+// [header, field in the website's row, kind, longest text kept]
+const USER_COLUMNS = [
+  ['User ID', 'id', 'text', 20],
+  ['Founder', 'founder', 'text', 3],
+  ['Name', 'name', 'text', 100],
+  ['Email', 'email', 'text', 254],
+  ['Signed up (IST)', 'signedUp', 'date'],
+  ['Onboarding finished (IST)', 'onboarded', 'date'],
+  ['Last active (IST)', 'lastActive', 'date'],
+  ['Language', 'language', 'text', 20],
+  ['City', 'city', 'text', 100],
+  ['Age', 'age', 'count'],
+  ['Sex', 'sex', 'text', 20],
+  ['Main activity', 'activity', 'text', 40],
+  ['Level', 'level', 'text', 40],
+  ['Goals', 'goals', 'text', 200],
+  ['Diet', 'diet', 'text', 40],
+  ['Plan', 'plan', 'text', 40],
+  ['Payments', 'payments', 'count'],
+  ['Meals logged', 'meals', 'count'],
+  ['Reports uploaded', 'reports', 'count'],
+  ['Weekly email', 'weeklyEmail', 'text', 10],
+  ['Synced (IST)', 'synced', 'date'],
+];
+const USERS_HEADERS = USER_COLUMNS.map(function (c) { return c[0]; });
+const USER_ID = /^u_[0-9a-f]{12}$/;
+const IST_STAMP = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+const MAX_USER_ROWS = 200;
+const MAX_FORGET_IDS = 500;
+
 function doPost(e) {
   let body;
   try {
@@ -125,6 +179,9 @@ function doPost(e) {
   // Feedback rows carry no email address, so they're handled before the waitlist's checks.
   if (body.action === 'feedback') return locked_(function () { return saveFeedback_(body.rows); });
   if (body.action === 'forget') return locked_(function () { return forgetRespondent_(body.respondent); });
+  if (body.action === 'users') return locked_(function () { return saveUsers_(body.rows); });
+  if (body.action === 'users-forget') return locked_(function () { return forgetUsers_(body.ids); });
+  if (body.action === 'users-ids') return locked_(function () { return listUserIds_(); });
   return waitlist_(body);
 }
 
@@ -171,9 +228,10 @@ function waitlist_(body) {
 }
 
 // Visiting the web app URL in a browser shows this, which confirms the deployment works.
-// "feedback": true means the deployed version has the Feedback tab's actions.
+// "feedback": true means the deployed version has the Feedback tab's actions, and
+// "users": true the Users tab's.
 function doGet() {
-  return json_({ ok: true, service: 'd-human-waitlist', feedback: true });
+  return json_({ ok: true, service: 'd-human-waitlist', feedback: true, users: true });
 }
 
 function locked_(run) {
@@ -267,6 +325,175 @@ function forgetRespondent_(code) {
   return { ok: true, status: 'forgotten', deleted: deleted };
 }
 
+// Adds each account's row, or rewrites the row with its User ID. Every row is checked
+// before any is written. Only the tab's own columns are written, so notes kept to the
+// right of them stay. Rows next to each other go in one write, which keeps a daily
+// rewrite of everyone fast.
+function saveUsers_(rows) {
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_USER_ROWS) {
+    return { ok: false, error: 'bad_rows' };
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || typeof row !== 'object' || !USER_ID.test(String(row.id))) return { ok: false, error: 'bad_row' };
+  }
+
+  const sheet = getTab_(USERS_TAB, USERS_HEADERS);
+  const width = USERS_HEADERS.length;
+  // Columns moved or renamed by hand: writing by position would put data under the wrong
+  // heading, so nothing is written until the tab is set up again.
+  const header = sheet.getRange(1, 1, 1, width).getValues()[0].map(String);
+  if (header.join('|') !== USERS_HEADERS.join('|')) return { ok: false, error: 'headers_changed' };
+
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const rowOf = userRows_(sheet);
+  const updates = [];
+  const adds = [];
+  const addAt = {};
+  rows.forEach(function (row) {
+    const id = String(row.id);
+    const values = userValues_(row, tz);
+    if (rowOf[id]) {
+      updates.push({ at: rowOf[id], values: values });
+    } else if (addAt[id] !== undefined) {
+      adds[addAt[id]] = values; // the same account twice in one batch: the later row wins
+    } else {
+      addAt[id] = adds.length;
+      adds.push(values);
+    }
+  });
+
+  // Sorting is stable, so for the same row the later of two updates stays last and wins.
+  updates.sort(function (a, b) { return a.at - b.at; });
+  let i = 0;
+  while (i < updates.length) {
+    const start = updates[i].at;
+    const block = [updates[i].values];
+    let j = i;
+    while (j + 1 < updates.length && updates[j + 1].at <= updates[j].at + 1) {
+      if (updates[j + 1].at === updates[j].at) block[block.length - 1] = updates[j + 1].values;
+      else block.push(updates[j + 1].values);
+      j++;
+    }
+    sheet.getRange(start, 1, block.length, width).setValues(block);
+    i = j + 1;
+  }
+
+  if (adds.length) {
+    const first = sheet.getLastRow() + 1;
+    const short = first + adds.length - 1 - sheet.getMaxRows();
+    if (short > 0) sheet.insertRowsAfter(sheet.getMaxRows(), short);
+    sheet.getRange(first, 1, adds.length, width).setValues(adds);
+  }
+  return { ok: true, status: 'saved', saved: rows.length, added: adds.length };
+}
+
+function userValues_(row, tz) {
+  return USER_COLUMNS.map(function (c) {
+    const value = row[c[1]];
+    if (c[2] === 'date') return istDate_(value, tz);
+    if (c[2] === 'count') return count_(value);
+    return clean_(value, c[3]);
+  });
+}
+
+// The website sends Indian time as "2026-11-25 14:30". Read in this spreadsheet's own time
+// zone, the cell shows that same clock time whatever the spreadsheet is set to, and it
+// stays a real date for sorting and filtering.
+function istDate_(value, tz) {
+  const s = String(value || '');
+  if (!IST_STAMP.test(s)) return '';
+  return Utilities.parseDate(s, tz, 'yyyy-MM-dd HH:mm');
+}
+
+// Row number of each User ID in the tab (the first, should one appear twice).
+function userRows_(sheet) {
+  const rowOf = {};
+  const last = sheet.getLastRow();
+  if (last < 2) return rowOf;
+  sheet.getRange(2, 1, last - 1, 1).getValues().forEach(function (cell, i) {
+    const id = String(cell[0]).replace(/^'/, '').trim();
+    if (USER_ID.test(id) && !rowOf[id]) rowOf[id] = i + 2;
+  });
+  return rowOf;
+}
+
+// Deletes every row with one of these User IDs (their accounts were deleted).
+// Bottom up, so the row numbers still to check don't move.
+function forgetUsers_(ids) {
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_FORGET_IDS) return { ok: false, error: 'bad_ids' };
+  const wanted = {};
+  for (let i = 0; i < ids.length; i++) {
+    const id = String(ids[i]);
+    if (!USER_ID.test(id)) return { ok: false, error: 'bad_id' };
+    wanted[id] = true;
+  }
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_TAB);
+  if (!sheet) return { ok: true, status: 'forgotten', deleted: 0 };
+  const last = sheet.getLastRow();
+  if (last < 2) return { ok: true, status: 'forgotten', deleted: 0 };
+  // Sheets refuses to delete every row below the frozen header, so keep a spare one.
+  if (sheet.getMaxRows() <= last) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
+  const cells = sheet.getRange(2, 1, last - 1, 1).getValues();
+  let deleted = 0;
+  for (let i = cells.length - 1; i >= 0; i--) {
+    if (wanted[String(cells[i][0]).replace(/^'/, '').trim()] === true) {
+      sheet.deleteRow(i + 2);
+      deleted++;
+    }
+  }
+  return { ok: true, status: 'forgotten', deleted: deleted };
+}
+
+// Every User ID in the tab, so the website can remove rows of accounts that are gone.
+function listUserIds_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_TAB);
+  return { ok: true, status: 'listed', ids: sheet ? Object.keys(userRows_(sheet)) : [] };
+}
+
+/**
+ * Run once from the editor (after pasting this file) to prepare the Users tab. Like
+ * setup(), it never deletes data, so running it again only reapplies the headers and
+ * formatting.
+ */
+function setupUsers() {
+  setupTab_(
+    USERS_TAB,
+    USERS_HEADERS,
+    USER_COLUMNS.filter(function (c) { return c[2] === 'date'; }).map(function (c) { return c[0]; }),
+    null,
+    {
+      'User ID': 130,
+      Founder: 70,
+      Name: 170,
+      Email: 240,
+      'Signed up (IST)': 140,
+      'Onboarding finished (IST)': 160,
+      'Last active (IST)': 140,
+      Age: 60,
+      Goals: 220,
+      Plan: 170,
+      Payments: 80,
+      'Synced (IST)': 140,
+    },
+    // The filter covers every column, so sorting moves notes kept to the right with their
+    // rows, and 5,000 rows, so it covers accounts added later.
+    { again: 'setupUsers', allColumns: true, minRows: 5000 }
+  );
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+  Logger.log(
+    secret
+      ? 'WEBHOOK_SECRET is set (' + secret.length + ' characters).'
+      : 'WEBHOOK_SECRET is missing. Add it under Project Settings > Script properties.'
+  );
+  Logger.log('Dates show Indian time (IST), whatever this spreadsheet\'s time zone (' + ss.getSpreadsheetTimeZone() + ').');
+  Logger.log('Add your own columns only to the right of "' + USERS_HEADERS[USERS_HEADERS.length - 1] + '".');
+  Logger.log('Now deploy a new version: Deploy > Manage deployments > Edit > Version: New version > Deploy.');
+  Logger.log('Keep this spreadsheet shared with the founding team only: the Users tab holds names and email addresses.');
+}
+
 /**
  * Run once from the editor (after pasting this file) to prepare the Feedback and
  * Replies tabs. Like setup(), it never deletes data, so running it again only
@@ -298,7 +525,12 @@ function setupFeedback() {
   Logger.log('Keep this spreadsheet shared with the founding team only: typed answers may hold personal details.');
 }
 
-function setupTab_(name, headers, dateCols, wrapCol, widths) {
+// options.again: the function to run again after renaming a clashing tab (setupFeedback
+// when left out). options.allColumns: the filter covers every column of the tab, not
+// only these headers. options.minRows: the tab gets at least this many rows first, so the
+// filter (which doesn't grow by itself) covers rows added later.
+function setupTab_(name, headers, dateCols, wrapCol, widths, options) {
+  const opts = options || {};
   const sheet = getTab_(name, headers);
   const header = sheet.getRange(1, 1, 1, headers.length);
   const current = header.getValues()[0].map(String);
@@ -306,7 +538,7 @@ function setupTab_(name, headers, dateCols, wrapCol, widths) {
     if (sheet.getLastRow() > 1) {
       throw new Error(
         'Row 1 of the "' + name + '" tab has different headers and there is data below it. ' +
-          'Rename that tab (e.g. "' + name + ' old") and run setupFeedback again.'
+          'Rename that tab (e.g. "' + name + ' old") and run ' + (opts.again || 'setupFeedback') + ' again.'
       );
     }
     header.setValues([headers]);
@@ -316,16 +548,20 @@ function setupTab_(name, headers, dateCols, wrapCol, widths) {
   sheet.setFrozenRows(1);
 
   if (sheet.getMaxRows() < 2) sheet.insertRowsAfter(1, 999);
+  if (opts.minRows && sheet.getMaxRows() < opts.minRows) sheet.insertRowsAfter(sheet.getMaxRows(), opts.minRows - sheet.getMaxRows());
   const rows = sheet.getMaxRows() - 1;
   dateCols.forEach(function (col) {
     sheet.getRange(2, headers.indexOf(col) + 1, rows, 1).setNumberFormat('yyyy-mm-dd hh:mm');
   });
-  sheet.getRange(2, headers.indexOf(wrapCol) + 1, rows, 1).setWrap(true);
+  if (wrapCol) sheet.getRange(2, headers.indexOf(wrapCol) + 1, rows, 1).setWrap(true);
   headers.forEach(function (col, i) {
     sheet.setColumnWidth(i + 1, widths[col] || 130);
   });
 
-  if (!sheet.getFilter()) sheet.getRange(1, 1, sheet.getMaxRows(), headers.length).createFilter();
+  if (!sheet.getFilter()) {
+    const filterWidth = opts.allColumns ? Math.max(sheet.getMaxColumns(), headers.length) : headers.length;
+    sheet.getRange(1, 1, sheet.getMaxRows(), filterWidth).createFilter();
+  }
   Logger.log('The "' + name + '" tab is ready with ' + headers.length + ' columns.');
 }
 

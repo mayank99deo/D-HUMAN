@@ -11,6 +11,7 @@ import { langTag } from "@/lib/domain/speech";
 import { purgeAsks } from "@/lib/platform/ask";
 import { personaFor } from "@/lib/platform/profile";
 import { makeWrap, reportDay, wrapDays, wrapStatsFrom, wrapTargets, type WrapLog } from "@/lib/platform/wraps";
+import { syncUsersSheet, summary as usersSheetSummary, type UsersSheetResult } from "@/lib/sheets/users";
 import { dailyCap, shouldAlert, utcDay } from "./budget";
 import { sendingAllowed } from "./client";
 import { feedbackEmailOptions, syncFeedbackSheet, type SheetCatchUp } from "./feedback";
@@ -61,11 +62,16 @@ import { DAILY_JOB, DEFAULT_EMAIL_PREFS, EMAIL_BUDGET, ONCE, alertJobKey, type E
 //      questions and counts from before today (IST; lib/platform/ask.ts purgeAsks).
 //   5. The feedback Sheet's catch-up (lib/email/feedback.ts): forgets for deleted accounts
 //      that the Sheet missed ("sheet-forget:" rows), then answers that didn't arrive.
-//   6. Counts (never addresses) in job_runs.last_result; the lease is released. A run
+//   6. The Sheet's Users tab (lib/sheets/users.ts): rows of deleted accounts removed
+//      ("sheet-forget-user:" rows), then every account changed since the last sync, and
+//      everyone once an Indian day (the first run is the backfill). Its own state and
+//      result live in job_runs "sheet-users".
+//   7. Counts (never addresses) in job_runs.last_result; the lease is released. A run
 //      that failed anywhere tells the founders, once a UTC day (the step's name, no details).
-// Steps 4 and 5 keep promises of their own (Ask's questions are kept for the day only), so
-// they run even when a step before them throws. From 2026-11-19 to 11-24 the retry sweep
-// threw on every live run and nothing after it ran, housekeeping included.
+// Steps 4 to 6 keep promises of their own (Ask's questions are kept for the day only, and
+// deleted accounts leave the Sheet), so they run even when a step before them throws. From
+// 2026-11-19 to 11-24 the retry sweep threw on every live run and nothing after it ran,
+// housekeeping included.
 //
 // Switches (Vercel env, both off by default, so Mayank can watch a dry week first):
 //   EMAIL_WEEKLY_LIVE=1     the weekly email sends; unset, the Sunday run is a dry run
@@ -141,6 +147,8 @@ export type RunResult = {
   housekeeping: { loginCodes: number; sessions: number; dryRows: number; askTurns: number; askDays: number } | null;
   /** Null on dry runs; "skipped" when the run had no time left; "error" when it threw. */
   sheet: SheetCatchUp | "skipped" | "error" | null;
+  /** The Sheet's Users tab, the same way. Its status says whether the Sheet took the rows. */
+  usersSheet: UsersSheetResult | "skipped" | "error" | null;
   stoppedEarly: "time" | "not_production" | "no_api_key" | "no_link_secret" | null;
   error?: string;
   /** The step that threw. A throw in an email step stops the run's emails; housekeeping and the Sheet still run. */
@@ -164,6 +172,7 @@ function newResult(now: Date, dry: boolean, live: RunResult["live"]): RunResult 
     feedback: { ...tally(), used: 0, barely: 0 },
     housekeeping: null,
     sheet: null,
+    usersSheet: null,
     stoppedEarly: null,
     ms: 0,
   };
@@ -573,6 +582,7 @@ export async function runDaily(opts: RunOptions = {}): Promise<RunResult> {
         failed(error);
       }
       result.sheet = await feedbackSheet(ctx);
+      result.usersSheet = await usersSheet(ctx);
       if (result.status === "error") result.failureAlert = await failureAlert(ctx);
     }
   } finally {
@@ -590,7 +600,8 @@ function summary(r: RunResult): string {
     const live = k === "weekly" ? r.live.weekly : r.live.lifecycle;
     return `${k} ${live ? "live" : "dry"} due ${t.due} ${live ? `sent ${t.sent}` : `would ${t.wouldSend}`} capped ${t.capped} over-budget ${t.overBudget}${t.failed ? ` failed ${t.failed}` : ""}`;
   });
-  return [`${r.status}`, r.failedAt ? `failed at ${r.failedAt}` : "", `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, sheetSummary(r.sheet), r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
+  const users = r.usersSheet === null ? "" : typeof r.usersSheet === "string" ? `users sheet ${r.usersSheet}` : `users sheet ${usersSheetSummary(r.usersSheet)}`;
+  return [`${r.status}`, r.failedAt ? `failed at ${r.failedAt}` : "", `budget left ${r.budget?.left ?? "?"}`, `retries ${r.retries.tried}`, ...kinds, sheetSummary(r.sheet), users, r.stoppedEarly ? `stopped: ${r.stoppedEarly}` : "", `${r.ms} ms`].filter(Boolean).join("; ");
 }
 
 /**
@@ -1065,6 +1076,22 @@ async function feedbackSheet(ctx: Ctx): Promise<RunResult["sheet"]> {
   } catch (error) {
     // The emails have gone by now; a database hiccup here shouldn't mark the run failed.
     console.error("[email] feedback sheet catch-up failed:", error instanceof Error ? error.message : error);
+    return "error";
+  }
+}
+
+// ── 6. The Users tab ────────────────────────────────────────────────────────
+// Last, as no email waits on it. A Sheet that is down or not yet updated is a status in its
+// result, not a failed run; only a database error here throws, and even that doesn't mark
+// the run failed (the emails have gone). Stops at the run's time budget.
+
+async function usersSheet(ctx: Ctx): Promise<RunResult["usersSheet"]> {
+  if (outOfTime(ctx)) return "skipped";
+  try {
+    return await syncUsersSheet({ now: ctx.now, deadline: ctx.started + TIME_BUDGET_MS });
+  } catch (error) {
+    // The class only: a query error's message carries its parameters (account ids).
+    console.error(`[email] users sheet sync failed: ${error instanceof Error ? error.name : "unknown error"}`);
     return "error";
   }
 }

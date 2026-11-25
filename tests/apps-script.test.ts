@@ -1,162 +1,14 @@
 // google-apps-script/Code.gs, run in a sandbox against stand-ins for Google's services
-// (Sheets, script properties, the lock, ContentService). Covers the Feedback tab's
-// "feedback" and "forget" actions, setupFeedback, the formula escaping every value goes
-// through, and that the waitlist's "join" and "update" still behave as before.
-// The real Sheet is never called; Mayank pastes the script by hand.
+// (tests/support/apps-script.ts). Covers the Feedback tab's "feedback" and "forget"
+// actions, setupFeedback, the Users tab's "users", "users-forget" and "users-ids" actions
+// and setupUsers, the formula escaping every value goes through, and that the waitlist's
+// "join" and "update" still behave as before. The real Sheet is never called; Mayank
+// pastes the script by hand.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
-import vm from "node:vm";
+import { SECRET, isDate, loadScript } from "./support/apps-script.ts";
 
-const SOURCE = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../google-apps-script/Code.gs"), "utf8");
-const SECRET = "test-webhook-secret";
-
-class FakeRange {
-  sheet: FakeSheet;
-  row: number;
-  col: number;
-  rows: number;
-  cols: number;
-  constructor(sheet: FakeSheet, row: number, col: number, rows = 1, cols = 1) {
-    this.sheet = sheet;
-    this.row = row;
-    this.col = col;
-    this.rows = rows;
-    this.cols = cols;
-  }
-  getValues() {
-    return Array.from({ length: this.rows }, (_, r) => Array.from({ length: this.cols }, (_, c) => this.sheet.cell(this.row + r, this.col + c)));
-  }
-  setValues(values: unknown[][]) {
-    assert.equal(values.length, this.rows, "setValues: row count matches the range");
-    values.forEach((line, r) => {
-      assert.equal(line.length, this.cols, "setValues: column count matches the range");
-      line.forEach((v, c) => this.sheet.set(this.row + r, this.col + c, v));
-    });
-    return this;
-  }
-  setValue(v: unknown) {
-    this.sheet.set(this.row, this.col, v);
-    return this;
-  }
-  setFontWeight() {
-    return this;
-  }
-  setBackground() {
-    return this;
-  }
-  setFontColor() {
-    return this;
-  }
-  setNumberFormat() {
-    return this;
-  }
-  setWrap() {
-    return this;
-  }
-  createFilter() {
-    this.sheet.filter = {};
-    return this.sheet.filter;
-  }
-}
-
-class FakeSheet {
-  data: unknown[][] = [];
-  filter: object | null = null;
-  frozen = 0;
-  maxRows = 1000;
-  name: string;
-  constructor(name: string) {
-    this.name = name;
-  }
-  cell(r: number, c: number) {
-    return this.data[r - 1]?.[c - 1] ?? "";
-  }
-  set(r: number, c: number, v: unknown) {
-    while (this.data.length < r) this.data.push([]);
-    this.data[r - 1][c - 1] = v;
-  }
-  getLastRow() {
-    let n = this.data.length;
-    while (n > 0 && this.data[n - 1].every((v) => v === "" || v === undefined)) n--;
-    return n;
-  }
-  getMaxRows() {
-    return Math.max(this.maxRows, this.data.length);
-  }
-  getRange(r: number, c: number, rows = 1, cols = 1) {
-    return new FakeRange(this, r, c, rows, cols);
-  }
-  appendRow(values: unknown[]) {
-    const r = this.getLastRow() + 1;
-    values.forEach((v, i) => this.set(r, i + 1, v));
-  }
-  deleteRow(r: number) {
-    this.data.splice(r - 1, 1);
-  }
-  setFrozenRows(n: number) {
-    this.frozen = n;
-  }
-  setColumnWidth() {}
-  insertRowsAfter(_after: number, n: number) {
-    this.maxRows += n;
-  }
-  getFilter() {
-    return this.filter;
-  }
-  /** Rows below the header, as plain arrays. */
-  body() {
-    return this.data.slice(1, this.getLastRow()).map((row) => [...row]);
-  }
-}
-
-class FakeSpreadsheet {
-  sheets = new Map<string, FakeSheet>();
-  getSheetByName(name: string) {
-    return this.sheets.get(name) ?? null;
-  }
-  insertSheet(name: string) {
-    const sheet = new FakeSheet(name);
-    this.sheets.set(name, sheet);
-    return sheet;
-  }
-}
-
-type Script = {
-  doPost(e: { postData: { contents: string } }): { text: string };
-  doGet(): { text: string };
-  setup(): void;
-  setupFeedback(): void;
-  clean_(value: unknown, max?: number): string;
-};
-
-function load({ secret = SECRET as string | null, lockFree = true } = {}) {
-  const ss = new FakeSpreadsheet();
-  const logs: string[] = [];
-  const sandbox = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss, flush() {} },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k: string) => (k === "WEBHOOK_SECRET" ? secret : null) }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => lockFree, waitLock() {}, releaseLock() {} }) },
-    ContentService: {
-      createTextOutput: (text: string) => ({
-        text,
-        setMimeType() {
-          return this;
-        },
-      }),
-      MimeType: { JSON: "application/json" },
-    },
-    Logger: { log: (m: unknown) => logs.push(String(m)) },
-    console,
-  };
-  const script = vm.runInContext(`${SOURCE}\n;({ doPost, doGet, setup, setupFeedback, clean_ });`, vm.createContext(sandbox)) as Script;
-  const post = (body: unknown) => JSON.parse(script.doPost({ postData: { contents: typeof body === "string" ? body : JSON.stringify(body) } }).text);
-  return { ss, script, post, logs };
-}
-
-const isDate = (v: unknown) => Object.prototype.toString.call(v) === "[object Date]";
+const load = loadScript;
 
 const RESPONDENT = "r_0123456789ab";
 function answer(over: Record<string, unknown> = {}) {
@@ -370,8 +222,299 @@ describe("the waitlist still works as before", () => {
     assert.equal(ss.getSheetByName("Feedback"), null, "waitlist calls never touch the Feedback tab");
   });
 
-  it("doGet says the deployed version has the feedback actions", () => {
+  it("doGet says the deployed version has the feedback and users actions", () => {
     const { script } = load();
-    assert.deepEqual(JSON.parse(script.doGet().text), { ok: true, service: "d-human-waitlist", feedback: true });
+    assert.deepEqual(JSON.parse(script.doGet().text), { ok: true, service: "d-human-waitlist", feedback: true, users: true });
+  });
+});
+
+// ── The Users tab ───────────────────────────────────────────────────────────
+
+const USER_HEADER = [
+  "User ID",
+  "Founder",
+  "Name",
+  "Email",
+  "Signed up (IST)",
+  "Onboarding finished (IST)",
+  "Last active (IST)",
+  "Language",
+  "City",
+  "Age",
+  "Sex",
+  "Main activity",
+  "Level",
+  "Goals",
+  "Diet",
+  "Plan",
+  "Payments",
+  "Meals logged",
+  "Reports uploaded",
+  "Weekly email",
+  "Synced (IST)",
+];
+const ucol = (name: string) => USER_HEADER.indexOf(name);
+const uid = (n: number) => `u_${n.toString(16).padStart(12, "0")}`;
+function user(n: number, over: Record<string, unknown> = {}) {
+  return {
+    id: uid(n),
+    founder: "No",
+    name: `Asha ${n}`,
+    email: `asha${n}@example.com`,
+    signedUp: "2026-11-20 09:15",
+    onboarded: "2026-11-20 09:30",
+    lastActive: "2026-11-24 21:05",
+    language: "English",
+    city: "Indore",
+    age: 31,
+    sex: "Female",
+    activity: "Running",
+    level: "Regular",
+    goals: "More energy, Lose fat",
+    diet: "Vegetarian",
+    plan: "Free",
+    payments: 0,
+    meals: 12,
+    reports: 1,
+    weeklyEmail: "On",
+    synced: "2026-11-25 10:31",
+    ...over,
+  };
+}
+const users = (ss: ReturnType<typeof load>["ss"]) => ss.getSheetByName("Users")!;
+
+describe("users action", () => {
+  it("refuses a wrong or missing secret and writes nothing", () => {
+    const { ss, post } = load();
+    assert.deepEqual(post({ secret: "nope", action: "users", rows: [user(1)] }), { ok: false, error: "unauthorized" });
+    assert.deepEqual(post({ action: "users", rows: [user(1)] }), { ok: false, error: "unauthorized" });
+    assert.equal(ss.getSheetByName("Users"), null);
+  });
+
+  it("makes the tab with its headers, then adds the rows in the order sent, in one write", () => {
+    const { ss, post } = load();
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [user(1), user(2), user(3)] }), { ok: true, status: "saved", saved: 3, added: 3 });
+    const tab = users(ss);
+    assert.deepEqual([...tab.data[0]], USER_HEADER);
+    const rows = tab.body();
+    assert.deepEqual(
+      rows.map((r) => r[ucol("User ID")]),
+      [uid(1), uid(2), uid(3)],
+    );
+    assert.equal(tab.writes, 1, "three new rows, one write");
+    const [first] = rows;
+    assert.equal(first[ucol("Name")], "Asha 1");
+    assert.equal(first[ucol("Email")], "asha1@example.com");
+    assert.equal(first[ucol("Age")], 31);
+    assert.equal(first[ucol("Meals logged")], 12);
+    assert.equal(first[ucol("Plan")], "Free");
+    assert.equal(first[ucol("Weekly email")], "On");
+  });
+
+  it("dates are real dates showing the Indian clock time, read in the spreadsheet's own time zone", () => {
+    const { ss, post, parsed } = load({ timeZone: "America/New_York" });
+    post({ secret: SECRET, action: "users", rows: [user(1, { onboarded: "" })] });
+    const [row] = users(ss).body();
+    for (const name of ["Signed up (IST)", "Last active (IST)", "Synced (IST)"]) assert.ok(isDate(row[ucol(name)]), name);
+    // The stand-in returns the clock time as UTC, so this is exactly what the cell shows.
+    assert.equal((row[ucol("Signed up (IST)")] as Date).toISOString(), "2026-11-20T09:15:00.000Z");
+    assert.equal(row[ucol("Onboarding finished (IST)")], "", "blank when onboarding isn't finished");
+    assert.ok(parsed.length >= 3 && parsed.every((p) => p.tz === "America/New_York" && p.format === "yyyy-MM-dd HH:mm"));
+    // Anything but the site's own format is left blank, never guessed.
+    post({ secret: SECRET, action: "users", rows: [user(2, { signedUp: "=NOW()", lastActive: "2026-11-24T21:05:00Z" })] });
+    const second = users(ss).body()[1];
+    assert.equal(second[ucol("Signed up (IST)")], "");
+    assert.equal(second[ucol("Last active (IST)")], "");
+  });
+
+  it("updates the row with the same User ID, leaves notes to its right, and writes neighbours together", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [1, 2, 3, 4, 5].map((n) => user(n)) });
+    const tab = users(ss);
+    tab.set(3, USER_HEADER.length + 1, "called on Monday"); // a founder's note beside account 2
+    tab.writes = 0;
+    const res = post({ secret: SECRET, action: "users", rows: [user(2, { meals: 40, plan: "Pass until 04 Dec 2026" }), user(3, { meals: 9 }), user(5, { city: "Pune" })] });
+    assert.deepEqual(res, { ok: true, status: "saved", saved: 3, added: 0 });
+    const rows = tab.body();
+    assert.equal(rows.length, 5, "no duplicates");
+    assert.equal(rows[1][ucol("Meals logged")], 40);
+    assert.equal(rows[1][ucol("Plan")], "Pass until 04 Dec 2026");
+    assert.equal(rows[1][USER_HEADER.length], "called on Monday", "the note stays");
+    assert.equal(rows[2][ucol("Meals logged")], 9);
+    assert.equal(rows[4][ucol("City")], "Pune");
+    assert.equal(tab.writes, 2, "rows 2 and 3 in one write, row 5 in another");
+  });
+
+  it("finds rows by User ID after the founders sort the tab", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1), user(2), user(3)] });
+    const tab = users(ss);
+    const [header, ...body] = tab.data;
+    tab.data = [header, ...body.reverse()];
+    post({ secret: SECRET, action: "users", rows: [user(1, { name: "Asha Rao" })] });
+    const rows = tab.body();
+    assert.deepEqual(
+      rows.map((r) => r[ucol("User ID")]),
+      [uid(3), uid(2), uid(1)],
+    );
+    assert.equal(rows[2][ucol("Name")], "Asha Rao");
+  });
+
+  it("the same account twice in one batch: one row, the later values", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1, { meals: 1 }), user(1, { meals: 2 })] });
+    assert.deepEqual(
+      users(ss)
+        .body()
+        .map((r) => r[ucol("Meals logged")]),
+      [2],
+    );
+    post({ secret: SECRET, action: "users", rows: [user(1, { meals: 3 }), user(1, { meals: 4 })] });
+    assert.deepEqual(
+      users(ss)
+        .body()
+        .map((r) => r[ucol("Meals logged")]),
+      [4],
+    );
+  });
+
+  it("escapes anything a person typed that a spreadsheet could run", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1, { name: '=HYPERLINK("https://x.test","tap")', email: "+priya@example.com", city: "@SUM(A1)" })] });
+    const [row] = users(ss).body();
+    assert.equal(row[ucol("Name")], '\'=HYPERLINK("https://x.test","tap")');
+    assert.equal(row[ucol("Email")], "'+priya@example.com");
+    assert.equal(row[ucol("City")], "'@SUM(A1)");
+    for (const cell of row) if (typeof cell === "string") assert.doesNotMatch(cell, /^[=+\-@]/, "no cell starts like a formula");
+  });
+
+  it("checks every row before writing any", () => {
+    const { ss, post } = load();
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [user(1), user(2, { id: "priya@example.com" })] }), { ok: false, error: "bad_row" });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [user(1, { id: "=1+1" })] }), { ok: false, error: "bad_row" });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [null] }), { ok: false, error: "bad_row" });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [] }), { ok: false, error: "bad_rows" });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: "nope" }), { ok: false, error: "bad_rows" });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: Array.from({ length: 201 }, (_, i) => user(i)) }), { ok: false, error: "bad_rows" });
+    assert.equal(ss.getSheetByName("Users"), null);
+  });
+
+  it("takes 200 rows, and grows the tab past its last row", () => {
+    const { ss, post } = load();
+    const tab = ss.insertSheet("Users");
+    tab.appendRow(USER_HEADER);
+    tab.maxRows = 50;
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: Array.from({ length: 200 }, (_, i) => user(i + 1)) }), { ok: true, status: "saved", saved: 200, added: 200 });
+    assert.equal(tab.body().length, 200);
+    assert.ok(tab.getMaxRows() >= 201);
+  });
+
+  it("refuses to write under headers someone moved or renamed", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1)] });
+    const tab = users(ss);
+    tab.data[0][ucol("Name")] = "Full name";
+    const before = JSON.stringify(tab.data);
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [user(1, { meals: 99 })] }), { ok: false, error: "headers_changed" });
+    assert.equal(JSON.stringify(tab.data), before);
+  });
+
+  it("answers busy when the lock is held", () => {
+    const { post } = load({ lockFree: false });
+    assert.deepEqual(post({ secret: SECRET, action: "users", rows: [user(1)] }), { ok: false, error: "busy" });
+  });
+
+  it("never touches the other tabs", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1)] });
+    assert.deepEqual([...ss.sheets.keys()], ["Users"]);
+  });
+});
+
+describe("users-forget action", () => {
+  it("deletes every row with those User IDs, and nobody else's", () => {
+    const { ss, post } = load();
+    post({ secret: SECRET, action: "users", rows: [user(1), user(2), user(3), user(4)] });
+    users(ss).appendRow([uid(2), "No", "copied by hand"]);
+    assert.deepEqual(post({ secret: SECRET, action: "users-forget", ids: [uid(2), uid(4), uid(99)] }), { ok: true, status: "forgotten", deleted: 3 });
+    assert.deepEqual(
+      users(ss)
+        .body()
+        .map((r) => r[ucol("User ID")]),
+      [uid(1), uid(3)],
+    );
+    assert.deepEqual(post({ secret: SECRET, action: "users-forget", ids: [uid(2)] }), { ok: true, status: "forgotten", deleted: 0 });
+  });
+
+  it("removes the last row even when the tab has no spare row below it", () => {
+    const { ss, post } = load();
+    const tab = ss.insertSheet("Users");
+    tab.appendRow(USER_HEADER);
+    tab.setFrozenRows(1);
+    tab.maxRows = 2;
+    post({ secret: SECRET, action: "users", rows: [user(1)] });
+    assert.deepEqual(post({ secret: SECRET, action: "users-forget", ids: [uid(1)] }), { ok: true, status: "forgotten", deleted: 1 });
+    assert.equal(tab.body().length, 0);
+  });
+
+  it("refuses anything but User IDs, and works before the tab exists", () => {
+    const { post } = load();
+    for (const ids of [[], "u_000000000001", ["priya@example.com"], ["u_123"], [null], Array.from({ length: 501 }, (_, i) => uid(i))]) {
+      const res = post({ secret: SECRET, action: "users-forget", ids });
+      assert.equal(res.ok, false, JSON.stringify(ids).slice(0, 40));
+    }
+    assert.deepEqual(post({ secret: SECRET, action: "users-forget", ids: [uid(1)] }), { ok: true, status: "forgotten", deleted: 0 });
+    assert.deepEqual(post({ secret: "nope", action: "users-forget", ids: [uid(1)] }), { ok: false, error: "unauthorized" });
+  });
+});
+
+describe("users-ids action", () => {
+  it("lists the User IDs in the tab, and nothing else from it", () => {
+    const { ss, post } = load();
+    assert.deepEqual(post({ secret: SECRET, action: "users-ids" }), { ok: true, status: "listed", ids: [] });
+    post({ secret: SECRET, action: "users", rows: [user(1), user(2)] });
+    users(ss).appendRow(["a note row", "", "Someone"]);
+    assert.deepEqual(post({ secret: SECRET, action: "users-ids" }), { ok: true, status: "listed", ids: [uid(1), uid(2)] });
+    assert.deepEqual(post({ secret: "nope", action: "users-ids" }), { ok: false, error: "unauthorized" });
+  });
+});
+
+describe("setupUsers", () => {
+  it("builds the tab with a filter over every column, and running it again keeps the data", () => {
+    const { ss, script, post, logs } = load();
+    script.setupUsers();
+    const tab = users(ss);
+    assert.deepEqual([...tab.data[0]], USER_HEADER);
+    assert.equal(tab.frozen, 1);
+    assert.equal(tab.filter?.cols, 26, "sorting moves notes kept to the right with their rows");
+    assert.ok(tab.getMaxRows() >= 5000 && tab.filter!.rows >= 5000, "the filter covers accounts added later");
+    assert.ok(logs.some((l) => /WEBHOOK_SECRET is set/.test(l)));
+    assert.ok(logs.some((l) => /Indian time \(IST\)/.test(l)));
+    post({ secret: SECRET, action: "users", rows: [user(1)] });
+    script.setupUsers();
+    assert.equal(tab.body().length, 1);
+  });
+
+  it("stops rather than overwrite a tab whose headers differ with data below", () => {
+    const { ss, script } = load();
+    const tab = ss.insertSheet("Users");
+    tab.appendRow(["Something", "Else"]);
+    tab.appendRow(["kept", "data"]);
+    assert.throws(() => script.setupUsers(), /different headers.*run setupUsers again/);
+    assert.deepEqual([...tab.data[1]], ["kept", "data"]);
+  });
+
+  it("leaves the Waitlist, Feedback and Replies tabs alone", () => {
+    const { ss, script } = load();
+    script.setupUsers();
+    assert.deepEqual([...ss.sheets.keys()], ["Users"]);
+  });
+
+  it("the old setupFeedback still names itself when it stops", () => {
+    const { ss, script } = load();
+    const tab = ss.insertSheet("Feedback");
+    tab.appendRow(["Something"]);
+    tab.appendRow(["kept"]);
+    assert.throws(() => script.setupFeedback(), /run setupFeedback again/);
   });
 });

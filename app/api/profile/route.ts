@@ -10,6 +10,8 @@ import { ACTIVITY_IDS, CONDITION_IDS, DIET_IDS, GOAL_IDS, LANGUAGE_IDS, LEVEL_ID
 import { ensureEvents } from "@/lib/platform/events";
 import { json, unauthorized } from "@/lib/platform/http";
 import { getProfile, personaFor } from "@/lib/platform/profile";
+import { sheetFieldsChanged } from "@/lib/sheets/user-row";
+import { pushUserRow } from "@/lib/sheets/users";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 const text = (max: number) => z.string().trim().max(max).nullable().transform((v) => v || null);
@@ -104,5 +106,8 @@ export async function POST(request: Request) {
   // The welcome email, once per account, after the response so it never holds up the save.
   // A dry run until EMAIL_LIFECYCLE_LIVE is on; the daily job catches up any that didn't go.
   if (justFinished) after(() => sendWelcome(saved));
+  // The founders' Sheet: once onboarding finishes, and when Settings changes a field it shows.
+  // Saves during onboarding (one per step) wait for its end; the daily job has them anyway.
+  if (saved.onboardedAt && (justFinished || sheetFieldsChanged(before, saved))) after(() => pushUserRow(user.id));
   return json({ status: "saved" });
 }
