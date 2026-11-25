@@ -1,4 +1,3 @@
-import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { webhookSecret } from "@/lib/billing/razorpay";
 import { webhookSignatureOk } from "@/lib/billing/signature";
 import { handleWebhook } from "@/lib/platform/billing";
@@ -12,8 +11,6 @@ const MAX_BYTES = 256 * 1024;
 // before anything is parsed. Razorpay retries anything but a quick 2xx for 24 hours,
 // and may send an event more than once or out of order; settling is idempotent.
 export async function POST(request: Request) {
-  // Never for the apps (A6).
-  if (carriesAppToken(request)) return refuseAppToken();
   const secret = webhookSecret();
   if (!secret) return json({ error: "not_configured" }, 503);
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES) return json({ error: "too_large" }, 413);

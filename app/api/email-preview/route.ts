@@ -1,4 +1,3 @@
-import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { renderEmail } from "@/lib/email/templates";
 import { emailSamples } from "@/lib/email/templates/samples";
 import { siteUrl } from "@/lib/site-url";
@@ -12,8 +11,6 @@ import { welcomeEmail } from "@/lib/waitlist/welcome-email";
 // Dark mode: switch the browser or DevTools to prefers-color-scheme: dark (Apple Mail's view).
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production") return new Response("Not found", { status: 404 });
-  // Never for the apps (A6).
-  if (carriesAppToken(request)) return refuseAppToken();
 
   const url = new URL(request.url);
   const origin = url.origin;

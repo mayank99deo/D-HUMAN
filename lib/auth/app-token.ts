@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 
 // The native apps' bearer tokens (the mobile repo's docs/API.md §2): the format, how long
-// they last, and the header checks every route can afford. No database here, so routes that
-// only refuse app tokens (cron, webhooks, the waitlist) don't load it.
+// they last, and the header checks every route can afford, with no database here. The web
+// routes that read no session (cron, webhooks, the waitlist, unsubscribe, the dev routes)
+// don't check for tokens at all: there a token is nobody (tests/app-auth.test.ts, 17).
 
 const DAY = 86_400_000;
 
@@ -36,10 +37,9 @@ export function fromBrowser(request: Request): boolean {
 }
 
 /**
- * Whether the request carries an app token, well-formed or not. The routes that must never
- * serve the apps refuse it (A6) by this header check alone, with no database lookup. Only
- * `dht_` tokens: the daily cron and the Sheets form send their own `Bearer <secret>` and are
- * unaffected.
+ * Whether the request carries an app token, well-formed or not. /write, which reads the web's
+ * session, refuses it (A6) by this header check alone, with no database lookup. Only `dht_`
+ * tokens count.
  */
 export const carriesAppToken = (request: Request) => /^\s*bearer\s+dht_/i.test(request.headers.get("authorization") ?? "");
 

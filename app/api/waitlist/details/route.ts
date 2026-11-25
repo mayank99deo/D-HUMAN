@@ -1,5 +1,4 @@
 import { after } from "next/server";
-import { carriesAppToken, refuseAppToken } from "@/lib/auth/app-token";
 import { updateContactName } from "@/lib/waitlist/email";
 import { PLAN_LABELS, TRAINING_LABELS } from "@/lib/waitlist/options";
 import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
@@ -8,8 +7,6 @@ import { updateSignup } from "@/lib/waitlist/sheets";
 import { verifyEmailToken } from "@/lib/waitlist/token";
 
 export async function POST(request: Request) {
-  // Never for the apps (A6).
-  if (carriesAppToken(request)) return refuseAppToken();
   if (!allowRequest(`details:${clientIp(request.headers)}`, 10, 60_000)) {
     return Response.json({ error: "rate_limited" }, { status: 429 });
   }

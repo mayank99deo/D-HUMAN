@@ -102,6 +102,19 @@ async function call(route: string, handler: Handler, r: Request, ctx?: unknown) 
   return { res, status: res.status, body: body ? (JSON.parse(body) as Record<string, unknown>) : null };
 }
 const bearer = (t: string) => `Bearer ${t}`;
+// The web routes that read no session at all: an app token is nobody there (A6 by construction).
+const SESSIONLESS = [
+  "app/api/billing/webhook/route.ts",
+  "app/api/cron/daily/route.ts",
+  "app/api/dev/session/route.ts",
+  "app/api/email-preview/route.ts",
+  "app/api/email/unsubscribe/route.ts",
+  "app/api/email/webhook/route.ts",
+  "app/api/waitlist/details/route.ts",
+  "app/api/waitlist/form/route.ts",
+  "app/api/waitlist/route.ts",
+];
+const SESSION_READ = /\b(apiUser|getSessionUser|requireUser|requireMember|authenticate|apiMember|apiSignedIn|writeGuard|writerAccess|notForApp)\(|cookies\(\)/;
 const params = (publicId: string) => ({ params: Promise.resolve({ publicId }) });
 async function runAfter() {
   const queued = g.__after.splice(0);
@@ -535,7 +548,7 @@ describe("revoking (A9)", () => {
 });
 
 describe("where app tokens are refused (A6)", () => {
-  it("17: the blog's writer, cron, dev routes, both webhooks, unsubscribe and the waitlist answer 403 not_for_app before anything runs", async () => {
+  it("17: cron, dev routes, both webhooks, unsubscribe and the waitlist read no session, so an app token gets nothing there; /write refuses it", async () => {
     const t = (await appSignIn("refused@example.com")).token;
     process.env.CRON_SECRET = "cron-secret-for-tests";
     const routes: [string, Handler, string][] = [
@@ -550,14 +563,20 @@ describe("where app tokens are refused (A6)", () => {
       ["/api/waitlist/details", (await import("../app/api/waitlist/details/route.ts")).POST as Handler, "POST"],
       ["/api/waitlist/form", (await import("../app/api/waitlist/form/route.ts")).POST as Handler, "POST"],
     ];
+    // Their files are the web's, untouched; none reads a session, so a token can't be anyone there.
+    for (const f of SESSIONLESS) assert.doesNotMatch(readFileSync(path.join(ROOT, f), "utf8"), SESSION_READ, f);
+    const env = process.env as Record<string, string | undefined>;
+    const nodeEnv = env.NODE_ENV;
     for (const [url, handler, method] of routes) {
-      for (const auth of [bearer(t), "bearer dht_whatever"]) {
+      // The dev routes answer 404 in production, token or none; here they'd mint a demo session.
+      if (url === "/api/dev/session" || url === "/api/email-preview") env.NODE_ENV = "production";
+      const answer = async (auth?: string) => {
         const r = await handler(request(method, `${url}?t=x`, { auth, body: method === "POST" ? {} : undefined }));
-        // Never 401: the app would wipe a sign-in that's fine (QA's call, 2026-11-26).
-        assert.equal(r.status, 403, `${method} ${url}`);
-        assert.deepEqual(await r.json(), { error: "not_for_app", message: NOT_FOR_APP_WORDS }, `${method} ${url}`);
-        assert.equal(r.headers.get("cache-control"), "private, no-store", `${method} ${url}`);
-      }
+        return [r.status, await r.text()];
+      };
+      const plain = await answer();
+      for (const auth of [bearer(t), "bearer dht_whatever"]) assert.deepEqual(await answer(auth), plain, `${method} ${url}: the same answer as with no token`);
+      env.NODE_ENV = nodeEnv;
     }
     // Their own secrets are not app tokens: the cron still checks its own, and Vercel Cron's call gets through.
     const cron = routes[0][1];
@@ -574,7 +593,8 @@ describe("where app tokens are refused (A6)", () => {
     g.__cookie = web.cookie;
     for (const mutation of [true, false]) {
       const guard = await writeGuard(request("POST", "/api/write/posts", { auth: bearer(t), cookie: web.cookie, origin: SITE }), { mutation });
-      assert.ok(!guard.ok && guard.response.status === 403);
+      assert.ok(!guard.ok && guard.response.status === 403, "403 not_for_app: the token is fine, /write isn't the app's");
+      assert.deepEqual(await guard.response.json(), { error: "not_for_app", message: NOT_FOR_APP_WORDS });
     }
     const plain = await writeGuard(request("POST", "/api/write/posts", { cookie: web.cookie, origin: SITE }));
     assert.ok(plain.ok, "the writer's own cookie request is unchanged");
@@ -617,14 +637,11 @@ describe("routes not open to the apps yet (not_for_app)", () => {
     return readdirRecursive(path.join(ROOT, "app/api"))
       .filter((f) => f.endsWith("route.ts"))
       .map((f) => path.relative(ROOT, f))
-      .filter((f) => !open.has(f) && !SIGN_IN.includes(f))
-      .filter((f) => {
-        const src = readFileSync(path.join(ROOT, f), "utf8");
-        return !/if \(carriesAppToken\(request\)\) return refuseAppToken\(\);/.test(src) && !/writeGuard\(request/.test(src);
-      });
+      .filter((f) => !open.has(f) && !SIGN_IN.includes(f) && !SESSIONLESS.includes(f))
+      .filter((f) => !/writeGuard\(request/.test(readFileSync(path.join(ROOT, f), "utf8")));
   }
 
-  it("every /api route is open to the apps, refuses their tokens outright (A6), is sign-in itself, or checks notForApp first in every handler", async () => {
+  it("every /api route is open to the apps, reads no session, is sign-in itself or /write, or checks notForApp first in every handler", async () => {
     const rest = await notOpen();
     assert.ok(rest.length >= 21, `${rest.length} routes`);
     for (const f of rest) {
