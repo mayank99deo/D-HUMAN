@@ -41,15 +41,6 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     method: "post",
-    path: "/api/auth/apple",
-    file: "app/api/auth/apple/route.ts",
-    summary: "Sign in with Apple. Not on yet: 501 until Apple enrolment.",
-    auth: "open",
-    request: s.AppleSignInRequest,
-    responses: { 400: refusal, 501: refusal },
-  },
-  {
-    method: "post",
     path: "/api/auth/signout",
     file: "app/api/auth/signout/route.ts",
     summary: "Sign this phone out, or with others: true every other session (the web's included).",
@@ -112,7 +103,6 @@ const STATUS_WORDS: Record<number, string> = {
   404: "Not found (another person's id looks the same).",
   409: "Not onboarded yet.",
   429: "Too many tries. Retry-After says when to come back.",
-  501: "Not available yet.",
 };
 
 function json(schema: z.ZodType, io: "input" | "output") {

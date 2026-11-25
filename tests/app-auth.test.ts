@@ -62,7 +62,6 @@ const { reviewAccount } = await import("../lib/auth/review.ts");
 const { SIGN_IN_WORDS } = await import("../lib/auth/sign-in-words.ts");
 const { scrubTokens } = await import("../lib/auth/scrub.ts");
 const token = (await import("../app/api/auth/token/route.ts")).POST as Handler;
-const apple = (await import("../app/api/auth/apple/route.ts")).POST as Handler;
 const verify = (await import("../app/api/auth/verify/route.ts")).POST as Handler;
 const signout = (await import("../app/api/auth/signout/route.ts")).POST as Handler;
 const deleteAccount = (await import("../app/api/account/delete/route.ts")).POST as Handler;
@@ -343,11 +342,6 @@ describe("the token route's own rules", () => {
     }
   });
 
-  it("Sign in with Apple says plainly it isn't on yet (501), and never answers a browser", async () => {
-    const r = await call("apple", apple, request("POST", "/api/auth/apple", { body: { identityToken: "x" } }));
-    assert.deepEqual([r.status, r.body], [501, { error: "apple_unavailable", message: SIGN_IN_WORDS.apple_unavailable }]);
-    assert.equal((await call("apple", apple, request("POST", "/api/auth/apple", { origin: SITE, body: {} }))).status, 400);
-  });
 });
 
 describe("using tokens (A3, A4)", () => {
@@ -838,7 +832,7 @@ describe("caching, cookies, CORS and logs", () => {
   });
 
   it("35: nothing the new routes load caches across requests", () => {
-    const entries = ["app/api/auth/token/route.ts", "app/api/auth/apple/route.ts", "app/api/auth/signout/route.ts", "app/api/account/delete/route.ts", "app/api/me/sessions/route.ts", "app/api/me/sessions/[publicId]/route.ts"];
+    const entries = ["app/api/auth/token/route.ts", "app/api/auth/signout/route.ts", "app/api/account/delete/route.ts", "app/api/me/sessions/route.ts", "app/api/me/sessions/[publicId]/route.ts"];
     const seen = importGraph(entries);
     assert.ok(seen.size > 10, `walked ${seen.size} files`);
     const offenders = [...seen].filter((f) => /["']use cache["']|unstable_cache|cacheLife\(/.test(readFileSync(f, "utf8")));
@@ -854,7 +848,7 @@ describe("caching, cookies, CORS and logs", () => {
       assert.equal(a.headers.get("set-cookie"), null, `${a.route} ${a.status}`);
     }
     const statuses = new Set(fresh.map((a) => a.status));
-    for (const s of [200, 304, 400, 401, 403, 404, 429, 501]) assert.ok(statuses.has(s), `a ${s} was checked`);
+    for (const s of [200, 304, 400, 401, 403, 404, 429]) assert.ok(statuses.has(s), `a ${s} was checked`);
   });
 
   it("37: no answer but a sign-in, and no log line, holds a token", () => {

@@ -91,15 +91,10 @@ describe("the apps' contract", () => {
   });
 
   it("each route's answers, for every status it gives, are what the contract says", async () => {
-    // Sign-in: 200, 400 and 429; Apple: 400 and 501.
+    // Sign-in: 200, 400 and 429.
     const t = await signIn("contract@example.com", { key: "contract-key-0123456789" });
     await call("post", "/api/auth/token", { body: { email: "contract@example.com", code: "000000" } });
     for (let i = 0; i < 21; i++) await call("post", "/api/auth/token", { ip: "203.0.113.9", body: { email: "x@example.com", code: "123456" } });
-    await call("post", "/api/auth/apple", { body: { identityToken: "a", authorizationCode: "b", nonce: "c" } });
-    const browser = await handlers.get("post /api/auth/apple")!(new Request(`${SITE}/api/auth/apple`, { method: "POST", headers: { origin: SITE } }));
-    assert.equal(browser.status, 400);
-    assert.ok(routeOf("post", "/api/auth/apple").responses[400]!.safeParse(await browser.json()).success);
-    seen.add("post /api/auth/apple 400");
 
     // Me and Home: 200, 304, 401; Home's 409 before onboarding.
     const meFirst = await call("get", "/api/me", { token: t });

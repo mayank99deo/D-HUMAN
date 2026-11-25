@@ -60,12 +60,6 @@ export const DeviceView = z.strictObject({
 });
 export const SessionsResponse = z.strictObject({ sessions: z.array(DeviceView) });
 export const EndSessionResponse = z.strictObject({ status: z.literal("signed_out") });
-export const AppleSignInRequest = z.object({
-  identityToken: S,
-  authorizationCode: S,
-  nonce: S,
-  fullName: z.object({ givenName: S.optional(), familyName: S.optional() }).optional(),
-});
 
 // ── Me ───────────────────────────────────────────────────────────────────────
 
