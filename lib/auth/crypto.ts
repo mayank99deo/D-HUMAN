@@ -23,6 +23,10 @@ export const newCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
 export const hashCode = (email: string, code: string) =>
   createHmac("sha256", authSecret()).update(`${email.toLowerCase()}:${code}`).digest("hex");
 
+/** 32 bytes keyed by AUTH_SECRET, base64url: unguessable without the secret, the same for the same parts. */
+export const keyedDigest = (purpose: string, ...parts: string[]) =>
+  createHmac("sha256", authSecret()).update([purpose, ...parts].join("\u0000")).digest("base64url");
+
 export function sameHash(a: string, b: string) {
   const x = Buffer.from(a);
   const y = Buffer.from(b);

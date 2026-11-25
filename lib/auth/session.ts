@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, gt } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
@@ -48,7 +48,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     .select({ id: schema.users.id, email: schema.users.email })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
-    .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date())))
+    // kind: a cookie only ever finds a cookie's row, never an app token's (lib/auth/bearer.ts).
+    .where(and(eq(schema.sessions.id, sha256(token)), eq(schema.sessions.kind, "cookie"), gt(schema.sessions.expiresAt, new Date())))
     .limit(1);
   return rows[0] ?? null;
 });
@@ -59,7 +60,11 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
-// For Route Handlers: they answer 401 rather than redirecting.
+// For Route Handlers: they answer 401 rather than redirecting. A request carrying an
+// Authorization header is never resolved from the cookie (A4): the apps send one, and only
+// routes that call authenticate() (lib/auth/authenticate.ts) take their tokens. The web never
+// sends one, so for it nothing changes.
 export async function apiUser(): Promise<SessionUser | null> {
+  if ((await headers()).has("authorization")) return null;
   return getSessionUser();
 }

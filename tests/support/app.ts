@@ -17,10 +17,20 @@ const { registerHooks } = nodeModule as unknown as { registerHooks: (hooks: { re
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const asModule = (code: string) => ({ url: `data:text/javascript,${encodeURIComponent(code)}`, shortCircuit: true });
 
+// Plain Node can't load Next's request modules. When a test doesn't stub them, these load in
+// their place, so a module that imports them (lib/auth/session.ts, reached through
+// lib/auth/authenticate.ts) can be imported; calling one says to stub it.
+const unstubbed = (name: string) => `() => { throw new Error("${name} isn't available in plain Node: stub it in this test"); }`;
+const NEXT_DEFAULTS: Record<string, string> = {
+  "next/headers": ["cookies", "headers", "draftMode"].map((n) => `export const ${n} = ${unstubbed(`next/headers ${n}()`)};`).join("\n"),
+  "next/navigation": ["redirect", "permanentRedirect", "notFound", "forbidden", "unauthorized"].map((n) => `export const ${n} = ${unstubbed(`next/navigation ${n}()`)};`).join("\n"),
+};
+
 export function allowAppImports(stubs: Record<string, string> = {}) {
   registerHooks({
     resolve(specifier, context, next) {
       if (specifier in stubs) return asModule(stubs[specifier]);
+      if (specifier in NEXT_DEFAULTS) return asModule(NEXT_DEFAULTS[specifier]);
       if (specifier === "server-only") return asModule("export {}");
       const target = specifier.startsWith("@/") ? pathToFileURL(path.join(root, specifier.slice(2))).href : specifier;
       const local = target.startsWith(".") || target.startsWith("file:");

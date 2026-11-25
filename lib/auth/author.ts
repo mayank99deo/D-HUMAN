@@ -6,6 +6,7 @@ import { cache } from "react";
 import { slugify } from "@/lib/blog/checks";
 import { FRESH_SESSION_DAYS } from "@/lib/blog/types";
 import { db, schema } from "@/lib/db";
+import { carriesAppToken, refuseAppToken } from "./app-token";
 import { SESSION_COOKIE } from "./cookie";
 import { newId, sha256 } from "./crypto";
 import { sameOrigin } from "./origin";
@@ -79,7 +80,8 @@ async function sessionWithAge(): Promise<{ user: { id: string; email: string }; 
     .select({ id: schema.users.id, email: schema.users.email, createdAt: schema.sessions.createdAt })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
-    .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date())))
+    // kind: an app token never opens /write, even sent as a cookie (A6).
+    .where(and(eq(schema.sessions.id, sha256(token)), eq(schema.sessions.kind, "cookie"), gt(schema.sessions.expiresAt, new Date())))
     .limit(1);
   return row ? { user: { id: row.id, email: row.email }, createdAt: row.createdAt } : null;
 }
@@ -109,6 +111,8 @@ const reply = (body: unknown, status: number) => Response.json(body, { status, h
  * from another site: 403.
  */
 export async function writeGuard(request: Request, { mutation = true }: { mutation?: boolean } = {}): Promise<{ ok: true; author: Author } | { ok: false; response: Response }> {
+  // The apps never write the blog (A6): their tokens are refused before anything else.
+  if (carriesAppToken(request)) return { ok: false, response: refuseAppToken() };
   if (mutation && !sameOrigin(request)) return { ok: false, response: reply({ error: "bad_origin" }, 403) };
   const access = await writerAccess();
   if (access.kind === "signed_out") return { ok: false, response: reply({ error: "signed_out" }, 401) };
