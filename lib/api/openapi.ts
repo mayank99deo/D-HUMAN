@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.1.0";
+export const CONTRACT_VERSION = "0.2.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -101,6 +101,33 @@ export const APP_ROUTES: AppRoute[] = [
     responses: { 200: s.HomeResponse, 304: null, 401: refusal, 409: refusal },
     etag: true,
   },
+  {
+    method: "get",
+    path: "/api/fuel",
+    file: "app/api/fuel/route.ts",
+    summary: "Fuel, as the web's /fuel shows it: today's totals against targets, today's meals, the usual day, food gaps and the plan.",
+    auth: "bearer",
+    responses: { 200: s.FuelResponse, 304: null, 401: refusal, 409: refusal },
+    etag: true,
+  },
+  {
+    method: "get",
+    path: "/api/fuel/past",
+    file: "app/api/fuel/past/route.ts",
+    summary: "Past meals: the 28 days before today that have meals, newest first, labelled as the web labels them.",
+    auth: "bearer",
+    responses: { 200: s.PastMealsResponse, 304: null, 401: refusal, 409: refusal },
+    etag: true,
+  },
+  {
+    method: "get",
+    path: "/api/fuel/facts",
+    file: "app/api/fuel/facts/route.ts",
+    summary: "Facts for the meal wait screen, picked for this person. Rarely change: keep them with their ETag.",
+    auth: "bearer",
+    responses: { 200: s.FactsResponse, 304: null, 401: refusal, 409: refusal },
+    etag: true,
+  },
 ];
 
 const STATUS_WORDS: Record<number, string> = {
@@ -128,7 +155,7 @@ export function openapi() {
       { name: "X-DHuman-Client", in: "header", required: false, schema: { type: "string" }, description: "ios/1.0.0 (42). Used only for update prompts." },
     ];
     if (r.etag) parameters.push({ name: "If-None-Match", in: "header", required: false, schema: { type: "string" }, description: "The ETag of the app's copy." });
-    if (r.path.includes("{publicId}")) parameters.push({ name: "publicId", in: "path", required: true, schema: { type: "string" } });
+    for (const [, name] of r.path.matchAll(/\{(\w+)\}/g)) parameters.push({ name, in: "path", required: true, schema: { type: "string" } });
     const responses: Record<string, unknown> = {};
     for (const [status, schema] of Object.entries(r.responses)) {
       const headers = {

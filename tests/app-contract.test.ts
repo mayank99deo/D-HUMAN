@@ -53,7 +53,7 @@ async function call(method: "get" | "post" | "delete", p: string, o: { token?: s
   if (o.body !== undefined && route.request && !o.bad) route.request.parse(o.body);
   g.__headers = headers;
   g.__cookie = o.cookie;
-  const url = p.replace("{publicId}", o.params?.publicId ?? "x");
+  const url = p.replace(/\{(\w+)\}/g, (_m, k: string) => o.params?.[k] ?? "x");
   const res = await handlers.get(`${method} ${p}`)!(new Request(`${SITE}${url}`, { method: method.toUpperCase(), headers, body: o.body === undefined ? undefined : JSON.stringify(o.body) }), o.params ? { params: Promise.resolve(o.params) } : undefined);
   const text = await res.text();
   const label = `${method.toUpperCase()} ${p} → ${res.status}`;
@@ -105,13 +105,22 @@ describe("the apps' contract", () => {
     const meFirst = await call("get", "/api/me", { token: t });
     await call("get", "/api/me", { token: t, etag: meFirst.etag });
     await call("get", "/api/me");
-    await call("get", "/api/home", { token: t });
+    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts"];
+    for (const p of screens) await call("get", p, { token: t });
     const d = await db();
     const user = (await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "contract@example.com")))[0].id;
     await d.update(schema.profiles).set({ name: "Asha", birthYear: 1990, primaryActivity: "running", activities: ["running"], consentAt: new Date(), onboardedAt: new Date() }).where(eq(schema.profiles.userId, user));
-    const homeFirst = await call("get", "/api/home", { token: t });
-    await call("get", "/api/home", { token: t, etag: homeFirst.etag });
-    await call("get", "/api/home");
+    for (const day of [0, -1]) {
+      await d.insert(schema.foodLogs).values({
+        id: randomUUID(), userId: user, localDate: new Date(Date.now() + day * 86_400_000 + 5.5 * 3_600_000).toISOString().slice(0, 10), meal: "lunch", source: "text", title: "Dal, two rotis",
+        items: [{ name: "Dal", portion: "1 bowl" }], kcal: 420, proteinG: 18, carbsG: 60, fatG: 10, fibreG: 8, micros: { iron_mg: 3, tip: "Add curd.", lang: "en" },
+      });
+    }
+    for (const p of screens) {
+      const first = await call("get", p, { token: t });
+      await call("get", p, { token: t, etag: first.etag });
+      await call("get", p);
+    }
 
     // Devices: 200, 304, 401, 403 (a web cookie), 404, and ending one.
     const second = await signIn("contract@example.com");

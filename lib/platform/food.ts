@@ -234,7 +234,8 @@ export function mealView(l: FoodLog): MealView {
   };
 }
 
-const clockTime = (at: Date, tz: string | null | undefined) => {
+/** "8:40 am" on the person's clock. */
+export const clockTime = (at: Date, tz: string | null | undefined) => {
   const f = (zone: string) => new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone: zone }).format(at);
   try {
     return f(tz || "Asia/Kolkata");

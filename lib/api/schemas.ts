@@ -192,3 +192,79 @@ export const HomeResponse = z.strictObject({
   }),
   stack: z.strictObject({ state: z.enum(HOME_STACK_STATES), line: S, button: S, id: S.nullable() }),
 });
+
+// ── Shared pieces ────────────────────────────────────────────────────────────
+
+export const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export const MEAL_SOURCES = ["photo", "voice", "text"] as const;
+export const PLAN_REFUSALS = ["free_reads_used", "pass_reads_used", "free_meals_used", "meals_today_used"] as const;
+export const MICRO_KEYS = ["iron_mg", "calcium_mg", "magnesium_mg", "zinc_mg", "b12_ug", "folate_ug", "vitamin_c_mg", "vitamin_d_iu"] as const;
+
+export const MealJson = z
+  .strictObject({
+    id: S,
+    meal: z.enum(MEAL_SLOTS),
+    title: S,
+    source: S.describe("photo, voice or text; a repeat keeps its first meal's."),
+    kcal: N,
+    proteinG: N,
+    confidence: S.nullable(),
+    tip: S.nullable(),
+    items: z.array(S).describe("'Name, portion', as the web lists them."),
+    demo: z.boolean().describe("Written from a template because AI is off on this server."),
+    time: S.describe("When it was eaten, on the person's clock: '8:40 am'."),
+    at: IsoTime.describe("When it was eaten: a queued meal's own time, else when it was logged."),
+    lang: S.nullable().describe("The language the title and tip are written in, as a BCP 47 tag ('hi', 'hi-Latn', 'en')."),
+  })
+  .describe("A logged meal: estimates, never measurements.");
+
+export const PlanJson = z
+  .strictObject({
+    pass: z.strictObject({ until: S.describe("'14 Dec 2026'"), endsAt: IsoTime }).nullable(),
+    queued: z.strictObject({ until: S, endsAt: IsoTime }).nullable().describe("A pass bought ahead, starting when the current one ends."),
+    reads: z.strictObject({ used: Int, limit: Int, free: z.boolean().describe("true: the reads the person started with; false: a pass's.") }),
+    meals: z.strictObject({ today: Int, perDay: Int, used: Int, freeLimit: Int.nullable().describe("Null with a pass.") }),
+    readBlock: z.enum(PLAN_REFUSALS).nullable().describe("Why one more read isn't allowed now, or null."),
+    mealBlock: z.enum(PLAN_REFUSALS).nullable().describe("Why one more meal log isn't allowed now, or null."),
+    canBuy: z.boolean(),
+    paymentsOn: z.boolean(),
+  })
+  .describe("What the person may use. No words and no price: the apps write their own, with the store's price.");
+
+// ── Fuel ─────────────────────────────────────────────────────────────────────
+
+const Macros5 = z.strictObject({ kcal: N, proteinG: N, carbsG: N, fatG: N, fibreG: N });
+
+export const FuelResponse = z.strictObject({
+  day: IsoDate,
+  totals: Macros5.describe("Today so far, from today's meals."),
+  targets: Macros5.extend({ basis: z.array(S).describe("How each target was set, in plain words."), estimated: z.boolean().describe("Height, weight or age was missing.") }),
+  micros: z.array(
+    z.strictObject({
+      key: z.enum(MICRO_KEYS),
+      label: S,
+      pct: Int.nullable().describe("Share of today's need. Null for vitamin D, which shows in IU only."),
+      iu: Int.nullable().describe("Vitamin D only: IU from today's food."),
+    }),
+  ),
+  meals: z.array(MealJson).describe("Today's meals, in the order they were logged."),
+  usualDay: z
+    .strictObject({ description: S, patterns: z.array(S), short: z.boolean().describe("Too light to count: under 60% of the energy target.") })
+    .nullable(),
+  gaps: z.array(z.strictObject({ label: S, pct: Int })).max(4).describe("What the person's food runs shortest of, lowest first. Empty without enough data."),
+  gapSource: z.enum(["logs", "typical_day", "none"]),
+  stackReady: z.boolean().describe("No report and no stack yet, but the meals are enough to build one."),
+  plan: PlanJson,
+  aiOff: z.boolean(),
+});
+
+export const FactsResponse = z.strictObject({
+  facts: z.array(z.strictObject({ kicker: S, text: S, scope: S.describe("Whom the fact is for.") })),
+  categories: z.array(S).describe("The person's bands, shown circling the wait screen."),
+});
+
+export const PastMealsResponse = z.strictObject({
+  day: IsoDate.describe("Today; the list holds the 28 days before it."),
+  days: z.array(z.strictObject({ date: IsoDate, label: S.describe("'Yesterday' or 'Sat, 14 Nov'."), meals: z.array(MealJson) })).describe("Only days with meals, newest first."),
+  target: z.strictObject({ kcal: N, proteinG: N }),
+});

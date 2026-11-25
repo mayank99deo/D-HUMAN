@@ -123,13 +123,25 @@ export function formatDay(at: Date, tz: string | null | undefined): string {
 
 /** Everything the screens show about a person's plan, with dates already in their time zone. */
 export async function planView(userId: string, timezone: string | null | undefined): Promise<PlanView> {
+  return (await planDetail(userId, timezone)).view;
+}
+
+/**
+ * planView, plus the moments behind its formatted dates, for the apps (planJson in
+ * lib/platform/views/parts.ts). Kept beside the view, not in it: the web's screens get the
+ * view exactly as before.
+ */
+export async function planDetail(
+  userId: string,
+  timezone: string | null | undefined,
+): Promise<{ view: PlanView; passEndsAt: Date | null; queuedEndsAt: Date | null }> {
   const d = await db();
   const now = new Date();
   const today = localDate(timezone, now);
   const [pass, until] = await Promise.all([activePass(d, userId, now), coveredUntil(d, userId)]);
   const c = await countsFor(d, userId, pass, today);
   const queued = pass && until && until > pass.endsAt ? until : null;
-  return {
+  const view: PlanView = {
     pass: pass ? { until: formatDay(pass.endsAt, timezone) } : null,
     queuedUntil: queued ? formatDay(queued, timezone) : null,
     reads: pass ? { used: c.readsInPass, limit: PLAN.passReads, free: false } : { used: c.readsTotal, limit: PLAN.freeReads, free: true },
@@ -139,6 +151,7 @@ export async function planView(userId: string, timezone: string | null | undefin
     canBuy: canBuy(until && until > now ? { endsAt: until } : null, now),
     paymentsOn: paymentsOn(),
   };
+  return { view, passEndsAt: pass?.endsAt ?? null, queuedEndsAt: queued };
 }
 
 /** Paid passes, newest first, for Settings. */

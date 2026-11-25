@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
   },
   "servers": [
@@ -2104,6 +2104,1085 @@
                     "fuel",
                     "events",
                     "stack"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not onboarded yet.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fuel": {
+      "get": {
+        "summary": "Fuel, as the web's /fuel shows it: today's totals against targets, today's meals, the usual day, food gaps and the plan.",
+        "operationId": "getApiFuel",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                      "description": "A calendar day, YYYY-MM-DD, in the person's own time zone."
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "type": "number"
+                        },
+                        "carbsG": {
+                          "type": "number"
+                        },
+                        "fatG": {
+                          "type": "number"
+                        },
+                        "fibreG": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kcal",
+                        "proteinG",
+                        "carbsG",
+                        "fatG",
+                        "fibreG"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Today so far, from today's meals."
+                    },
+                    "targets": {
+                      "type": "object",
+                      "properties": {
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "type": "number"
+                        },
+                        "carbsG": {
+                          "type": "number"
+                        },
+                        "fatG": {
+                          "type": "number"
+                        },
+                        "fibreG": {
+                          "type": "number"
+                        },
+                        "basis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "How each target was set, in plain words."
+                        },
+                        "estimated": {
+                          "type": "boolean",
+                          "description": "Height, weight or age was missing."
+                        }
+                      },
+                      "required": [
+                        "kcal",
+                        "proteinG",
+                        "carbsG",
+                        "fatG",
+                        "fibreG",
+                        "basis",
+                        "estimated"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "micros": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "iron_mg",
+                              "calcium_mg",
+                              "magnesium_mg",
+                              "zinc_mg",
+                              "b12_ug",
+                              "folate_ug",
+                              "vitamin_c_mg",
+                              "vitamin_d_iu"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "pct": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Share of today's need. Null for vitamin D, which shows in IU only."
+                          },
+                          "iu": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Vitamin D only: IU from today's food."
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "pct",
+                          "iu"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "meals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "meal": {
+                            "type": "string",
+                            "enum": [
+                              "breakfast",
+                              "lunch",
+                              "dinner",
+                              "snack"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "photo, voice or text; a repeat keeps its first meal's."
+                          },
+                          "kcal": {
+                            "type": "number"
+                          },
+                          "proteinG": {
+                            "type": "number"
+                          },
+                          "confidence": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "tip": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "'Name, portion', as the web lists them."
+                          },
+                          "demo": {
+                            "type": "boolean",
+                            "description": "Written from a template because AI is off on this server."
+                          },
+                          "time": {
+                            "type": "string",
+                            "description": "When it was eaten, on the person's clock: '8:40 am'."
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                            "description": "When it was eaten: a queued meal's own time, else when it was logged."
+                          },
+                          "lang": {
+                            "description": "The language the title and tip are written in, as a BCP 47 tag ('hi', 'hi-Latn', 'en').",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "meal",
+                          "title",
+                          "source",
+                          "kcal",
+                          "proteinG",
+                          "confidence",
+                          "tip",
+                          "items",
+                          "demo",
+                          "time",
+                          "at",
+                          "lang"
+                        ],
+                        "additionalProperties": false,
+                        "description": "A logged meal: estimates, never measurements."
+                      },
+                      "description": "Today's meals, in the order they were logged."
+                    },
+                    "usualDay": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string"
+                            },
+                            "patterns": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "short": {
+                              "type": "boolean",
+                              "description": "Too light to count: under 60% of the energy target."
+                            }
+                          },
+                          "required": [
+                            "description",
+                            "patterns",
+                            "short"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "gaps": {
+                      "maxItems": 4,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "pct": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "What the person's food runs shortest of, lowest first. Empty without enough data."
+                    },
+                    "gapSource": {
+                      "type": "string",
+                      "enum": [
+                        "logs",
+                        "typical_day",
+                        "none"
+                      ]
+                    },
+                    "stackReady": {
+                      "type": "boolean",
+                      "description": "No report and no stack yet, but the meals are enough to build one."
+                    },
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "pass": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "until": {
+                                  "type": "string",
+                                  "description": "'14 Dec 2026'"
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "A moment, ISO 8601 in UTC."
+                                }
+                              },
+                              "required": [
+                                "until",
+                                "endsAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "queued": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "until": {
+                                  "type": "string"
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "A moment, ISO 8601 in UTC."
+                                }
+                              },
+                              "required": [
+                                "until",
+                                "endsAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "A pass bought ahead, starting when the current one ends."
+                        },
+                        "reads": {
+                          "type": "object",
+                          "properties": {
+                            "used": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "limit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "free": {
+                              "type": "boolean",
+                              "description": "true: the reads the person started with; false: a pass's."
+                            }
+                          },
+                          "required": [
+                            "used",
+                            "limit",
+                            "free"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "meals": {
+                          "type": "object",
+                          "properties": {
+                            "today": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "perDay": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "used": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "freeLimit": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Null with a pass."
+                            }
+                          },
+                          "required": [
+                            "today",
+                            "perDay",
+                            "used",
+                            "freeLimit"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "readBlock": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "free_reads_used",
+                                "pass_reads_used",
+                                "free_meals_used",
+                                "meals_today_used"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Why one more read isn't allowed now, or null."
+                        },
+                        "mealBlock": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "free_reads_used",
+                                "pass_reads_used",
+                                "free_meals_used",
+                                "meals_today_used"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Why one more meal log isn't allowed now, or null."
+                        },
+                        "canBuy": {
+                          "type": "boolean"
+                        },
+                        "paymentsOn": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pass",
+                        "queued",
+                        "reads",
+                        "meals",
+                        "readBlock",
+                        "mealBlock",
+                        "canBuy",
+                        "paymentsOn"
+                      ],
+                      "additionalProperties": false,
+                      "description": "What the person may use. No words and no price: the apps write their own, with the store's price."
+                    },
+                    "aiOff": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "totals",
+                    "targets",
+                    "micros",
+                    "meals",
+                    "usualDay",
+                    "gaps",
+                    "gapSource",
+                    "stackReady",
+                    "plan",
+                    "aiOff"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not onboarded yet.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fuel/past": {
+      "get": {
+        "summary": "Past meals: the 28 days before today that have meals, newest first, labelled as the web labels them.",
+        "operationId": "getApiFuelPast",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                      "description": "Today; the list holds the 28 days before it."
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                            "description": "A calendar day, YYYY-MM-DD, in the person's own time zone."
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "'Yesterday' or 'Sat, 14 Nov'."
+                          },
+                          "meals": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "meal": {
+                                  "type": "string",
+                                  "enum": [
+                                    "breakfast",
+                                    "lunch",
+                                    "dinner",
+                                    "snack"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "description": "photo, voice or text; a repeat keeps its first meal's."
+                                },
+                                "kcal": {
+                                  "type": "number"
+                                },
+                                "proteinG": {
+                                  "type": "number"
+                                },
+                                "confidence": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "tip": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "'Name, portion', as the web lists them."
+                                },
+                                "demo": {
+                                  "type": "boolean",
+                                  "description": "Written from a template because AI is off on this server."
+                                },
+                                "time": {
+                                  "type": "string",
+                                  "description": "When it was eaten, on the person's clock: '8:40 am'."
+                                },
+                                "at": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "When it was eaten: a queued meal's own time, else when it was logged."
+                                },
+                                "lang": {
+                                  "description": "The language the title and tip are written in, as a BCP 47 tag ('hi', 'hi-Latn', 'en').",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "meal",
+                                "title",
+                                "source",
+                                "kcal",
+                                "proteinG",
+                                "confidence",
+                                "tip",
+                                "items",
+                                "demo",
+                                "time",
+                                "at",
+                                "lang"
+                              ],
+                              "additionalProperties": false,
+                              "description": "A logged meal: estimates, never measurements."
+                            }
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "label",
+                          "meals"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "Only days with meals, newest first."
+                    },
+                    "target": {
+                      "type": "object",
+                      "properties": {
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kcal",
+                        "proteinG"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "days",
+                    "target"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not onboarded yet.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fuel/facts": {
+      "get": {
+        "summary": "Facts for the meal wait screen, picked for this person. Rarely change: keep them with their ETag.",
+        "operationId": "getApiFuelFacts",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kicker": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "description": "Whom the fact is for."
+                          }
+                        },
+                        "required": [
+                          "kicker",
+                          "text",
+                          "scope"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The person's bands, shown circling the wait screen."
+                    }
+                  },
+                  "required": [
+                    "facts",
+                    "categories"
                   ],
                   "additionalProperties": false
                 }
