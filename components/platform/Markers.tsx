@@ -3,31 +3,12 @@ import { markerDef, type MarkerStatus } from "@/lib/domain/markers";
 import { ASK_COPY } from "./ask-copy";
 import { askAboutMarker, markerPrefill } from "./ask-starters";
 import { AskAbout } from "./AskAbout";
+import { fmt, rangeText, statusGlyph, statusWords } from "./marker-text";
 
-// Range rails and marker tiles. The band is the lab's range; the pin is you.
+// Range rails and marker tiles. The band is the lab's range; the pin is you. The words and
+// numbers come from marker-text.ts, which the apps' view builders use too.
 
-const fmt = (n: number | null | undefined) =>
-  n == null ? "" : Math.abs(n) >= 100 ? Math.round(n).toLocaleString("en-IN") : String(+n.toFixed(n % 1 === 0 ? 0 : Math.abs(n) < 10 ? 2 : 1));
-
-export function statusGlyph(status: string) {
-  if (status === "in_range") return "glyph-in";
-  if (status === "edge_low" || status === "edge_high") return "glyph-edge";
-  if (status === "low" || status === "high") return "glyph-out";
-  return "glyph-unknown";
-}
-
-export function statusWords(status: string) {
-  return (
-    {
-      in_range: "In range",
-      edge_low: "Low end of range",
-      edge_high: "High end of range",
-      low: "Below range",
-      high: "Above range",
-      unknown: "No range printed",
-    }[status] ?? "No range printed"
-  );
-}
+export { rangeText, statusGlyph, statusWords };
 
 const PIN: Record<string, string> = {
   in_range: "var(--color-serum)",
@@ -64,19 +45,6 @@ export function RangeRail({ value, low, high, status, className = "" }: { value:
       <div className="absolute top-0 h-6 w-[3px] -translate-x-1/2" style={{ left: `${p}%`, background: PIN[status] ?? "var(--color-graphite)" }} />
     </div>
   );
-}
-
-export function rangeText(m: Pick<Marker, "refLow" | "refHigh" | "refText" | "rangeSource">) {
-  const r =
-    m.refLow != null && m.refHigh != null
-      ? `${fmt(m.refLow)}–${fmt(m.refHigh)}`
-      : m.refLow != null
-        ? `above ${fmt(m.refLow)}`
-        : m.refHigh != null
-          ? `below ${fmt(m.refHigh)}`
-          : m.refText || "no range printed";
-  if (m.rangeSource === "derived") return `${r} (typical range; calculated from your results)`;
-  return m.rangeSource === "catalog" ? `${r} (typical range)` : r;
 }
 
 export function Trend({ now, before }: { now: number | null; before?: number }) {

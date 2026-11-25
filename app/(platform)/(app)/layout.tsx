@@ -7,44 +7,43 @@ import { EmailTap } from "@/components/platform/EmailTap";
 import { Nav, NavView } from "@/components/platform/Nav";
 import { ScrollReset } from "@/components/platform/ScrollReset";
 import { Tour } from "@/components/platform/Tour";
-import { askGate } from "@/lib/ask/types";
-import { getSessionUser, type SessionUser } from "@/lib/auth/session";
-import type { Profile } from "@/lib/db/schema";
-import { getProfile, personaFor } from "@/lib/platform/profile";
+import { getSessionUser } from "@/lib/auth/session";
+import { getProfile } from "@/lib/platform/profile";
+import { meView } from "@/lib/platform/views/me";
 
 export const metadata: Metadata = {
   title: { default: "D-Human", template: "%s | D-Human" },
   robots: { index: false },
 };
 
-// Ask is open to this person: founders first, then onboarded adults (askGate). The control,
-// the tour's Ask stop and the sheet all follow this one answer.
-const askOpen = (user: SessionUser | null, profile: Profile | null) =>
-  !!user && !!profile && askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok";
-
-async function NavWithUser() {
+// Who is signed in, as meView works it out (the apps' GET /api/me sends the same), or null.
+// Ask's control, the tour's Ask stop and the sheet all follow its one askOpen answer.
+// Cached user and profile reads, so the three parts below cost no extra queries.
+async function me() {
   const user = await getSessionUser();
   const profile = user ? await getProfile(user.id) : null;
-  const initial = (profile?.name?.trim()[0] ?? user?.email[0] ?? "D").toUpperCase();
-  return <Nav initial={initial} ask={askOpen(user, profile)} />;
+  return user ? meView(user, profile) : null;
+}
+
+async function NavWithUser() {
+  const m = await me();
+  return <Nav initial={m?.initial ?? "D"} ask={m?.askOpen ?? false} />;
 }
 
 // Ask's host: it loads the sheet's code only on intent, so nothing here holds up the page.
 async function AskForUser() {
-  const user = await getSessionUser();
-  const profile = user ? await getProfile(user.id) : null;
-  if (!user || !profile || !askOpen(user, profile)) return null;
-  return <AskHost who={user.id} region={askRegionOf(profile.timezone)} readLanguage={isReadLanguage(profile.language) ? profile.language : "en"} />;
+  const m = await me();
+  if (!m?.profile || !m.askOpen) return null;
+  return <AskHost who={m.user.id} region={askRegionOf(m.profile.timezone)} readLanguage={isReadLanguage(m.profile.language) ? m.profile.language : "en"} />;
 }
 
 // The first-run tour, for onboarded people. It waits for the tour to be done on
 // the server; people onboarded before it shipped were marked done by migration
-// 0006. Same cached user and profile reads as the nav, so no extra queries.
+// 0006.
 async function TourForUser() {
-  const user = await getSessionUser();
-  const profile = user ? await getProfile(user.id) : null;
-  if (!user || !profile?.onboardedAt) return null;
-  return <Tour who={user.id} pending={!profile.tourDoneAt} name={personaFor(profile).firstName} ask={askOpen(user, profile)} />;
+  const m = await me();
+  if (!m?.onboarded || !m.persona) return null;
+  return <Tour who={m.user.id} pending={m.tourPending} name={m.persona.firstName} ask={m.askOpen} />;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
