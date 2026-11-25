@@ -23,7 +23,8 @@ import { newId, sameHash, sha256 } from "./crypto";
 // verifyCode, which uses one of that email's tries. Twelve digits or more means a review
 // code can never be mistaken for a six-digit emailed one.
 
-const WINDOW = "review-window"; // login_codes.code_hash of a window; a real code's hash is 64 hex
+/** login_codes.code_hash of a review window; a real code's hash is 64 hex. No email is sent for one, so the email budget skips it. */
+export const REVIEW_WINDOW = "review-window";
 const TEN_MINUTES = 10 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 const MAX_TRIES = 5;
@@ -55,7 +56,7 @@ async function openWindow(email: string, now: number): Promise<string | null> {
     const [open] = await tx
       .select({ id: codes.id })
       .from(codes)
-      .where(and(eq(codes.email, email), eq(codes.codeHash, WINDOW), gt(codes.expiresAt, new Date(now)), lt(codes.attempts, MAX_TRIES)))
+      .where(and(eq(codes.email, email), eq(codes.codeHash, REVIEW_WINDOW), gt(codes.expiresAt, new Date(now)), lt(codes.attempts, MAX_TRIES)))
       .orderBy(desc(codes.createdAt))
       .limit(1);
     if (open) return open.id;
@@ -65,7 +66,7 @@ async function openWindow(email: string, now: number): Promise<string | null> {
       .where(and(eq(codes.email, email), gt(codes.createdAt, new Date(now - 24 * HOUR))));
     if (recent.hour >= MAX_CODES_PER_HOUR || recent.day >= MAX_CODES_PER_DAY) return null;
     const id = newId();
-    await tx.insert(codes).values({ id, email, codeHash: WINDOW, expiresAt: new Date(now + TEN_MINUTES), consumedAt: new Date(now) });
+    await tx.insert(codes).values({ id, email, codeHash: REVIEW_WINDOW, expiresAt: new Date(now + TEN_MINUTES), consumedAt: new Date(now) });
     return id;
   });
 }
