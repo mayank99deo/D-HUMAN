@@ -172,6 +172,16 @@ export const APP_ROUTES: AppRoute[] = [
     etag: true,
   },
   {
+    method: "get",
+    path: "/api/stack",
+    file: "app/api/stack/route.ts",
+    summary:
+      "The Stack, as the web's /stack shows it: the stack, why it's out of date or held, the hold's words, flagged results, and a fit for every budget slab. Held or out of date: no plan, no doses.",
+    auth: "bearer",
+    responses: { 200: s.StackResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
+    etag: true,
+  },
+  {
     method: "post",
     path: "/api/food",
     file: "app/api/food/route.ts",

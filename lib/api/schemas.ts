@@ -366,3 +366,61 @@ export const ReadResponse = z.strictObject({
   }),
   testTips: z.array(S),
 });
+
+// ── Stack ────────────────────────────────────────────────────────────────────
+
+const BUDGET_SLABS = ["under_1000", "1000_2000", "2000_3000", "3000_4000", "4000_5000", "5000_plus", "not_sure"] as const;
+export const STACK_BUDGET_IDS = BUDGET_SLABS;
+
+const FitJson = z.strictObject({
+  included: z.array(Int).describe("Item indexes that fit, in priority order."),
+  later: z.array(Int).describe("Item indexes for \x27when your budget allows\x27."),
+  pick: z.array(Int.nullable()).describe("The brand picked for each item (an index into its brands), or null."),
+  cost: z.array(N.nullable()).describe("Monthly rupees for each item, or null when unknown."),
+  typical: z.array(z.boolean()).describe("The cost is a typical price, not a brand\x27s."),
+  total: N,
+  cap: N.nullable(),
+});
+
+const StackPlanJson = z.strictObject({
+  items: z.array(
+    z.strictObject({
+      nutrient: S, dose: S, why: S.nullable(), markers: z.array(S), dietGap: S.nullable(), form: S.nullable(), timing: S.nullable(), duration: S.nullable(), cautions: S.nullable(), rule: S.nullable(),
+      brands: z.array(z.strictObject({ brand: S, product: S.nullable(), url: S.nullable(), note: S.nullable(), priceInr: N.nullable(), pack: S.nullable(), monthlyInr: N.nullable() })),
+    }),
+  ).describe("In priority order: results outside range, then edge of range, then food gaps."),
+  skip: z.array(z.strictObject({ name: S, why: S.nullable() })),
+  foodFirst: z.array(S),
+  seeDoctor: z.array(S),
+  gaps: z.array(z.strictObject({ key: S, label: S, pct: N, iu: N.nullable(), outcome: z.enum(["stack", "food", "test", "doctor"]), note: S, lead: S, more: S.nullable().describe("The rest of a long note, behind More."), rule: S.nullable() })),
+  gapsBasis: z.strictObject({ source: z.enum(["logs", "typical_day"]), days: N }).nullable(),
+});
+
+export const StackResponse = z.discriminatedUnion("state", [
+  z.strictObject({ state: z.literal("start_with_food"), fullDays: Int, usualDayShort: z.boolean() }),
+  z.strictObject({
+    state: z.literal("stack"),
+    stack: z
+      .strictObject({
+        id: S,
+        status: z.enum(["building", "ready", "failed"]),
+        error: S.nullable(),
+        plan: StackPlanJson.nullable().describe("Null while building or failed, and when the stack is held or out of date: then no doses, anywhere."),
+        demo: z.boolean(),
+        made: IsoTime,
+      })
+      .nullable()
+      .describe("Null before the first build."),
+    staleReason: z.enum(["report", "profile"]).nullable(),
+    basis: z.enum(["report", "meals"]),
+    hasReport: z.boolean(),
+    body: S.describe("A meals stack\x27s basis: \x2724, 175 cm, 70 kg, regular lifter\x27."),
+    markerNames: z.record(S, S),
+    budget: z.enum(BUDGET_SLABS).nullable(),
+    fits: z.record(z.enum(BUDGET_SLABS), FitJson).nullable().describe("The plan fitted to every budget slab, so a change of budget re-fits on the phone. Null when there\x27s no plan to show."),
+    flagged: z.array(z.strictObject({ name: S, urgent: z.boolean() })).describe("Results kept out of the stack, from the newest report."),
+    hold: z.enum(["urgent", "pregnant"]).nullable(),
+    holdLine: S.nullable().describe("The hold\x27s words, verbatim (G13). Show it at the top whenever hold is set."),
+    aiOff: z.boolean(),
+  }),
+]);

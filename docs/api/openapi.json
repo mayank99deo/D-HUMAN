@@ -5084,6 +5084,761 @@
         }
       }
     },
+    "/api/stack": {
+      "get": {
+        "summary": "The Stack, as the web's /stack shows it: the stack, why it's out of date or held, the hold's words, flagged results, and a fit for every budget slab. Held or out of date: no plan, no doses.",
+        "operationId": "getApiStack",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "start_with_food"
+                        },
+                        "fullDays": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "usualDayShort": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "fullDays",
+                        "usualDayShort"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "stack"
+                        },
+                        "stack": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "building",
+                                    "ready",
+                                    "failed"
+                                  ]
+                                },
+                                "error": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "plan": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "nutrient": {
+                                                "type": "string"
+                                              },
+                                              "dose": {
+                                                "type": "string"
+                                              },
+                                              "why": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "markers": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "dietGap": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "form": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "timing": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "duration": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "cautions": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "rule": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "brands": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "brand": {
+                                                      "type": "string"
+                                                    },
+                                                    "product": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "url": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "note": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "priceInr": {
+                                                      "type": [
+                                                        "number",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "pack": {
+                                                      "type": [
+                                                        "string",
+                                                        "null"
+                                                      ]
+                                                    },
+                                                    "monthlyInr": {
+                                                      "type": [
+                                                        "number",
+                                                        "null"
+                                                      ]
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "brand",
+                                                    "product",
+                                                    "url",
+                                                    "note",
+                                                    "priceInr",
+                                                    "pack",
+                                                    "monthlyInr"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "nutrient",
+                                              "dose",
+                                              "why",
+                                              "markers",
+                                              "dietGap",
+                                              "form",
+                                              "timing",
+                                              "duration",
+                                              "cautions",
+                                              "rule",
+                                              "brands"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          "description": "In priority order: results outside range, then edge of range, then food gaps."
+                                        },
+                                        "skip": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "why": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "why"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "foodFirst": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "seeDoctor": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "gaps": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "key": {
+                                                "type": "string"
+                                              },
+                                              "label": {
+                                                "type": "string"
+                                              },
+                                              "pct": {
+                                                "type": "number"
+                                              },
+                                              "iu": {
+                                                "type": [
+                                                  "number",
+                                                  "null"
+                                                ]
+                                              },
+                                              "outcome": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "stack",
+                                                  "food",
+                                                  "test",
+                                                  "doctor"
+                                                ]
+                                              },
+                                              "note": {
+                                                "type": "string"
+                                              },
+                                              "lead": {
+                                                "type": "string"
+                                              },
+                                              "more": {
+                                                "description": "The rest of a long note, behind More.",
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "rule": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "key",
+                                              "label",
+                                              "pct",
+                                              "iu",
+                                              "outcome",
+                                              "note",
+                                              "lead",
+                                              "more",
+                                              "rule"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "gapsBasis": {
+                                          "anyOf": [
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "source": {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "logs",
+                                                    "typical_day"
+                                                  ]
+                                                },
+                                                "days": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "source",
+                                                "days"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "items",
+                                        "skip",
+                                        "foodFirst",
+                                        "seeDoctor",
+                                        "gaps",
+                                        "gapsBasis"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Null while building or failed, and when the stack is held or out of date: then no doses, anywhere."
+                                },
+                                "demo": {
+                                  "type": "boolean"
+                                },
+                                "made": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "A moment, ISO 8601 in UTC."
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "status",
+                                "error",
+                                "plan",
+                                "demo",
+                                "made"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null before the first build."
+                        },
+                        "staleReason": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "report",
+                                "profile"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": [
+                            "report",
+                            "meals"
+                          ]
+                        },
+                        "hasReport": {
+                          "type": "boolean"
+                        },
+                        "body": {
+                          "type": "string",
+                          "description": "A meals stack's basis: '24, 175 cm, 70 kg, regular lifter'."
+                        },
+                        "markerNames": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "budget": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "under_1000",
+                                "1000_2000",
+                                "2000_3000",
+                                "3000_4000",
+                                "4000_5000",
+                                "5000_plus",
+                                "not_sure"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "fits": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "enum": [
+                                  "under_1000",
+                                  "1000_2000",
+                                  "2000_3000",
+                                  "3000_4000",
+                                  "4000_5000",
+                                  "5000_plus",
+                                  "not_sure"
+                                ]
+                              },
+                              "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                  "included": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "description": "Item indexes that fit, in priority order."
+                                  },
+                                  "later": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "description": "Item indexes for 'when your budget allows'."
+                                  },
+                                  "pick": {
+                                    "type": "array",
+                                    "items": {
+                                      "anyOf": [
+                                        {
+                                          "type": "integer",
+                                          "minimum": -9007199254740991,
+                                          "maximum": 9007199254740991
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "description": "The brand picked for each item (an index into its brands), or null."
+                                  },
+                                  "cost": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "description": "Monthly rupees for each item, or null when unknown."
+                                  },
+                                  "typical": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "boolean"
+                                    },
+                                    "description": "The cost is a typical price, not a brand's."
+                                  },
+                                  "total": {
+                                    "type": "number"
+                                  },
+                                  "cap": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "included",
+                                  "later",
+                                  "pick",
+                                  "cost",
+                                  "typical",
+                                  "total",
+                                  "cap"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "required": [
+                                "under_1000",
+                                "1000_2000",
+                                "2000_3000",
+                                "3000_4000",
+                                "4000_5000",
+                                "5000_plus",
+                                "not_sure"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The plan fitted to every budget slab, so a change of budget re-fits on the phone. Null when there's no plan to show."
+                        },
+                        "flagged": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "urgent": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "urgent"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "description": "Results kept out of the stack, from the newest report."
+                        },
+                        "hold": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "urgent",
+                                "pregnant"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "holdLine": {
+                          "description": "The hold's words, verbatim (G13). Show it at the top whenever hold is set.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "aiOff": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "stack",
+                        "staleReason",
+                        "basis",
+                        "hasReport",
+                        "body",
+                        "markerNames",
+                        "budget",
+                        "fits",
+                        "flagged",
+                        "hold",
+                        "holdLine",
+                        "aiOff"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/food": {
       "post": {
         "summary": "Log a meal from words, a photo or speech. Idempotent on `key`. 402 carries `refusal`; 409 is not_onboarded, consent_needed or in_progress (with Retry-After: send the same try again).",

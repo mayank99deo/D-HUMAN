@@ -1,5 +1,9 @@
 import { after } from "next/server";
+import { viewResponse } from "@/lib/api/respond";
+import { stackJson } from "@/lib/api/views/stack";
 import { AiUnavailableError } from "@/lib/ai/client";
+import { apiMember } from "@/lib/platform/api-member";
+import { stackData, stackView } from "@/lib/platform/views/stack";
 import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -7,6 +11,16 @@ import { STACK_MESSAGES, startStack } from "@/lib/platform/stack";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 300;
+
+// The apps' Stack, from the same loader and builder as the web's /stack page
+// (lib/platform/views/stack.ts): the stack, why it's out of date or held, the hold's words, the
+// flagged results, and a fit for every budget slab. A held or out-of-date stack carries no
+// doses. Apps only (a web cookie gets 403 bearer_required); private, no-store, with an ETag.
+export async function GET(request: Request) {
+  const member = await apiMember(request);
+  if (!member.ok) return member.response;
+  return viewResponse(request, stackJson(stackView(member, await stackData(member))));
+}
 
 export async function POST(request: Request) {
   const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app

@@ -136,7 +136,7 @@ describe("the apps' contract", () => {
     const meFirst = await call("get", "/api/me", { token: t });
     await call("get", "/api/me", { token: t, etag: meFirst.etag });
     await call("get", "/api/me");
-    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload", "/api/reports", "/api/reports/{id}/read"];
+    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload", "/api/reports", "/api/reports/{id}/read", "/api/stack"];
     const reportId = randomUUID();
     for (const p of screens) await call("get", p, { token: t, params: { id: reportId } });
     const d = await db();
