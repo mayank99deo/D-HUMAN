@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { allowAppImports, tempDatabase } from "./support/app.ts";
 
 type Handler = (request: Request, ctx?: unknown) => Promise<Response>;
-type G = { __headers?: Headers; __cookie?: string; __after: (() => unknown)[] };
+type G = { __headers?: Headers; __cookie?: string; __after: (() => unknown)[]; __aiMode?: string; __meal?: "food" | "not_food" | "refuse" | "fail" };
 const g = globalThis as unknown as G;
 g.__after = [];
 
@@ -21,6 +21,18 @@ allowAppImports({
     export const cookies = async () => ({ get: (name) => (globalThis.__cookie ? { name, value: globalThis.__cookie } : undefined), set: () => {}, delete: () => {} });`,
   "next/server": "export const after = (fn) => { globalThis.__after.push(fn); }; export const connection = async () => {};",
   "@/lib/email/send": "export const sendFounderAlert = async () => ({ status: 'sent' });",
+  // Claude, as each meal answer needs: off by default, as on a server with no key.
+  "@/lib/ai/client": `export class AiRefusalError extends Error {}; export class AiUnavailableError extends Error {}; export const aiMode = () => globalThis.__aiMode ?? "off";`,
+  "@/lib/ai/food": `
+    import { AiRefusalError } from "@/lib/ai/client";
+    export const estimateMeal = async (input) => {
+      const how = globalThis.__meal ?? "food";
+      if (how === "refuse") throw new AiRefusalError("declined");
+      if (how === "fail") throw new Error("AI hiccup");
+      const item = { name: "Dal", portion: "1 bowl", grams: null, kcal: 180, protein_g: 9, carbs_g: 24, fat_g: 5, fibre_g: 6 };
+      return { data: { is_food: how === "food", reply_language: input.words.reply.id, title: "Dal", meal_guess: null, items: [item], confidence: "high", tip: null }, model: "test" };
+    };
+    export const estimateUsualDay = async () => { throw new Error("not in this test"); };`,
 });
 const removeDatabase = tempDatabase();
 
@@ -43,7 +55,11 @@ for (const r of APP_ROUTES) handlers.set(`${r.method} ${r.path}`, (await import(
 // Every (route, status) seen, checked against the contract as it happens.
 const seen = new Set<string>();
 let ip = 0;
-async function call(method: "get" | "post" | "delete", p: string, o: { token?: string; cookie?: string; body?: unknown; bad?: true; etag?: string; ip?: string; params?: Record<string, string> } = {}) {
+async function call(
+  method: "get" | "post" | "delete",
+  p: string,
+  o: { token?: string; cookie?: string; body?: unknown; form?: Record<string, string | Blob>; bad?: true; etag?: string; ip?: string; params?: Record<string, string> } = {},
+) {
   const route = routeOf(method, p);
   const headers = new Headers({ "x-forwarded-for": o.ip ?? `10.1.${Math.floor(++ip / 250)}.${ip % 250}` });
   if (o.token) headers.set("authorization", `Bearer ${o.token}`);
@@ -51,10 +67,17 @@ async function call(method: "get" | "post" | "delete", p: string, o: { token?: s
   if (o.body !== undefined) headers.set("content-type", "application/json");
   // What the test sends is what the contract allows, unless it's a deliberately bad request.
   if (o.body !== undefined && route.request && !o.bad) route.request.parse(o.body);
+  let body: string | FormData | undefined = o.body === undefined ? undefined : JSON.stringify(o.body);
+  if (o.form) {
+    assert.ok(route.form, `${p} takes JSON, not a form`);
+    if (!o.bad) route.request!.parse(Object.fromEntries(Object.entries(o.form).map(([k, v]) => [k, typeof v === "string" ? v : "(file)"])));
+    body = new FormData();
+    for (const [k, v] of Object.entries(o.form)) body.append(k, v);
+  }
   g.__headers = headers;
   g.__cookie = o.cookie;
   const url = p.replace(/\{(\w+)\}/g, (_m, k: string) => o.params?.[k] ?? "x");
-  const res = await handlers.get(`${method} ${p}`)!(new Request(`${SITE}${url}`, { method: method.toUpperCase(), headers, body: o.body === undefined ? undefined : JSON.stringify(o.body) }), o.params ? { params: Promise.resolve(o.params) } : undefined);
+  const res = await handlers.get(`${method} ${p}`)!(new Request(`${SITE}${url}`, { method: method.toUpperCase(), headers, body }), o.params ? { params: Promise.resolve(o.params) } : undefined);
   const text = await res.text();
   const label = `${method.toUpperCase()} ${p} → ${res.status}`;
   assert.ok(res.status in route.responses, `${label}: a status the contract doesn't list`);
@@ -84,7 +107,7 @@ describe("the apps' contract", () => {
     for (const r of APP_ROUTES) assert.match(readFileSync(path.join(ROOT, r.file), "utf8"), new RegExp(`export async function ${r.method.toUpperCase()}\\(`), r.file);
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(path.join(dir, n)).isDirectory() ? walk(path.join(dir, n)) : [path.join(dir, n)]));
     const appPath = walk(path.join(ROOT, "app/api"))
-      .filter((f) => f.endsWith("route.ts") && /\b(authenticate|apiMember|apiSignedIn|startAppSession)\(/.test(readFileSync(f, "utf8")))
+      .filter((f) => f.endsWith("route.ts") && /\b(authenticate|appActor|apiMember|apiSignedIn|startAppSession)\(/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     const listed = new Set(APP_ROUTES.map((r) => r.file));
     assert.deepEqual(appPath.filter((f) => !listed.has(f)), [], "routes that take app tokens but aren't in lib/api/openapi.ts");
@@ -145,7 +168,55 @@ describe("the apps' contract", () => {
     await call("post", "/api/account/delete", { token: third, body: {}, bad: true });
     await call("post", "/api/account/delete", { token: third, body: { confirm: "DELETE" } });
     await call("post", "/api/account/delete", { token: third, body: { confirm: "DELETE" } });
+  });
 
+  it("meal writes: every status POST /api/food and DELETE /api/food/{id} give", async () => {
+    const d = await db();
+    const onboard = async (email: string, consentAt = new Date()) => {
+      const t = await signIn(email);
+      const [u] = await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
+      await d.update(schema.profiles).set({ name: "Ravi", birthYear: 1992, primaryActivity: "gym", activities: ["gym"], consentAt, onboardedAt: new Date() }).where(eq(schema.profiles.userId, u.id));
+      return { t, id: u.id };
+    };
+    let k = 0;
+    const key = () => `contract-meal-${String(++k).padStart(8, "0")}`;
+    const meal = (t: string, extra: Record<string, string | Blob> = {}, bad?: true) => call("post", "/api/food", { token: t, form: { text: "dal", source: "text", key: key(), ...extra }, bad });
+
+    const notYet = await signIn("meal-not-onboarded@example.com");
+    await meal(notYet); // 409 not_onboarded
+    await call("post", "/api/food", { token: "dht_not-a-real-token", form: { text: "dal", source: "text" } }); // 401
+    const { t, id } = await onboard("meal-contract@example.com");
+    g.__aiMode = "off";
+    await meal(t); // 503 ai_off
+    g.__aiMode = "live";
+    const logged = await meal(t); // 200
+    await meal(t, { source: "sms" }, true); // 400 invalid
+    await meal(t, { eatenAt: new Date(Date.now() - 72 * 3_600_000).toISOString() }); // 400 bad_time
+    await meal(t, { photo: new Blob([new Uint8Array(3 * 1024 * 1024 + 1)], { type: "image/jpeg" }) }); // 413
+    await meal(t, { photo: new Blob(["not a photo"], { type: "image/jpeg" }) }); // 415
+    g.__meal = "not_food";
+    await meal(t); // 422 not_food
+    g.__meal = "refuse";
+    await meal(t); // 422 refused
+    g.__meal = "fail";
+    await meal(t); // 500
+    g.__meal = "food";
+    for (let i = 0; i < 4; i++) await meal(t);
+    const limit = await meal(t); // 402: 5 a day
+    assert.equal(limit.body!.refusal, "meals_today_used");
+    const old = await onboard("meal-old-consent@example.com", new Date("2026-11-01T00:00:00Z"));
+    const consent = await meal(old.t); // 409 consent_needed
+    assert.equal(consent.body!.error, "consent_needed");
+    const { allowRequest } = await import("../lib/waitlist/rate-limit.ts");
+    for (let i = 0; i < 40; i++) allowRequest(`food:${id}`, 40, 60 * 60_000);
+    await meal(t); // 429
+
+    const mealId = (logged.body!.meal as { id: string }).id;
+    await call("delete", "/api/food/{id}", { token: t, params: { id: mealId } });
+    await call("delete", "/api/food/{id}", { token: "dht_not-a-real-token", params: { id: mealId } });
+  });
+
+  it("lists no status that no route gave", () => {
     const documented = APP_ROUTES.flatMap((r) => Object.keys(r.responses).map((status) => `${r.method} ${r.path} ${status}`));
     assert.deepEqual(documented.filter((x) => !seen.has(x)), [], "statuses the contract lists that no route gave");
   });

@@ -268,3 +268,29 @@ export const PastMealsResponse = z.strictObject({
   days: z.array(z.strictObject({ date: IsoDate, label: S.describe("'Yesterday' or 'Sat, 14 Nov'."), meals: z.array(MealJson) })).describe("Only days with meals, newest first."),
   target: z.strictObject({ kcal: N, proteinG: N }),
 });
+
+// ── Meal writes ──────────────────────────────────────────────────────────────
+
+const MealKey = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).describe("A random key made once per try. Send the same try again with the same key: it's logged once.");
+
+export const MealForm = z
+  .object({
+    text: S.max(3000).optional().describe("The words to read. Up to 1000 characters of the person's own words."),
+    original: S.max(1000).optional().describe("The person's own words, only when `text` is a translation of them."),
+    spoken: S.optional().describe("The language picked for speaking, for meals logged by voice (en, hinglish, hi, bn, …)."),
+    source: z.enum(MEAL_SOURCES),
+    meal: z.enum(MEAL_SLOTS).optional().describe("Omit to let the server guess."),
+    key: MealKey.optional(),
+    photo: S.optional().describe("A JPEG, PNG or WebP, at most 3 MB (convert HEIC first). Its time and place never go in the file."),
+    eatenAt: IsoTime.optional().describe("A queued meal: when it was eaten. At most 48 hours old and 5 minutes ahead, else 400 bad_time. It sets the day the meal counts on."),
+    photoAt: IsoTime.optional().describe("A gallery photo: when it was taken. Taken on the meal's day, its time sets the slot when none is given."),
+    voiceEnd: z.enum(["pause", "tap", "log_now", "edited"]).optional().describe("How a spoken meal was ended. For the server's log only."),
+  })
+  .describe("multipart/form-data. A Hinglish or English pick whose words arrive in Devanagari is read in Latin letters.");
+
+export const AppMealAnswer = z.strictObject({
+  meal: MealJson,
+  repeat: z.literal(true).optional().describe("This key's try was already logged: this is that meal, counted once."),
+});
+
+export const DeletedResponse = z.strictObject({ status: z.literal("deleted") });

@@ -1,7 +1,7 @@
 import "server-only";
 import type { FoodLog } from "@/lib/db/schema";
 import { langTag, scriptLanguage } from "@/lib/domain/speech";
-import { clockTime, mealView } from "@/lib/platform/food";
+import { clockTime, eatenAtOf, mealView } from "@/lib/platform/food";
 import type { PlanDetail } from "@/lib/platform/plan-state";
 
 // Pieces several of the apps' answers share (lib/api/schemas.ts MealJson, PlanJson). Only the
@@ -14,7 +14,7 @@ import type { PlanDetail } from "@/lib/platform/plan-state";
  */
 export function mealJson(l: FoodLog, tz: string | null | undefined) {
   const v = mealView(l);
-  const at = l.createdAt;
+  const at = eatenAtOf(l);
   return {
     id: v.id,
     meal: v.meal,

@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { aiMode, AiUnavailableError } from "@/lib/ai/client";
 import { estimateMeal, estimateUsualDay } from "@/lib/ai/food";
 import { mockDay, mockMeal } from "@/lib/ai/mock";
@@ -114,7 +114,16 @@ export type MealInput = {
   spoken?: SpokenId;
   source: "photo" | "voice" | "text";
   meal?: MealKind;
+  /** The apps only: when a meal queued offline was eaten. It sets the meal's day, and its slot when none is given. */
+  eatenAt?: Date;
+  /** The apps only: when a gallery photo taken today was taken. Its clock sets the slot when none is given (Mayank, 2026-11-26). */
+  photoAt?: Date;
+  /** The apps only: what a Latin-letter pick heard in Devanagari, kept when the words were romanized on arrival. */
+  inputRaw?: string;
 };
+
+/** The day a meal counts on: the day it was eaten, in the person's time zone. */
+export const mealDay = (tz: string | null | undefined, input: Pick<MealInput, "eatenAt">, now = new Date()) => localDate(tz, input.eatenAt ?? now);
 
 export async function logMeal(userId: string, profile: Profile, input: MealInput): Promise<{ log: FoodLog } | { notFood: true }> {
   const mode = aiMode();
@@ -149,8 +158,9 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     // The caller's id when given: it is also the meal's entry in the usage ledger.
     id: input.id ?? newId(),
     userId,
-    localDate: localDate(profile.timezone),
-    meal: input.meal ?? data.meal_guess ?? mealFromClock(profile.timezone),
+    localDate: mealDay(profile.timezone, input),
+    // Said, else a gallery photo's own time, else the model's guess, else the clock when it was eaten.
+    meal: input.meal ?? (input.photoAt ? mealFromClock(profile.timezone, input.photoAt) : undefined) ?? data.meal_guess ?? mealFromClock(profile.timezone, input.eatenAt),
     source: input.source,
     // Their own words, so the log shows what they said, not the translation.
     inputText: words.said || null,
@@ -166,6 +176,8 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     micros: { ...sumMicros(items), tip: data.tip, lang: reply.id, basis },
     confidence: data.confidence,
     model,
+    ...(input.eatenAt ? { eatenAt: input.eatenAt } : {}),
+    ...(input.inputRaw ? { inputRaw: input.inputRaw } : {}),
   };
   const d = await db();
   const [log] = await d.insert(schema.foodLogs).values(row).onConflictDoNothing({ target: schema.foodLogs.id }).returning();
@@ -215,8 +227,12 @@ export async function logsBetween(userId: string, from: string, to: string) {
     .select()
     .from(schema.foodLogs)
     .where(and(eq(schema.foodLogs.userId, userId), gte(schema.foodLogs.localDate, from), lte(schema.foodLogs.localDate, to)))
-    .orderBy(schema.foodLogs.createdAt);
+    // In the order they were eaten: a meal queued offline on a phone sits where it was eaten, not where it arrived.
+    .orderBy(sql`coalesce(${schema.foodLogs.eatenAt}, ${schema.foodLogs.createdAt})`);
 }
+
+/** When a meal was eaten: a queued meal's own time, else when it was logged. */
+export const eatenAtOf = (l: Pick<FoodLog, "eatenAt" | "createdAt">) => l.eatenAt ?? l.createdAt;
 
 /** A logged meal as the screens show it. */
 export function mealView(l: FoodLog): MealView {
@@ -254,7 +270,7 @@ export async function mealHistory(userId: string, tz: string | null | undefined,
   const today = localDate(tz, now);
   const logs = await logsBetween(userId, addDays(today, -HISTORY_DAYS), addDays(today, -1));
   const byDay = new Map<string, MealView[]>();
-  for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), { ...mealView(l), time: clockTime(l.createdAt, tz) }]);
+  for (const l of logs) byDay.set(l.localDate, [...(byDay.get(l.localDate) ?? []), { ...mealView(l), time: clockTime(eatenAtOf(l), tz) }]);
   const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, meals]) => ({ date, meals }));
   return { today, days };
 }

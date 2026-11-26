@@ -3,6 +3,7 @@ import { aiMode } from "@/lib/ai/client";
 import { askGate } from "@/lib/ask/types";
 import { isOwnerEmail } from "@/lib/auth/owners";
 import type { Profile } from "@/lib/db/schema";
+import { CONSENT_VERSION, consentCurrent } from "@/lib/domain/consent";
 import { personaFor } from "../profile";
 
 // Who is signed in, worked out once for both the web's app layout (the nav's initial, the
@@ -10,13 +11,7 @@ import { personaFor } from "../profile";
 // repo's docs/API.md §3.2). This is the only answer that carries the profile in full, with
 // medicines, conditions and pregnancy (QA's T1): the apps' Settings and onboarding use it.
 
-/**
- * The consent wording's version: the day the current text went live (it added "and
- * questions" for Ask). Someone who agreed before it is asked again in the app. When the
- * app's own consent step names more (Apple's speech service), its new date goes here.
- */
-export const CONSENT_VERSION = "2026-11-20";
-const CONSENT_SINCE = Date.parse(`${CONSENT_VERSION}T00:00:00+05:30`);
+export { CONSENT_VERSION };
 
 export function meView(user: { id: string; email: string }, profile: Profile | null) {
   const persona = profile ? personaFor(profile) : null;
@@ -44,7 +39,7 @@ export function meJson(v: MeView) {
     id: v.user.id,
     email: v.user.email,
     onboarded: v.onboarded,
-    consent: { at: at?.toISOString() ?? null, version: CONSENT_VERSION, current: !!at && at.getTime() >= CONSENT_SINCE },
+    consent: { at: at?.toISOString() ?? null, version: CONSENT_VERSION, current: consentCurrent(at) },
     tourDone: !!p?.tourDoneAt,
     persona: v.persona
       ? { firstName: v.persona.firstName, initial: v.initial, bib: v.persona.bib, label: v.persona.label, archetype: v.persona.archetype, noun: v.persona.noun, level: v.persona.level, age: v.persona.age }

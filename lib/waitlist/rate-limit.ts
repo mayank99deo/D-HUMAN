@@ -19,6 +19,12 @@ export function allowRequest(key: string, limit: number, windowMs: number) {
   return bucket.count <= limit;
 }
 
+/** Seconds until a key's window starts again (for Retry-After), or 0 when it has no window running. */
+export function secondsUntilReset(key: string, now = Date.now()): number {
+  const bucket = buckets.get(key);
+  return bucket && bucket.resetAt > now ? Math.ceil((bucket.resetAt - now) / 1000) : 0;
+}
+
 export function clientIp(headers: Headers) {
   return (
     headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

@@ -271,6 +271,13 @@ export const foodLogs = pgTable(
     confidence: text("confidence"),
     model: text("model"),
     createdAt: created(),
+    // The apps only (0013). eaten_at: when a meal queued offline on a phone was eaten (it sets
+    // local_date); null for a meal sent at once. input_raw: what a Hinglish or English pick heard
+    // in Devanagari, before it was put in Latin letters on arrival. repeat_of: the meal a "Log
+    // again" copies (no AI call); kept as a plain id, since that meal may be deleted later.
+    eatenAt: timestamp("eaten_at", { withTimezone: true }),
+    inputRaw: text("input_raw"),
+    repeatOf: text("repeat_of"),
   },
   (t) => [index("food_logs_user_date_idx").on(t.userId, t.localDate)],
 ).enableRLS();

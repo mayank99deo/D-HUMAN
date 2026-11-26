@@ -192,7 +192,8 @@
               "Retry-After": {
                 "schema": {
                   "type": "integer"
-                }
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
               }
             },
             "content": {
@@ -770,7 +771,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in.",
+            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -896,7 +897,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in.",
+            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2160,7 +2161,7 @@
             }
           },
           "409": {
-            "description": "Not onboarded yet.",
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2782,7 +2783,7 @@
             }
           },
           "409": {
-            "description": "Not onboarded yet.",
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3063,7 +3064,7 @@
             }
           },
           "409": {
-            "description": "Not onboarded yet.",
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3239,7 +3240,662 @@
             }
           },
           "409": {
-            "description": "Not onboarded yet.",
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/food": {
+      "post": {
+        "summary": "Log a meal from words, a photo or speech. Idempotent on `key`. 402 carries `refusal`; 409 is not_onboarded, consent_needed or in_progress (with Retry-After: send the same try again).",
+        "description": "Log a meal from words, a photo or speech. Idempotent on `key`. 402 carries `refusal`; 409 is not_onboarded, consent_needed or in_progress (with Retry-After: send the same try again). An app write: answers 409 consent_needed (with `version`) when the person agreed to older consent wording; ask again, then send the same request once more.",
+        "operationId": "postApiFood",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "description": "The words to read. Up to 1000 characters of the person's own words.",
+                    "type": "string",
+                    "maxLength": 3000
+                  },
+                  "original": {
+                    "description": "The person's own words, only when `text` is a translation of them.",
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "spoken": {
+                    "description": "The language picked for speaking, for meals logged by voice (en, hinglish, hi, bn, …).",
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "photo",
+                      "voice",
+                      "text"
+                    ]
+                  },
+                  "meal": {
+                    "description": "Omit to let the server guess.",
+                    "type": "string",
+                    "enum": [
+                      "breakfast",
+                      "lunch",
+                      "dinner",
+                      "snack"
+                    ]
+                  },
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{16,64}$",
+                    "description": "A random key made once per try. Send the same try again with the same key: it's logged once."
+                  },
+                  "photo": {
+                    "description": "A JPEG, PNG or WebP, at most 3 MB (convert HEIC first). Its time and place never go in the file.",
+                    "type": "string"
+                  },
+                  "eatenAt": {
+                    "description": "A queued meal: when it was eaten. At most 48 hours old and 5 minutes ahead, else 400 bad_time. It sets the day the meal counts on.",
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  "photoAt": {
+                    "description": "A gallery photo: when it was taken. Taken on the meal's day, its time sets the slot when none is given.",
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  "voiceEnd": {
+                    "description": "How a spoken meal was ended. For the server's log only.",
+                    "type": "string",
+                    "enum": [
+                      "pause",
+                      "tap",
+                      "log_now",
+                      "edited"
+                    ]
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "description": "multipart/form-data. A Hinglish or English pick whose words arrive in Devanagari is read in Latin letters."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "meal": {
+                          "type": "string",
+                          "enum": [
+                            "breakfast",
+                            "lunch",
+                            "dinner",
+                            "snack"
+                          ]
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "photo, voice or text; a repeat keeps its first meal's."
+                        },
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "type": "number"
+                        },
+                        "confidence": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tip": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "'Name, portion', as the web lists them."
+                        },
+                        "demo": {
+                          "type": "boolean",
+                          "description": "Written from a template because AI is off on this server."
+                        },
+                        "time": {
+                          "type": "string",
+                          "description": "When it was eaten, on the person's clock: '8:40 am'."
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "description": "When it was eaten: a queued meal's own time, else when it was logged."
+                        },
+                        "lang": {
+                          "description": "The language the title and tip are written in, as a BCP 47 tag ('hi', 'hi-Latn', 'en').",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "meal",
+                        "title",
+                        "source",
+                        "kcal",
+                        "proteinG",
+                        "confidence",
+                        "tip",
+                        "items",
+                        "demo",
+                        "time",
+                        "at",
+                        "lang"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A logged meal: estimates, never measurements."
+                    },
+                    "repeat": {
+                      "description": "This key's try was already logged: this is that meal, counted once.",
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "meal"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused: the error code says why.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan doesn't allow one more: `refusal` says which limit. Show the app's own words for it, never `message`.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Too large.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a file type we read.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Read, but refused: `message` says what to try.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many tries. Retry-After says when to come back.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Something failed on our side. Try again with the same key.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI is switched off on this server (ai_off): show `message`.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/food/{id}": {
+      "delete": {
+        "summary": "Delete one of the person's meals. One that's already gone answers the same, so it's safe to send again.",
+        "operationId": "deleteApiFoodId",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "deleted"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
             "headers": {
               "Cache-Control": {
                 "schema": {

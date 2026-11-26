@@ -117,6 +117,15 @@ async function assertCurrentShape(pg: PGlite) {
   assert.match(sessionCols.rows.find((r) => r.c === "public_id")?.d ?? "", /gen_random_uuid\(\)/);
   const publicIdx = await one<{ def: string }>(pg, `select indexdef as def from pg_indexes where indexname = 'sessions_public_id_idx'`);
   assert.ok(publicIdx?.def.includes("UNIQUE INDEX") && publicIdx.def.includes("(public_id)"), publicIdx?.def);
+
+  // 0013: the apps' meals: when a queued meal was eaten, what was heard before romanizing, a repeat's source.
+  const mealCols = await pg.query<{ c: string; t: string; nullable: string; d: string | null }>(`select column_name as c, data_type as t, is_nullable as nullable, column_default as d
+    from information_schema.columns where table_name = 'food_logs' and column_name in ('eaten_at', 'input_raw', 'repeat_of') order by column_name`);
+  assert.deepEqual(mealCols.rows.map((r) => `${r.c} ${r.t} ${r.nullable} ${r.d}`), [
+    "eaten_at timestamp with time zone YES null",
+    "input_raw text YES null",
+    "repeat_of text YES null",
+  ]);
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -272,6 +281,39 @@ describe("migrations", () => {
       await assert.rejects(pg.query(`insert into sessions (id, user_id, expires_at, public_id) values ('h5', 'u2', now(), $1)`, [rows[0].public_id]), /sessions_public_id_idx/);
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from sessions`)).n, 2, "an account's sessions still go with it");
+      await pg.close();
+    });
+  }
+
+  // Production with 0012 and meals logged; 0013 run by the deploy or pasted first, either way,
+  // twice. Every existing meal keeps its values with the new columns empty, and the web's own
+  // insert (no new columns) keeps working.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0013 on production's meals (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0013_"));
+      assert.ok(at > 0, "0013 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      const meal = (id: string) => `insert into food_logs (id, user_id, local_date, meal, source, title, items, kcal, protein_g, carbs_g, fat_g, fibre_g, micros)
+        values ('${id}', 'u1', '2026-11-25', 'lunch', 'text', 'Dal', '[]', 400, 15, 60, 10, 8, '{}')`;
+      await pg.exec(`insert into users (id, email) values ('u1', 'a@x'); ${meal("m1")}; ${meal("m2")};`);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.deepEqual(
+        (await pg.query(`select id, kcal, eaten_at, input_raw, repeat_of from food_logs order by id`)).rows,
+        [{ id: "m1", kcal: 400, eaten_at: null, input_raw: null, repeat_of: null }, { id: "m2", kcal: 400, eaten_at: null, input_raw: null, repeat_of: null }],
+      );
+      await pg.exec(meal("m3"));
+      await pg.exec(`delete from users where id = 'u1'`);
+      assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
       await pg.close();
     });
   }
