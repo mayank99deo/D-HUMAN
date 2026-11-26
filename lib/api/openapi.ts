@@ -152,6 +152,17 @@ export const APP_ROUTES: AppRoute[] = [
     auth: "bearer",
     responses: { 200: s.DeletedResponse, 401: refusal },
   },
+  {
+    method: "post",
+    path: "/api/food/{id}/again",
+    file: "app/api/food/[id]/again/route.ts",
+    summary:
+      "Log again: one of the person's meals from the last 28 days, copied as a new meal with no AI call. Counts as a meal log. Idempotent on `key`. 404 when it's gone or older than 28 days.",
+    auth: "bearer",
+    request: s.AgainRequest,
+    responses: { 200: s.AppMealAnswer, 400: refusal, 401: refusal, 402: refusal, 403: refusal, 404: refusal, 409: refusal, 429: refusal },
+    consent: true,
+  },
 ];
 
 const STATUS_WORDS: Record<number, string> = {

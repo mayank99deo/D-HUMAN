@@ -212,6 +212,22 @@ describe("the apps' contract", () => {
     await meal(t); // 429
 
     const mealId = (logged.body!.meal as { id: string }).id;
+
+    // Log again: 200, 400, 401, 402, 403, 404, 409, 429.
+    const r = await onboard("again-contract@example.com");
+    const first = (await meal(r.t)).body!.meal as { id: string };
+    const again = (o: { token?: string; cookie?: string; body?: unknown; bad?: true }, id = first.id) => call("post", "/api/food/{id}/again", { ...o, params: { id } });
+    await again({ token: r.t, body: { key: key() } });
+    await again({ token: r.t, body: { key: "bad" }, bad: true });
+    await again({ token: "dht_not-a-real-token", body: { key: key() } });
+    await again({ token: r.t, body: { key: key() } }, "not-a-meal");
+    await again({ cookie: "web-cookie", body: { key: key() } });
+    await again({ token: old.t, body: { key: key() } });
+    for (let i = 0; i < 3; i++) await again({ token: r.t, body: { key: key() } });
+    await again({ token: r.t, body: { key: key() } }); // 402
+    for (let i = 0; i < 40; i++) allowRequest(`food:${r.id}`, 40, 60 * 60_000);
+    await again({ token: r.t, body: { key: key() } }); // 429
+
     await call("delete", "/api/food/{id}", { token: t, params: { id: mealId } });
     await call("delete", "/api/food/{id}", { token: "dht_not-a-real-token", params: { id: mealId } });
   });

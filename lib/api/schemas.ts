@@ -294,3 +294,11 @@ export const AppMealAnswer = z.strictObject({
 });
 
 export const DeletedResponse = z.strictObject({ status: z.literal("deleted") });
+
+export const AgainRequest = z.object({
+  key: MealKey,
+  eatenAt: IsoTime.optional().describe("A queued repeat: when it was eaten (48 hours at most)."),
+  meal: z.enum(MEAL_SLOTS).optional().describe("Omit to keep the first meal's slot."),
+});
+
+export const SlotRequest = z.object({ meal: z.enum(MEAL_SLOTS) });

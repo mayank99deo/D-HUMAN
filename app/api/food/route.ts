@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S } from "@/lib/api/errors";
 import { privateJson } from "@/lib/api/respond";
+import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach } from "@/lib/api/meals";
 import { mealJson } from "@/lib/api/views/parts";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { appActor, isAppRequest } from "@/lib/api/actor";
@@ -47,9 +48,6 @@ const appFields = z.object({
   voiceEnd: z.enum(["pause", "tap", "log_now", "edited"]).optional().catch(undefined),
 });
 
-/** How far back a queued meal may be logged for the day it was eaten, and how far ahead a phone's clock may run. */
-const EATEN_AT_MAX_AGE_MS = 48 * 60 * 60_000;
-const EATEN_AT_MAX_AHEAD_MS = 5 * 60_000;
 
 const STILL_READING = "We're still reading this meal. Try again in a moment.";
 
@@ -122,7 +120,7 @@ export async function POST(request: Request) {
     const now = Date.now();
     if (extra.data.eatenAt) {
       const eatenAt = new Date(extra.data.eatenAt);
-      if (now - eatenAt.getTime() > EATEN_AT_MAX_AGE_MS || eatenAt.getTime() - now > EATEN_AT_MAX_AHEAD_MS) return appRefusal("bad_time", 400);
+      if (!eatenAtInReach(eatenAt, now)) return appRefusal("bad_time", 400);
       meal.eatenAt = eatenAt;
     }
     // A gallery photo taken on the day the meal counts sets its slot; an older one doesn't (the app asks which meal).
