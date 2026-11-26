@@ -39,7 +39,7 @@ export const CodeResponse = z.union([
 export const TokenRequest = z.object({
   email: z.email(),
   code: S.describe("Six digits, or the App Review account's 12 or more. Spaces and dashes are ignored."),
-  key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("A random key for this try. Send it again with a resend: the same email, code and key within 10 minutes get the same token."),
+  key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("A new random key for each try, at least 128 bits (a UUIDv4 is fine); never a device id, a counter or anything reused. Send it again with a resend: the same email, code and key within 10 minutes get the same token, even after the code is used, so the key must be as secret as the code."),
   device: z.object({ label: S.max(40).optional().describe("The hardware model, e.g. iPhone18,1. Never the phone's name."), os: S.max(16).optional() }).optional(),
 });
 
