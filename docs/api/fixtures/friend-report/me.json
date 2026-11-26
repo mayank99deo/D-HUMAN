@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "etag": "W/\"-CWBumsQSXLeGSbnrltwtQ\"",
+  "body": {
+    "id": "995260d1-faae-4a61-8169-6f3ef07bd3ca",
+    "email": "friend@demo.dhuman.local",
+    "onboarded": true,
+    "consent": {
+      "at": "2026-11-26T06:18:40.905Z",
+      "version": "2026-11-20",
+      "current": true
+    },
+    "tourDone": true,
+    "healthCheckedAt": null,
+    "hold": null,
+    "reportsVersion": "1.FUCpWH6k9RjU0eFn",
+    "persona": {
+      "firstName": "Asha",
+      "initial": "A",
+      "bib": "32",
+      "label": "Regular runner",
+      "archetype": "running",
+      "noun": "runner",
+      "level": "regular",
+      "age": 32
+    },
+    "founder": false,
+    "aiOff": false,
+    "profile": {
+      "name": "Asha Rao",
+      "birthYear": 1994,
+      "sex": "female",
+      "heightCm": 160,
+      "weightKg": 55,
+      "city": "Indore",
+      "country": "India",
+      "timezone": "Asia/Kolkata",
+      "language": "en",
+      "activities": [
+        "running"
+      ],
+      "primaryActivity": "running",
+      "level": "regular",
+      "sessionsPerWeek": 4,
+      "goals": [
+        "energy"
+      ],
+      "eventInMind": null,
+      "diet": "veg",
+      "conditions": [],
+      "medications": null,
+      "currentSupplements": null,
+      "supplementBudget": null
+    }
+  }
+}

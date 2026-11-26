@@ -1,0 +1,58 @@
+{
+  "status": 200,
+  "etag": "W/\"iVQzWJKX4IELMijnpQV8eA\"",
+  "body": {
+    "id": "ffca272a-dd89-4d11-83e7-d0955cbaf2f8",
+    "email": "pregnant@demo.dhuman.local",
+    "onboarded": true,
+    "consent": {
+      "at": "2026-11-26T06:18:40.841Z",
+      "version": "2026-11-20",
+      "current": true
+    },
+    "tourDone": true,
+    "healthCheckedAt": "2026-11-26T06:18:40.840Z",
+    "hold": "pregnant",
+    "reportsVersion": "1.Ei5yWI69HxoxM-vp",
+    "persona": {
+      "firstName": "Meera",
+      "initial": "M",
+      "bib": "32",
+      "label": "Regular runner",
+      "archetype": "running",
+      "noun": "runner",
+      "level": "regular",
+      "age": 32
+    },
+    "founder": false,
+    "aiOff": false,
+    "profile": {
+      "name": "Meera",
+      "birthYear": 1994,
+      "sex": "female",
+      "heightCm": 160,
+      "weightKg": 55,
+      "city": "Indore",
+      "country": "India",
+      "timezone": "Asia/Kolkata",
+      "language": "en",
+      "activities": [
+        "running"
+      ],
+      "primaryActivity": "running",
+      "level": "regular",
+      "sessionsPerWeek": 4,
+      "goals": [
+        "energy"
+      ],
+      "eventInMind": null,
+      "diet": "veg",
+      "conditions": [
+        "pregnant"
+      ],
+      "medications": null,
+      "currentSupplements": null,
+      "supplementBudget": null
+    }
+  }
+}

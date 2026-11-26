@@ -1,0 +1,199 @@
+{
+  "status": 200,
+  "etag": "W/\"xlLkShcRtJFhRKTcztNSqg\"",
+  "body": {
+    "state": "stack",
+    "stack": {
+      "id": "8271569e-7158-472e-a3e5-2c478231cbc3",
+      "status": "ready",
+      "error": null,
+      "plan": {
+        "items": [
+          {
+            "nutrient": "Magnesium",
+            "dose": "200 mg a day",
+            "why": "Your meals run short of it.",
+            "markers": [],
+            "dietGap": null,
+            "form": "Glycinate tablet",
+            "timing": "After dinner",
+            "duration": "8 weeks",
+            "cautions": null,
+            "rule": "magnesium",
+            "brands": [
+              {
+                "brand": "Demo Brand",
+                "product": "Magnesium glycinate",
+                "url": null,
+                "note": null,
+                "priceInr": null,
+                "pack": null,
+                "monthlyInr": 450
+              }
+            ]
+          }
+        ],
+        "skip": [
+          {
+            "name": "Biotin",
+            "why": "Nothing points to it."
+          }
+        ],
+        "foodFirst": [
+          "A handful of nuts a day."
+        ],
+        "seeDoctor": [],
+        "gaps": [
+          {
+            "key": "magnesium_mg",
+            "label": "Magnesium",
+            "pct": 45,
+            "iu": null,
+            "outcome": "stack",
+            "note": "Your meals give about half of what you need.",
+            "lead": "Your meals give about half of what you need.",
+            "more": null,
+            "rule": "magnesium"
+          }
+        ],
+        "gapsBasis": {
+          "days": 3,
+          "source": "logs"
+        }
+      },
+      "demo": false,
+      "made": "2026-11-26T06:18:40.990Z"
+    },
+    "staleReason": null,
+    "basis": "meals",
+    "hasReport": false,
+    "body": "32, 160 cm, 55 kg, regular runner",
+    "markerNames": {},
+    "budget": "1000_2000",
+    "fits": {
+      "under_1000": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": 1000
+      },
+      "1000_2000": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": 2000
+      },
+      "2000_3000": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": 3000
+      },
+      "3000_4000": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": 4000
+      },
+      "4000_5000": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": 5000
+      },
+      "5000_plus": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": null
+      },
+      "not_sure": {
+        "included": [
+          0
+        ],
+        "later": [],
+        "pick": [
+          0
+        ],
+        "cost": [
+          450
+        ],
+        "typical": [
+          false
+        ],
+        "total": 450,
+        "cap": null
+      }
+    },
+    "flagged": [],
+    "hold": null,
+    "holdLine": null,
+    "aiOff": false
+  }
+}

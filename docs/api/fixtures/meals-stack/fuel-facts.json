@@ -1,0 +1,269 @@
+{
+  "status": 200,
+  "etag": "W/\"fX1oNRn57q-2G21NFMNFXA\"",
+  "body": {
+    "facts": [
+      {
+        "kicker": "Steady metabolism",
+        "text": "A 2021 study of over 6,000 people found that, adjusted for body size, daily energy use stays steady from about 20 to 60.",
+        "scope": "For 31–35 years"
+      },
+      {
+        "kicker": "Diet and disease",
+        "text": "India's dietary guidelines (ICMR-NIN, 2024) estimate that about 56% of the country's disease burden is linked to unhealthy diets.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Before pregnancy",
+        "text": "Folate before and in early pregnancy lowers the risk of neural tube defects. Dals, leafy greens and fortified foods help.",
+        "scope": "For women"
+      },
+      {
+        "kicker": "Half the plate",
+        "text": "ICMR-NIN's model plate fills about half with vegetables and fruit; grains, pulses, nuts and dairy share the rest.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Muscle after 30",
+        "text": "From around 30, muscle slowly declines with age, by roughly 3–8% a decade without training against it.",
+        "scope": "For 31–35 years"
+      },
+      {
+        "kicker": "Salt",
+        "text": "The WHO suggests under 5 g of salt a day, about a teaspoon. Indian adults average around 8 g, much of it from pickles, namkeen and restaurant food.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Thin-fat",
+        "text": "Many Indians gain fat around the waist first, even at a normal BMI. This 'thin-fat' pattern is linked to diabetes risk.",
+        "scope": "For 31–35 years"
+      },
+      {
+        "kicker": "Achaar",
+        "text": "One tablespoon of pickle can carry 1–2 g of salt, a third of a day's limit.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Diabetes in India",
+        "text": "ICMR-INDIAB (2023) found about 11% of Indian adults have diabetes and another 15% prediabetes.",
+        "scope": "For 31–35 years"
+      },
+      {
+        "kicker": "Hidden oil",
+        "text": "A tablespoon of oil or ghee is about 120 kcal. A two-spoon tadka adds as much energy as two or three rotis.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Women's iron",
+        "text": "ICMR-NIN sets women's iron need at about 29 mg a day, over 50% more than men's 19 mg.",
+        "scope": "For women"
+      },
+      {
+        "kicker": "Roti maths",
+        "text": "A medium phulka from about 30 g of atta is roughly 100 kcal. A teaspoon of ghee on top adds about 45 more.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Waist first",
+        "text": "In your thirties and forties, watching your waist can say more about metabolic risk than the scale.",
+        "scope": "For 31–35 years"
+      },
+      {
+        "kicker": "Dal-chawal",
+        "text": "Cereals run short of lysine and pulses short of methionine. Together, as dal-chawal or rajma-chawal, they make a more complete protein.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Healthy weight",
+        "text": "At 156–160 cm, the healthy weight range used for Indian adults (BMI 18.5–22.9) is about 45–59 kg.",
+        "scope": "For 156–160 cm"
+      },
+      {
+        "kicker": "Sprouting",
+        "text": "Soaking and sprouting pulses cuts phytates, which helps your body absorb more of their iron and zinc.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Half your height",
+        "text": "A waist under half your height is a simple heart-health target: at 156–160 cm, that's under about 78–80 cm.",
+        "scope": "For 156–160 cm"
+      },
+      {
+        "kicker": "Iron kadhai",
+        "text": "Cooking in an iron kadhai or tawa can add iron to food, especially sour dishes made with tomato or tamarind.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Your protein",
+        "text": "At 51–55 kg, ICMR-NIN's minimum is about 42–46 g of protein a day. If you train, 1.2–1.6 g per kg puts it at about 61–88 g.",
+        "scope": "For 51–55 kg"
+      },
+      {
+        "kicker": "Lemon last",
+        "text": "Vitamin C breaks down with heat. Squeeze lemon on dal or sabzi after cooking, not while it simmers.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "5 km in food",
+        "text": "At 51–55 kg, a 5 km run burns roughly 255–275 kcal, about the same as a samosa.",
+        "scope": "For 51–55 kg"
+      },
+      {
+        "kicker": "Chai timing",
+        "text": "Tannins in tea and coffee reduce the iron you absorb from a meal. Have chai an hour before or after eating.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Walking off a samosa",
+        "text": "At 51–55 kg, walking off one samosa (about 260 kcal) takes roughly 6.3–6.8 km at a brisk pace.",
+        "scope": "For 51–55 kg"
+      },
+      {
+        "kicker": "Ragi",
+        "text": "Gram for gram, ragi has roughly three times the calcium of milk.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Your water",
+        "text": "A common rule of thumb is 30–35 mL of fluid per kg a day: about 1.5–1.9 litres at 51–55 kg, more in heat or training.",
+        "scope": "For 51–55 kg"
+      },
+      {
+        "kicker": "Amla",
+        "text": "Gram for gram, amla carries several times the vitamin C of an orange.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "B12",
+        "text": "Vegetarians get B12 mainly from milk, curd and paneer, and many still run low. It's worth testing.",
+        "scope": "For vegetarians"
+      },
+      {
+        "kicker": "Whole fruit",
+        "text": "Juice loses most of the fruit's fibre, so a glass fills you up far less than the fruit it took to make.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Plant iron",
+        "text": "Iron from plants is absorbed less than iron from meat, so pairing it with vitamin C matters more for vegetarians.",
+        "scope": "For vegetarians"
+      },
+      {
+        "kicker": "Free sugar",
+        "text": "The WHO advises keeping free sugars under 10% of daily energy, ideally under 5%: about 25 g, or six teaspoons, for most adults.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Paneer",
+        "text": "Paneer is protein-dense: about 18 g per 100 g, with calcium as a bonus.",
+        "scope": "For vegetarians"
+      },
+      {
+        "kicker": "Sweet chai",
+        "text": "Two teaspoons of sugar a cup adds up: three cups a day is around 25–30 g of sugar, already at the WHO's ideal limit.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Soy chunks",
+        "text": "Soy chunks are among the richest plant proteins: about 50 g per 100 g, dry.",
+        "scope": "For vegetarians"
+      },
+      {
+        "kicker": "Cola",
+        "text": "A 300 mL bottle of cola has around 30 g of sugar, more than the WHO's ideal limit for a whole day.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Fibre",
+        "text": "Adults need about 25–30 g of fibre a day. A katori of rajma or chana gives roughly 6–9 g of it.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Protein spread",
+        "text": "Studies suggest muscles use protein better when it's spread across meals than when most of it comes at dinner.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Eat slowly",
+        "text": "Fullness signals take time to reach your brain. Eating slowly gives them a chance to arrive before second helpings do.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Sleep and hunger",
+        "text": "In sleep studies, short nights raised the hunger hormone ghrelin and lowered leptin, which signals fullness.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Dahi",
+        "text": "Homemade dahi carries live lactic acid bacteria, and fermentation makes its lactose easier for many people to digest.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Millets",
+        "text": "Jowar, bajra and ragi carry more fibre than polished rice, so they digest more slowly.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Reused oil",
+        "text": "Reheating frying oil again and again creates harmful compounds. ICMR-NIN's guidelines advise against reusing it.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Water in food",
+        "text": "About a fifth of the water you take in comes from food: dal, sabzi, curd and fruit all count.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Protein breakfast",
+        "text": "A protein-rich breakfast, like eggs, besan chilla or paneer, tends to keep you fuller through the morning than one of only carbs.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Nuts",
+        "text": "In large studies, a small handful of nuts most days, about 30 g, is linked with lower heart-disease risk.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Vitamin D",
+        "text": "Few foods carry much vitamin D. Sunlight is the main source; fortified milk, egg yolks and fatty fish add a little.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Calcium and iron",
+        "text": "Calcium competes with iron for absorption. If you take an iron tablet, keep it apart from milk and curd.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Cut fruit",
+        "text": "Cut fruit loses vitamin C to air and light as it sits. Eat it soon after cutting.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Smaller thali",
+        "text": "In several studies, people served on bigger plates ate more. A smaller thali can quietly mean a smaller portion.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Alcohol",
+        "text": "Alcohol has 7 kcal per gram, nearly as much as fat. A 60 mL peg of whisky is about 130 kcal before any mixer.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Height and burn",
+        "text": "In the standard formula for resting energy, each centimetre of height adds about 6 kcal a day.",
+        "scope": "For everyone"
+      },
+      {
+        "kicker": "Muscle burns more",
+        "text": "Muscle uses more energy at rest than fat does, which is one reason strength training helps keep weight steady.",
+        "scope": "For everyone"
+      }
+    ],
+    "categories": [
+      "31–35 years",
+      "156–160 cm",
+      "51–55 kg",
+      "Vegetarians"
+    ]
+  }
+}

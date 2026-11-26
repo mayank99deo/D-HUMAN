@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "etag": "W/\"KrscI8txxWUaURMRxGGB_Q\"",
+  "body": {
+    "state": "stack",
+    "stack": null,
+    "staleReason": null,
+    "basis": "report",
+    "hasReport": true,
+    "body": "32, 160 cm, 55 kg, regular runner",
+    "markerNames": {},
+    "budget": null,
+    "fits": null,
+    "flagged": [],
+    "hold": "pregnant",
+    "holdLine": "You're pregnant or breastfeeding, so we've held your stack: take nothing new without your doctor.",
+    "aiOff": false
+  }
+}

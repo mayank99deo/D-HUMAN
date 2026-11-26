@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "etag": "W/\"bQJlHU-FiZg0L9XHxyHDcg\"",
+  "body": {
+    "id": "abaf9f24-914d-404c-90e0-44bbae17c289",
+    "email": "urgent@demo.dhuman.local",
+    "onboarded": true,
+    "consent": {
+      "at": "2026-11-26T06:18:40.758Z",
+      "version": "2026-11-20",
+      "current": true
+    },
+    "tourDone": true,
+    "healthCheckedAt": null,
+    "hold": "urgent",
+    "reportsVersion": "1.APscwHi6HmUKLvTD",
+    "persona": {
+      "firstName": "Kiran",
+      "initial": "K",
+      "bib": "32",
+      "label": "Regular runner",
+      "archetype": "running",
+      "noun": "runner",
+      "level": "regular",
+      "age": 32
+    },
+    "founder": false,
+    "aiOff": false,
+    "profile": {
+      "name": "Kiran",
+      "birthYear": 1994,
+      "sex": "female",
+      "heightCm": 160,
+      "weightKg": 55,
+      "city": "Indore",
+      "country": "India",
+      "timezone": "Asia/Kolkata",
+      "language": "en",
+      "activities": [
+        "running"
+      ],
+      "primaryActivity": "running",
+      "level": "regular",
+      "sessionsPerWeek": 4,
+      "goals": [
+        "energy"
+      ],
+      "eventInMind": null,
+      "diet": "veg",
+      "conditions": [],
+      "medications": null,
+      "currentSupplements": null,
+      "supplementBudget": null
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "etag": "W/\"MaK_9iLT07tkALyTML6Dsw\"",
+  "body": {
+    "reports": [
+      {
+        "id": "d27009b1-3c7f-4076-bc80-ee59b4667b3c",
+        "status": "ready",
+        "title": "Demo Labs",
+        "when": "Collected 2 Nov 2026",
+        "collectedOn": "2026-11-02",
+        "uploadedOn": "2026-11-26",
+        "markers": 5,
+        "printedFor": null
+      }
+    ]
+  }
+}

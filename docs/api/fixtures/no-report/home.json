@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "etag": "W/\"HZthYm_biz40wogzxMVdiQ\"",
+  "body": {
+    "day": "2026-11-26",
+    "greeting": "Good morning",
+    "noun": "lifter",
+    "bib": {
+      "number": "28",
+      "name": "Ravi",
+      "label": "Regular lifter",
+      "archetype": "strength",
+      "next": "Next: your first blood report",
+      "nextDetail": "Upload a report and your bib gets its verdict.",
+      "retest": null,
+      "tone": null
+    },
+    "reading": null,
+    "report": null,
+    "lastFailed": null,
+    "fuel": {
+      "totals": {
+        "kcal": 1950,
+        "proteinG": 54,
+        "fibreG": 24
+      },
+      "targets": {
+        "kcal": 2520,
+        "proteinG": 115,
+        "fibreG": 30
+      },
+      "meals": 3,
+      "yesterday": {
+        "kcal": 1950,
+        "proteinG": 54,
+        "meals": 3
+      }
+    },
+    "events": {
+      "upcoming": [],
+      "pickedId": null,
+      "targetId": null,
+      "target": null
+    },
+    "stack": {
+      "state": "build_meals",
+      "line": "Your meals are enough to start: we build it from what you eat, measured against your body and training. No report needed.",
+      "button": "Build my stack",
+      "id": null
+    }
+  }
+}

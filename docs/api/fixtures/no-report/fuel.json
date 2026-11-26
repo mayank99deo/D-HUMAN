@@ -1,0 +1,172 @@
+{
+  "status": 200,
+  "etag": "W/\"TO9dlil9hNPOE9FEEUFHxQ\"",
+  "body": {
+    "day": "2026-11-26",
+    "totals": {
+      "kcal": 1950,
+      "proteinG": 54,
+      "carbsG": 180,
+      "fatG": 30,
+      "fibreG": 24
+    },
+    "targets": {
+      "kcal": 2520,
+      "proteinG": 115,
+      "carbsG": 344,
+      "fatG": 76,
+      "fibreG": 30,
+      "basis": [
+        "Energy: resting rate (Mifflin–St Jeor) × 1.5 for a regular level",
+        "Protein: 1.6 g per kg of body weight",
+        "Fat about 27% of energy; carbohydrate fills the rest",
+        "Micronutrients: ICMR-NIN 2020 allowances for adults"
+      ],
+      "estimated": false
+    },
+    "micros": [
+      {
+        "key": "iron_mg",
+        "label": "Iron",
+        "pct": 47,
+        "iu": null
+      },
+      {
+        "key": "calcium_mg",
+        "label": "Calcium",
+        "pct": 36,
+        "iu": null
+      },
+      {
+        "key": "magnesium_mg",
+        "label": "Magnesium",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "zinc_mg",
+        "label": "Zinc",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "b12_ug",
+        "label": "Vitamin B12",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "folate_ug",
+        "label": "Folate",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "vitamin_c_mg",
+        "label": "Vitamin C",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "vitamin_d_iu",
+        "label": "Vitamin D",
+        "pct": null,
+        "iu": 0
+      }
+    ],
+    "meals": [
+      {
+        "id": "2ec9fff3-3201-49ff-97a6-769406970d57",
+        "meal": "breakfast",
+        "title": "Demo breakfast",
+        "source": "text",
+        "kcal": 650,
+        "proteinG": 18,
+        "confidence": "medium",
+        "tip": "Add a bowl of curd.",
+        "items": [
+          "Demo breakfast, 1 plate"
+        ],
+        "demo": true,
+        "time": "1:48 am",
+        "at": "2026-11-25T20:18:40.459Z",
+        "lang": "en"
+      },
+      {
+        "id": "921ad3ef-c810-40fd-b044-5aaaceefbd39",
+        "meal": "lunch",
+        "title": "Demo lunch",
+        "source": "text",
+        "kcal": 650,
+        "proteinG": 18,
+        "confidence": "medium",
+        "tip": "Add a bowl of curd.",
+        "items": [
+          "Demo lunch, 1 plate"
+        ],
+        "demo": true,
+        "time": "6:48 am",
+        "at": "2026-11-26T01:18:40.463Z",
+        "lang": "en"
+      },
+      {
+        "id": "62578532-2678-4f9c-b69d-f663e64ff234",
+        "meal": "dinner",
+        "title": "Demo dinner",
+        "source": "text",
+        "kcal": 650,
+        "proteinG": 18,
+        "confidence": "medium",
+        "tip": "Add a bowl of curd.",
+        "items": [
+          "Demo dinner, 1 plate"
+        ],
+        "demo": true,
+        "time": "11:48 am",
+        "at": "2026-11-26T06:18:40.480Z",
+        "lang": "en"
+      }
+    ],
+    "usualDay": null,
+    "gaps": [
+      {
+        "label": "Magnesium",
+        "pct": 0
+      },
+      {
+        "label": "Zinc",
+        "pct": 0
+      },
+      {
+        "label": "Vitamin B12",
+        "pct": 0
+      },
+      {
+        "label": "Folate",
+        "pct": 0
+      }
+    ],
+    "gapSource": "logs",
+    "stackReady": true,
+    "plan": {
+      "pass": null,
+      "queued": null,
+      "reads": {
+        "used": 0,
+        "limit": 2,
+        "free": true
+      },
+      "meals": {
+        "today": 0,
+        "perDay": 5,
+        "used": 0,
+        "freeLimit": 20
+      },
+      "readBlock": null,
+      "mealBlock": null,
+      "canBuy": true,
+      "paymentsOn": false
+    },
+    "aiOff": false
+  }
+}

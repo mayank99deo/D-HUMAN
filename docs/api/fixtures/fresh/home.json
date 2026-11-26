@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "etag": "W/\"XJBu7are_pXhAl-87swO9w\"",
+  "body": {
+    "day": "2026-11-26",
+    "greeting": "Good morning",
+    "noun": "runner",
+    "bib": {
+      "number": "32",
+      "name": "Asha",
+      "label": "Regular runner",
+      "archetype": "running",
+      "next": "Next: your first blood report",
+      "nextDetail": "Upload a report and your bib gets its verdict.",
+      "retest": null,
+      "tone": null
+    },
+    "reading": null,
+    "report": null,
+    "lastFailed": null,
+    "fuel": {
+      "totals": {
+        "kcal": 0,
+        "proteinG": 0,
+        "fibreG": 0
+      },
+      "targets": {
+        "kcal": 1840,
+        "proteinG": 77,
+        "fibreG": 30
+      },
+      "meals": 0,
+      "yesterday": {
+        "kcal": 0,
+        "proteinG": 0,
+        "meals": 0
+      }
+    },
+    "events": {
+      "upcoming": [],
+      "pickedId": null,
+      "targetId": null,
+      "target": null
+    },
+    "stack": {
+      "state": "start",
+      "line": "Log meals on 3 days, or describe a normal day, and we'll build it. No report needed.",
+      "button": "Start my stack",
+      "id": null
+    }
+  }
+}

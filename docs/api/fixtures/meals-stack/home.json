@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "etag": "W/\"seXPFnZ2m8p4l02qizxN1Q\"",
+  "body": {
+    "day": "2026-11-26",
+    "greeting": "Good morning",
+    "noun": "runner",
+    "bib": {
+      "number": "32",
+      "name": "Dev",
+      "label": "Regular runner",
+      "archetype": "running",
+      "next": "Next: your first blood report",
+      "nextDetail": "Upload a report and your bib gets its verdict.",
+      "retest": null,
+      "tone": null
+    },
+    "reading": null,
+    "report": null,
+    "lastFailed": null,
+    "fuel": {
+      "totals": {
+        "kcal": 1950,
+        "proteinG": 54,
+        "fibreG": 24
+      },
+      "targets": {
+        "kcal": 1840,
+        "proteinG": 77,
+        "fibreG": 30
+      },
+      "meals": 3,
+      "yesterday": {
+        "kcal": 1950,
+        "proteinG": 54,
+        "meals": 3
+      }
+    },
+    "events": {
+      "upcoming": [],
+      "pickedId": null,
+      "targetId": null,
+      "target": null
+    },
+    "stack": {
+      "state": "ready",
+      "line": "1 supplement, each tied to a gap in what you eat. A blood report adds what food can't show.",
+      "button": "Open my stack",
+      "id": "8271569e-7158-472e-a3e5-2c478231cbc3"
+    }
+  }
+}

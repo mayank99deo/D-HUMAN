@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "etag": "W/\"FMpuUdNxe2d0BhfeWk4G4w\"",
+  "body": {
+    "minSupported": "1.0.0",
+    "latest": null,
+    "updateUrl": null,
+    "apiBase": "https://www.d-human.fit",
+    "off": [],
+    "links": {
+      "privacy": null,
+      "terms": null,
+      "support": null
+    },
+    "notice": null
+  }
+}

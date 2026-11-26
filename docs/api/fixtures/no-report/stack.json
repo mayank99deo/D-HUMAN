@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "etag": "W/\"gqMs4-2G4S7Cj2RC7Iqxkg\"",
+  "body": {
+    "state": "stack",
+    "stack": null,
+    "staleReason": null,
+    "basis": "meals",
+    "hasReport": false,
+    "body": "28, 175 cm, 72 kg, regular lifter",
+    "markerNames": {},
+    "budget": null,
+    "fits": null,
+    "flagged": [],
+    "hold": null,
+    "holdLine": null,
+    "aiOff": false
+  }
+}

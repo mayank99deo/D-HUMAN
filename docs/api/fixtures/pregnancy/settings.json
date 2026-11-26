@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "etag": "W/\"vJEPFcY6V2b3tpTsjr5JZg\"",
+  "body": {
+    "email": "pregnant@demo.dhuman.local",
+    "plan": {
+      "pass": null,
+      "queued": null,
+      "reads": {
+        "used": 0,
+        "limit": 2,
+        "free": true
+      },
+      "meals": {
+        "today": 0,
+        "perDay": 5,
+        "used": 0,
+        "freeLimit": 20
+      },
+      "readBlock": null,
+      "mealBlock": null,
+      "canBuy": true,
+      "paymentsOn": false
+    },
+    "passes": [],
+    "emails": {
+      "weekly": true,
+      "questions": true,
+      "weeklyPaused": false
+    },
+    "weekly": {
+      "channel": "email"
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "status": 200,
+  "etag": "W/\"3Vf6GNRhnUhBEuvNxl-uNQ\"",
+  "body": {
+    "plan": {
+      "pass": null,
+      "queued": null,
+      "reads": {
+        "used": 0,
+        "limit": 2,
+        "free": true
+      },
+      "meals": {
+        "today": 0,
+        "perDay": 5,
+        "used": 0,
+        "freeLimit": 20
+      },
+      "readBlock": null,
+      "mealBlock": null,
+      "canBuy": true,
+      "paymentsOn": false
+    },
+    "target": null,
+    "noun": "lifter",
+    "facts": [
+      {
+        "kicker": "Creatinine",
+        "text": "More muscle makes more creatinine. Lifters can read a little above range with healthy kidneys."
+      },
+      {
+        "kicker": "Liver enzymes",
+        "text": "Heavy lifting can raise ALT and AST for several days, enough to look like a liver problem on paper."
+      },
+      {
+        "kicker": "HbA1c",
+        "text": "HbA1c tracks your average blood sugar over roughly 2–3 months, because it rides on red blood cells that live about 120 days."
+      },
+      {
+        "kicker": "Timing",
+        "text": "Testosterone peaks in the morning, so labs prefer a sample before about 10 a.m."
+      },
+      {
+        "kicker": "Sleep",
+        "text": "In lab studies, a week of about 5 hours' sleep a night lowered testosterone in healthy young men."
+      },
+      {
+        "kicker": "B12",
+        "text": "B12 comes almost only from animal foods. Vegetarians, and people on long-term metformin or acid-reducing tablets, more often run low."
+      },
+      {
+        "kicker": "Protein timing",
+        "text": "Spreading protein over 3–4 meals of roughly 20–40 g each supports muscle growth better than one big serving."
+      },
+      {
+        "kicker": "Vitamin D",
+        "text": "Muscle tissue has vitamin D receptors, and very low vitamin D is linked with muscle weakness."
+      },
+      {
+        "kicker": "TSH",
+        "text": "TSH runs backwards: a high TSH usually means the thyroid is underactive, because the brain is signalling harder to get it going."
+      },
+      {
+        "kicker": "Iron & chai",
+        "text": "Tea and coffee with meals can cut the iron you absorb from plant foods. Vitamin C in the same meal, like lemon on dal, helps."
+      },
+      {
+        "kicker": "Fasting",
+        "text": "A fasting test means 8–12 hours with only water. Even a sweet chai beforehand can skew fasting glucose."
+      },
+      {
+        "kicker": "Rest day",
+        "text": "Hard training the day before a test can raise CK, AST and even creatinine. Bloods read cleanest after a rest day."
+      },
+      {
+        "kicker": "Sunshine",
+        "text": "Vitamin D is made in your skin from UVB light. Indoor days, covered skin and darker skin all cut how much you make, even in Indian sun."
+      },
+      {
+        "kicker": "More isn't better",
+        "text": "Vitamin D, vitamin A and iron can build up in the body and cause harm at high doses. That's why D-Human reads before it recommends."
+      },
+      {
+        "kicker": "Earned",
+        "text": "A supplement earns its place by fixing a measured gap. Without a test, it's a guess."
+      },
+      {
+        "kicker": "Ferritin",
+        "text": "Ferritin is your iron savings account. It can run low long before haemoglobin drops, so a normal Hb doesn't rule out low iron."
+      },
+      {
+        "kicker": "Ranges",
+        "text": "A reference range is where most people in a lab's population fall. 'In range' isn't always 'ideal for you'."
+      },
+      {
+        "kicker": "Trends",
+        "text": "One result is a snapshot. The same marker, same lab, same time of day, retested, shows you the trend."
+      }
+    ],
+    "limits": {
+      "maxFiles": 6,
+      "maxTotalBytes": 4194304,
+      "types": [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ]
+    },
+    "aiOff": false
+  }
+}

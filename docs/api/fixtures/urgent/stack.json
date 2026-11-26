@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "etag": "W/\"ys8CNAbcNIoP2sGtKPtxHA\"",
+  "body": {
+    "state": "stack",
+    "stack": null,
+    "staleReason": null,
+    "basis": "report",
+    "hasReport": true,
+    "body": "32, 160 cm, 55 kg, regular runner",
+    "markerNames": {},
+    "budget": null,
+    "fits": null,
+    "flagged": [
+      {
+        "name": "Ferritin",
+        "urgent": true
+      }
+    ],
+    "hold": "urgent",
+    "holdLine": "Ferritin needs medical advice today, so we've held your stack until a doctor has seen it.",
+    "aiOff": false
+  }
+}

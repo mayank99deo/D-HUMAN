@@ -1,0 +1,8 @@
+{
+  "status": 409,
+  "body": {
+    "error": "consent_needed",
+    "message": "We've updated what we ask you to agree to. Read it and agree to carry on.",
+    "version": "2026-11-20"
+  }
+}

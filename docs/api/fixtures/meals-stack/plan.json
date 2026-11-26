@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "etag": "W/\"cmslKlSmwCQDvQl4wYJOnA\"",
+  "body": {
+    "pass": null,
+    "queued": null,
+    "reads": {
+      "used": 0,
+      "limit": 2,
+      "free": true
+    },
+    "meals": {
+      "today": 0,
+      "perDay": 5,
+      "used": 0,
+      "freeLimit": 20
+    },
+    "readBlock": null,
+    "mealBlock": null,
+    "canBuy": true,
+    "paymentsOn": false
+  }
+}

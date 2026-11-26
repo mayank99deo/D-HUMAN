@@ -1,0 +1,34 @@
+{
+  "status": 200,
+  "etag": "W/\"9HJaK3VLxn_FiNVkrFdFVg\"",
+  "body": {
+    "day": "2026-11-26",
+    "cards": [
+      {
+        "key": "week:0",
+        "period": "week",
+        "offset": 0,
+        "name": "This week",
+        "label": "23 Nov – 29 Nov",
+        "start": "2026-11-23",
+        "end": "2026-11-29",
+        "ongoing": true,
+        "hasData": false,
+        "wrap": null
+      },
+      {
+        "key": "week:-1",
+        "period": "week",
+        "offset": -1,
+        "name": "Last week",
+        "label": "16 Nov – 22 Nov",
+        "start": "2026-11-16",
+        "end": "2026-11-22",
+        "ongoing": false,
+        "hasData": false,
+        "wrap": null
+      }
+    ],
+    "aiOff": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "status": 400,
+  "body": {
+    "error": "bad_time",
+    "message": "This meal was saved too long ago to log for that day."
+  }
+}

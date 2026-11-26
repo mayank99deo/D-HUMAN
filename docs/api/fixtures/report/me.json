@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "etag": "W/\"wvkk1y2moBkKj5RvAhySeA\"",
+  "body": {
+    "id": "5e202f21-3804-4f2c-af1c-abd019b3bcda",
+    "email": "report@demo.dhuman.local",
+    "onboarded": true,
+    "consent": {
+      "at": "2026-11-26T06:18:40.645Z",
+      "version": "2026-11-20",
+      "current": true
+    },
+    "tourDone": true,
+    "healthCheckedAt": null,
+    "hold": null,
+    "reportsVersion": "1.PKluLRRIg3Uy1DFx",
+    "persona": {
+      "firstName": "Priya",
+      "initial": "P",
+      "bib": "32",
+      "label": "Regular runner",
+      "archetype": "running",
+      "noun": "runner",
+      "level": "regular",
+      "age": 32
+    },
+    "founder": false,
+    "aiOff": false,
+    "profile": {
+      "name": "Priya",
+      "birthYear": 1994,
+      "sex": "female",
+      "heightCm": 160,
+      "weightKg": 55,
+      "city": "Indore",
+      "country": "India",
+      "timezone": "Asia/Kolkata",
+      "language": "en",
+      "activities": [
+        "running"
+      ],
+      "primaryActivity": "running",
+      "level": "regular",
+      "sessionsPerWeek": 4,
+      "goals": [
+        "energy"
+      ],
+      "eventInMind": null,
+      "diet": "veg",
+      "conditions": [],
+      "medications": null,
+      "currentSupplements": null,
+      "supplementBudget": null
+    }
+  }
+}

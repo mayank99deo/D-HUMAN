@@ -1,0 +1,103 @@
+{
+  "status": 200,
+  "etag": "W/\"05JhKf1V_4Tbdtu6vP6Hdg\"",
+  "body": {
+    "day": "2026-11-26",
+    "totals": {
+      "kcal": 0,
+      "proteinG": 0,
+      "carbsG": 0,
+      "fatG": 0,
+      "fibreG": 0
+    },
+    "targets": {
+      "kcal": 1840,
+      "proteinG": 77,
+      "carbsG": 260,
+      "fatG": 55,
+      "fibreG": 30,
+      "basis": [
+        "Energy: resting rate (Mifflin–St Jeor) × 1.5 for a regular level",
+        "Protein: 1.4 g per kg of body weight",
+        "Fat about 27% of energy; carbohydrate fills the rest",
+        "Micronutrients: ICMR-NIN 2020 allowances for adults"
+      ],
+      "estimated": false
+    },
+    "micros": [
+      {
+        "key": "iron_mg",
+        "label": "Iron",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "calcium_mg",
+        "label": "Calcium",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "magnesium_mg",
+        "label": "Magnesium",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "zinc_mg",
+        "label": "Zinc",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "b12_ug",
+        "label": "Vitamin B12",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "folate_ug",
+        "label": "Folate",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "vitamin_c_mg",
+        "label": "Vitamin C",
+        "pct": 0,
+        "iu": null
+      },
+      {
+        "key": "vitamin_d_iu",
+        "label": "Vitamin D",
+        "pct": null,
+        "iu": 0
+      }
+    ],
+    "meals": [],
+    "usualDay": null,
+    "gaps": [],
+    "gapSource": "none",
+    "stackReady": false,
+    "plan": {
+      "pass": null,
+      "queued": null,
+      "reads": {
+        "used": 0,
+        "limit": 2,
+        "free": true
+      },
+      "meals": {
+        "today": 0,
+        "perDay": 5,
+        "used": 0,
+        "freeLimit": 20
+      },
+      "readBlock": null,
+      "mealBlock": null,
+      "canBuy": true,
+      "paymentsOn": false
+    },
+    "aiOff": false
+  }
+}

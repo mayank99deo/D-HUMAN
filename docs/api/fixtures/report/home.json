@@ -1,0 +1,245 @@
+{
+  "status": 200,
+  "etag": "W/\"_AGJQxZDbfbYF9x0Pa5awQ\"",
+  "body": {
+    "day": "2026-11-26",
+    "greeting": "Good morning",
+    "noun": "runner",
+    "bib": {
+      "number": "32",
+      "name": "Priya",
+      "label": "Regular runner",
+      "archetype": "running",
+      "next": "Retest due 25 Jan, in 9 weeks",
+      "nextDetail": "To see it move.",
+      "retest": null,
+      "tone": "go_with_tweaks"
+    },
+    "reading": null,
+    "report": {
+      "id": "c1d22b53-3e5e-4bdb-988f-2def2ad23c1d",
+      "verdict": {
+        "level": "go_with_tweaks",
+        "line": "Ready, with one fix.",
+        "detail": "Demo read, written from a template.",
+        "lang": null
+      },
+      "demo": true,
+      "source": "collected 2 Nov",
+      "printedFor": null,
+      "matter": [
+        {
+          "id": "a6df5e7e-115d-473b-a64e-47356ab1c78c",
+          "key": "ferritin",
+          "name": "Ferritin",
+          "short": "Ferritin",
+          "panel": "iron",
+          "value": 10,
+          "valueText": null,
+          "shown": "10",
+          "unit": "ng/mL",
+          "refLow": 12,
+          "refHigh": 60,
+          "range": "12–60",
+          "status": "low",
+          "statusText": "Below range",
+          "flag": null,
+          "flagText": null,
+          "note": "Demo note.",
+          "before": null,
+          "derived": false
+        },
+        {
+          "id": "070ee673-3244-4e68-9478-81691e53494f",
+          "key": "hemoglobin",
+          "name": "Haemoglobin",
+          "short": "Hb",
+          "panel": "blood",
+          "value": 17,
+          "valueText": null,
+          "shown": "17",
+          "unit": "ng/mL",
+          "refLow": 12,
+          "refHigh": 60,
+          "range": "12–60",
+          "status": "in_range",
+          "statusText": "In range",
+          "flag": null,
+          "flagText": null,
+          "note": "Demo note.",
+          "before": null,
+          "derived": false
+        },
+        {
+          "id": "5ca74239-ed4b-4ab5-8dae-b231c681b200",
+          "key": "vitamin_d",
+          "name": "Vitamin D (25-OH)",
+          "short": "Vit D",
+          "panel": "vitamins",
+          "value": 24,
+          "valueText": null,
+          "shown": "24",
+          "unit": "ng/mL",
+          "refLow": 12,
+          "refHigh": 60,
+          "range": "12–60",
+          "status": "in_range",
+          "statusText": "In range",
+          "flag": null,
+          "flagText": null,
+          "note": "Demo note.",
+          "before": null,
+          "derived": false
+        },
+        {
+          "id": "c8b07d56-574c-48c4-b46b-103dadb46a62",
+          "key": "b12",
+          "name": "Vitamin B12",
+          "short": "B12",
+          "panel": "vitamins",
+          "value": 31,
+          "valueText": null,
+          "shown": "31",
+          "unit": "ng/mL",
+          "refLow": 12,
+          "refHigh": 60,
+          "range": "12–60",
+          "status": "in_range",
+          "statusText": "In range",
+          "flag": null,
+          "flagText": null,
+          "note": null,
+          "before": null,
+          "derived": false
+        },
+        {
+          "id": "61702593-b24e-4c9d-936b-78d32759ecb1",
+          "key": "tsh",
+          "name": "Thyroid-stimulating hormone",
+          "short": "TSH",
+          "panel": "thyroid",
+          "value": 38,
+          "valueText": null,
+          "shown": "38",
+          "unit": "ng/mL",
+          "refLow": 12,
+          "refHigh": 60,
+          "range": "12–60",
+          "status": "in_range",
+          "statusText": "In range",
+          "flag": null,
+          "flagText": null,
+          "note": null,
+          "before": null,
+          "derived": false
+        }
+      ],
+      "focus": [
+        {
+          "title": "Lift it with food",
+          "why": "It matters for your training.",
+          "action": "Add a portion of greens each day."
+        }
+      ],
+      "contour": [
+        {
+          "id": "070ee673-3244-4e68-9478-81691e53494f",
+          "short": "Hb",
+          "name": "Haemoglobin",
+          "value": 17,
+          "valueText": null,
+          "unit": "ng/mL",
+          "low": 12,
+          "high": 60,
+          "status": "in_range",
+          "range": "12–60"
+        },
+        {
+          "id": "a6df5e7e-115d-473b-a64e-47356ab1c78c",
+          "short": "Ferritin",
+          "name": "Ferritin",
+          "value": 10,
+          "valueText": null,
+          "unit": "ng/mL",
+          "low": 12,
+          "high": 60,
+          "status": "low",
+          "range": "12–60"
+        },
+        {
+          "id": "5ca74239-ed4b-4ab5-8dae-b231c681b200",
+          "short": "Vit D",
+          "name": "Vitamin D (25-OH)",
+          "value": 24,
+          "valueText": null,
+          "unit": "ng/mL",
+          "low": 12,
+          "high": 60,
+          "status": "in_range",
+          "range": "12–60"
+        },
+        {
+          "id": "c8b07d56-574c-48c4-b46b-103dadb46a62",
+          "short": "B12",
+          "name": "Vitamin B12",
+          "value": 31,
+          "valueText": null,
+          "unit": "ng/mL",
+          "low": 12,
+          "high": 60,
+          "status": "in_range",
+          "range": "12–60"
+        },
+        {
+          "id": "61702593-b24e-4c9d-936b-78d32759ecb1",
+          "short": "TSH",
+          "name": "Thyroid-stimulating hormone",
+          "value": 38,
+          "valueText": null,
+          "unit": "ng/mL",
+          "low": 12,
+          "high": 60,
+          "status": "in_range",
+          "range": "12–60"
+        }
+      ],
+      "retest": {
+        "dueOn": "2027-01-25",
+        "days": 60,
+        "label": "Retest due 25 Jan, in 9 weeks",
+        "why": "To see it move."
+      }
+    },
+    "lastFailed": null,
+    "fuel": {
+      "totals": {
+        "kcal": 420,
+        "proteinG": 18,
+        "fibreG": 8
+      },
+      "targets": {
+        "kcal": 1840,
+        "proteinG": 77,
+        "fibreG": 30
+      },
+      "meals": 1,
+      "yesterday": {
+        "kcal": 0,
+        "proteinG": 0,
+        "meals": 0
+      }
+    },
+    "events": {
+      "upcoming": [],
+      "pickedId": null,
+      "targetId": null,
+      "target": null
+    },
+    "stack": {
+      "state": "build_report",
+      "line": "Built from this report and what you eat. Only what a marker or a real gap points to.",
+      "button": "Build my stack",
+      "id": null
+    }
+  }
+}

@@ -1,0 +1,281 @@
+{
+  "status": 200,
+  "etag": "W/\"O80sgegIvk3BiqasE310Kw\"",
+  "body": {
+    "activities": [
+      {
+        "id": "running",
+        "label": "Running",
+        "hint": "5K to ultras"
+      },
+      {
+        "id": "hyrox",
+        "label": "HYROX & functional",
+        "hint": "Hybrid races, CrossFit"
+      },
+      {
+        "id": "strength",
+        "label": "Strength & gym",
+        "hint": "Lifting, bodybuilding"
+      },
+      {
+        "id": "trekking",
+        "label": "Trekking & the road",
+        "hint": "Hikes, high passes, long trips"
+      },
+      {
+        "id": "cycling",
+        "label": "Cycling",
+        "hint": "Road, MTB, brevets"
+      },
+      {
+        "id": "swimming",
+        "label": "Swimming",
+        "hint": "Pool or open water"
+      },
+      {
+        "id": "yoga",
+        "label": "Yoga & mobility",
+        "hint": "Yoga, pilates, stretching"
+      },
+      {
+        "id": "team",
+        "label": "Team & racket sports",
+        "hint": "Cricket, football, badminton"
+      },
+      {
+        "id": "walking",
+        "label": "Walking",
+        "hint": "Everyday steps"
+      },
+      {
+        "id": "starting",
+        "label": "Not much yet",
+        "hint": "Starting from zero is fine"
+      }
+    ],
+    "levels": [
+      {
+        "id": "starting",
+        "label": "Just starting",
+        "hint": "Building the habit"
+      },
+      {
+        "id": "regular",
+        "label": "Regular",
+        "hint": "2–4 sessions a week"
+      },
+      {
+        "id": "competitive",
+        "label": "Competitive",
+        "hint": "I race or enter events"
+      },
+      {
+        "id": "elite",
+        "label": "Elite",
+        "hint": "Podiums, coached, high volume"
+      }
+    ],
+    "goals": [
+      {
+        "id": "energy",
+        "label": "More energy",
+        "hint": null
+      },
+      {
+        "id": "fat_loss",
+        "label": "Lose fat",
+        "hint": null
+      },
+      {
+        "id": "muscle",
+        "label": "Build muscle",
+        "hint": null
+      },
+      {
+        "id": "performance",
+        "label": "Perform at an event",
+        "hint": null
+      },
+      {
+        "id": "sleep",
+        "label": "Sleep better",
+        "hint": null
+      },
+      {
+        "id": "stress",
+        "label": "Handle stress",
+        "hint": null
+      },
+      {
+        "id": "longevity",
+        "label": "Stay healthy for decades",
+        "hint": null
+      },
+      {
+        "id": "deficiency",
+        "label": "Fix a known deficiency",
+        "hint": null
+      }
+    ],
+    "diets": [
+      {
+        "id": "veg",
+        "label": "Vegetarian",
+        "hint": null
+      },
+      {
+        "id": "eggetarian",
+        "label": "Eggetarian",
+        "hint": null
+      },
+      {
+        "id": "nonveg",
+        "label": "Non-vegetarian",
+        "hint": null
+      },
+      {
+        "id": "vegan",
+        "label": "Vegan",
+        "hint": null
+      },
+      {
+        "id": "jain",
+        "label": "Jain",
+        "hint": null
+      }
+    ],
+    "conditions": [
+      {
+        "id": "thyroid",
+        "label": "Thyroid",
+        "hint": null
+      },
+      {
+        "id": "diabetes",
+        "label": "Diabetes or prediabetes",
+        "hint": null
+      },
+      {
+        "id": "bp",
+        "label": "High blood pressure",
+        "hint": null
+      },
+      {
+        "id": "cholesterol",
+        "label": "High cholesterol",
+        "hint": null
+      },
+      {
+        "id": "pcos",
+        "label": "PCOS",
+        "hint": null
+      },
+      {
+        "id": "anaemia",
+        "label": "Anaemia",
+        "hint": null
+      },
+      {
+        "id": "pregnant",
+        "label": "Pregnant or breastfeeding",
+        "hint": null
+      },
+      {
+        "id": "kidney",
+        "label": "Kidney",
+        "hint": null
+      },
+      {
+        "id": "liver",
+        "label": "Liver",
+        "hint": null
+      },
+      {
+        "id": "heart",
+        "label": "Heart",
+        "hint": null
+      }
+    ],
+    "sexes": [
+      {
+        "id": "male",
+        "label": "Male",
+        "hint": null
+      },
+      {
+        "id": "female",
+        "label": "Female",
+        "hint": null
+      },
+      {
+        "id": "intersex",
+        "label": "Intersex",
+        "hint": null
+      }
+    ],
+    "languages": [
+      {
+        "id": "en",
+        "label": "English",
+        "hint": null
+      },
+      {
+        "id": "hi",
+        "label": "हिंदी",
+        "hint": null
+      },
+      {
+        "id": "hinglish",
+        "label": "Hinglish",
+        "hint": null
+      }
+    ],
+    "budgets": [
+      {
+        "id": "under_1000",
+        "label": "Under ₹1,000",
+        "cap": 1000
+      },
+      {
+        "id": "1000_2000",
+        "label": "₹1,000–2,000",
+        "cap": 2000
+      },
+      {
+        "id": "2000_3000",
+        "label": "₹2,000–3,000",
+        "cap": 3000
+      },
+      {
+        "id": "3000_4000",
+        "label": "₹3,000–4,000",
+        "cap": 4000
+      },
+      {
+        "id": "4000_5000",
+        "label": "₹4,000–5,000",
+        "cap": 5000
+      },
+      {
+        "id": "5000_plus",
+        "label": "Above ₹5,000",
+        "cap": null
+      },
+      {
+        "id": "not_sure",
+        "label": "Not sure",
+        "cap": null
+      }
+    ],
+    "birthYears": {
+      "min": 1926,
+      "max": 2008
+    },
+    "limits": {
+      "goals": 3,
+      "activities": 10,
+      "conditions": 10
+    }
+  }
+}

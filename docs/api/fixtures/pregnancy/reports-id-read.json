@@ -1,0 +1,177 @@
+{
+  "status": 200,
+  "etag": "W/\"uAMTV6zIwriDL8W5rjPUPQ\"",
+  "body": {
+    "id": "d27009b1-3c7f-4076-bc80-ee59b4667b3c",
+    "lab": "Demo Labs",
+    "collectedOn": "2026-11-02",
+    "uploadedOn": "2026-11-26",
+    "demo": true,
+    "aiNote": "Demo read, written from a template",
+    "printedFor": null,
+    "verdict": {
+      "level": "go_with_tweaks",
+      "line": "Ready, with one fix.",
+      "detail": "Demo read, written from a template.",
+      "lang": null
+    },
+    "headline": "A steady base",
+    "summary": "Demo read: most results sit in range.",
+    "counts": {
+      "markers": 5,
+      "out": 1
+    },
+    "wins": [
+      "Most results are in range."
+    ],
+    "focus": [
+      {
+        "title": "Lift it with food",
+        "why": "It matters for your training.",
+        "action": "Add a portion of greens each day."
+      }
+    ],
+    "groups": [
+      {
+        "panel": "Blood count",
+        "markers": [
+          {
+            "id": "f94e8815-c23b-4ad0-b17b-36f033806f88",
+            "key": "hemoglobin",
+            "name": "Haemoglobin",
+            "short": "Hb",
+            "panel": "blood",
+            "value": 17,
+            "valueText": null,
+            "shown": "17",
+            "unit": "ng/mL",
+            "refLow": 12,
+            "refHigh": 60,
+            "range": "12–60",
+            "status": "in_range",
+            "statusText": "In range",
+            "flag": null,
+            "flagText": null,
+            "note": "Demo note.",
+            "before": null,
+            "derived": false
+          }
+        ]
+      },
+      {
+        "panel": "Iron",
+        "markers": [
+          {
+            "id": "7d96b960-54b2-4bce-bb23-04e1c8f03900",
+            "key": "ferritin",
+            "name": "Ferritin",
+            "short": "Ferritin",
+            "panel": "iron",
+            "value": 10,
+            "valueText": null,
+            "shown": "10",
+            "unit": "ng/mL",
+            "refLow": 12,
+            "refHigh": 60,
+            "range": "12–60",
+            "status": "low",
+            "statusText": "Below range",
+            "flag": null,
+            "flagText": null,
+            "note": "Demo note.",
+            "before": null,
+            "derived": false
+          }
+        ]
+      },
+      {
+        "panel": "Vitamins",
+        "markers": [
+          {
+            "id": "7a34cd48-0f70-4579-9db2-e805ce586d1c",
+            "key": "vitamin_d",
+            "name": "Vitamin D (25-OH)",
+            "short": "Vit D",
+            "panel": "vitamins",
+            "value": 24,
+            "valueText": null,
+            "shown": "24",
+            "unit": "ng/mL",
+            "refLow": 12,
+            "refHigh": 60,
+            "range": "12–60",
+            "status": "in_range",
+            "statusText": "In range",
+            "flag": null,
+            "flagText": null,
+            "note": "Demo note.",
+            "before": null,
+            "derived": false
+          },
+          {
+            "id": "c92be8f2-1131-4e20-b13c-e8d86c20a405",
+            "key": "b12",
+            "name": "Vitamin B12",
+            "short": "B12",
+            "panel": "vitamins",
+            "value": 31,
+            "valueText": null,
+            "shown": "31",
+            "unit": "ng/mL",
+            "refLow": 12,
+            "refHigh": 60,
+            "range": "12–60",
+            "status": "in_range",
+            "statusText": "In range",
+            "flag": null,
+            "flagText": null,
+            "note": "Demo note.",
+            "before": null,
+            "derived": false
+          }
+        ]
+      },
+      {
+        "panel": "Thyroid",
+        "markers": [
+          {
+            "id": "27bc2647-6a86-449c-8536-bf1a06c1f7f0",
+            "key": "tsh",
+            "name": "Thyroid-stimulating hormone",
+            "short": "TSH",
+            "panel": "thyroid",
+            "value": 38,
+            "valueText": null,
+            "shown": "38",
+            "unit": "ng/mL",
+            "refLow": 12,
+            "refHigh": 60,
+            "range": "12–60",
+            "status": "in_range",
+            "statusText": "In range",
+            "flag": null,
+            "flagText": null,
+            "note": "Demo note.",
+            "before": null,
+            "derived": false
+          }
+        ]
+      }
+    ],
+    "doctorQuestions": [],
+    "retest": {
+      "dueOn": "2027-01-25",
+      "days": 60,
+      "label": "Retest due 25 Jan, in 9 weeks",
+      "weeks": 12,
+      "from": "collected",
+      "why": "To see it move.",
+      "markers": [
+        "Ferritin"
+      ]
+    },
+    "testTips": [
+      "Fast for 10 hours before the test."
+    ]
+  }
+}

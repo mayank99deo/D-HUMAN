@@ -1,0 +1,12 @@
+{
+  "status": 200,
+  "etag": "W/\"ZwI4WLS8YbDub18AhMla1A\"",
+  "body": {
+    "day": "2026-11-26",
+    "days": [],
+    "target": {
+      "kcal": 1840,
+      "proteinG": 77
+    }
+  }
+}

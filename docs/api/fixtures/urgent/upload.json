@@ -1,0 +1,120 @@
+{
+  "status": 200,
+  "etag": "W/\"Q2xWrOp6IqNdWvewedM5TQ\"",
+  "body": {
+    "plan": {
+      "pass": null,
+      "queued": null,
+      "reads": {
+        "used": 0,
+        "limit": 2,
+        "free": true
+      },
+      "meals": {
+        "today": 0,
+        "perDay": 5,
+        "used": 0,
+        "freeLimit": 20
+      },
+      "readBlock": null,
+      "mealBlock": null,
+      "canBuy": true,
+      "paymentsOn": false
+    },
+    "target": null,
+    "noun": "runner",
+    "facts": [
+      {
+        "kicker": "Foot strike",
+        "text": "Every foot strike breaks a few red blood cells. It's one reason runners lose a little more iron than most."
+      },
+      {
+        "kicker": "Hepcidin",
+        "text": "For a few hours after a hard run, a hormone called hepcidin rises and your gut absorbs less iron."
+      },
+      {
+        "kicker": "HbA1c",
+        "text": "HbA1c tracks your average blood sugar over roughly 2–3 months, because it rides on red blood cells that live about 120 days."
+      },
+      {
+        "kicker": "Runner's ferritin",
+        "text": "Many sports doctors look for ferritin above roughly 30–50 ng/mL in runners, higher than some lab cut-offs."
+      },
+      {
+        "kicker": "Heavy legs",
+        "text": "Low iron stores, even without anaemia, can show up as heavy legs and slower recovery."
+      },
+      {
+        "kicker": "B12",
+        "text": "B12 comes almost only from animal foods. Vegetarians, and people on long-term metformin or acid-reducing tablets, more often run low."
+      },
+      {
+        "kicker": "Sports anaemia",
+        "text": "Endurance training expands plasma volume first, so haemoglobin can read a little low. Often that's harmless dilution."
+      },
+      {
+        "kicker": "HDL",
+        "text": "Endurance training tends to raise HDL, the cholesterol that helps clear the rest."
+      },
+      {
+        "kicker": "TSH",
+        "text": "TSH runs backwards: a high TSH usually means the thyroid is underactive, because the brain is signalling harder to get it going."
+      },
+      {
+        "kicker": "Salt",
+        "text": "Runs over about 90 minutes in heat can drain sodium as well as water. Sweat can carry a lot of salt."
+      },
+      {
+        "kicker": "Bones",
+        "text": "Low vitamin D is linked with more stress fractures in some studies of runners and military recruits."
+      },
+      {
+        "kicker": "Fasting",
+        "text": "A fasting test means 8–12 hours with only water. Even a sweet chai beforehand can skew fasting glucose."
+      },
+      {
+        "kicker": "Rest day",
+        "text": "Hard training the day before a test can raise CK, AST and even creatinine. Bloods read cleanest after a rest day."
+      },
+      {
+        "kicker": "Sunshine",
+        "text": "Vitamin D is made in your skin from UVB light. Indoor days, covered skin and darker skin all cut how much you make, even in Indian sun."
+      },
+      {
+        "kicker": "More isn't better",
+        "text": "Vitamin D, vitamin A and iron can build up in the body and cause harm at high doses. That's why D-Human reads before it recommends."
+      },
+      {
+        "kicker": "Earned",
+        "text": "A supplement earns its place by fixing a measured gap. Without a test, it's a guess."
+      },
+      {
+        "kicker": "Ferritin",
+        "text": "Ferritin is your iron savings account. It can run low long before haemoglobin drops, so a normal Hb doesn't rule out low iron."
+      },
+      {
+        "kicker": "Ranges",
+        "text": "A reference range is where most people in a lab's population fall. 'In range' isn't always 'ideal for you'."
+      },
+      {
+        "kicker": "Trends",
+        "text": "One result is a snapshot. The same marker, same lab, same time of day, retested, shows you the trend."
+      },
+      {
+        "kicker": "Iron & chai",
+        "text": "Tea and coffee with meals can cut the iron you absorb from plant foods. Vitamin C in the same meal, like lemon on dal, helps."
+      }
+    ],
+    "limits": {
+      "maxFiles": 6,
+      "maxTotalBytes": 4194304,
+      "types": [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ]
+    },
+    "aiOff": false
+  }
+}

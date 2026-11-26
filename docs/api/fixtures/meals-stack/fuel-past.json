@@ -1,0 +1,184 @@
+{
+  "status": 200,
+  "etag": "W/\"zLl4vr9njsRUCi20IijrUQ\"",
+  "body": {
+    "day": "2026-11-26",
+    "days": [
+      {
+        "date": "2026-11-25",
+        "label": "Yesterday",
+        "meals": [
+          {
+            "id": "33016436-72b7-4dd5-b9c9-4588b07ad8d1",
+            "meal": "breakfast",
+            "title": "Demo breakfast",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo breakfast, 1 plate"
+            ],
+            "demo": true,
+            "time": "1:48 am",
+            "at": "2026-11-24T20:18:40.978Z",
+            "lang": "en"
+          },
+          {
+            "id": "f1a787d1-bb59-4c7b-8525-0553f804cfca",
+            "meal": "lunch",
+            "title": "Demo lunch",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo lunch, 1 plate"
+            ],
+            "demo": true,
+            "time": "6:48 am",
+            "at": "2026-11-25T01:18:40.979Z",
+            "lang": "en"
+          },
+          {
+            "id": "a6670e7d-4182-448c-84d1-4bede79cad91",
+            "meal": "dinner",
+            "title": "Demo dinner",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo dinner, 1 plate"
+            ],
+            "demo": true,
+            "time": "11:48 am",
+            "at": "2026-11-25T06:18:40.986Z",
+            "lang": "en"
+          }
+        ]
+      },
+      {
+        "date": "2026-11-24",
+        "label": "Tue, 24 Nov",
+        "meals": [
+          {
+            "id": "0fc2a59f-5e2c-41bb-98f0-d8335007b9c9",
+            "meal": "breakfast",
+            "title": "Demo breakfast",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo breakfast, 1 plate"
+            ],
+            "demo": true,
+            "time": "1:48 am",
+            "at": "2026-11-23T20:18:40.988Z",
+            "lang": "en"
+          },
+          {
+            "id": "846fee62-cb71-4893-b2b6-14ba3b119f8e",
+            "meal": "lunch",
+            "title": "Demo lunch",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo lunch, 1 plate"
+            ],
+            "demo": true,
+            "time": "6:48 am",
+            "at": "2026-11-24T01:18:40.988Z",
+            "lang": "en"
+          },
+          {
+            "id": "82d569b5-ddba-476e-a286-9add5d9740d5",
+            "meal": "dinner",
+            "title": "Demo dinner",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo dinner, 1 plate"
+            ],
+            "demo": true,
+            "time": "11:48 am",
+            "at": "2026-11-24T06:18:40.988Z",
+            "lang": "en"
+          }
+        ]
+      },
+      {
+        "date": "2026-11-23",
+        "label": "Mon, 23 Nov",
+        "meals": [
+          {
+            "id": "beb4d3b6-5170-4e9f-bbf0-909b523746df",
+            "meal": "breakfast",
+            "title": "Demo breakfast",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo breakfast, 1 plate"
+            ],
+            "demo": true,
+            "time": "1:48 am",
+            "at": "2026-11-22T20:18:40.989Z",
+            "lang": "en"
+          },
+          {
+            "id": "6a5f2652-9308-484d-90c9-1842c3c86993",
+            "meal": "lunch",
+            "title": "Demo lunch",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo lunch, 1 plate"
+            ],
+            "demo": true,
+            "time": "6:48 am",
+            "at": "2026-11-23T01:18:40.989Z",
+            "lang": "en"
+          },
+          {
+            "id": "1dad4b0b-1429-46c1-972a-5cfa396e52f1",
+            "meal": "dinner",
+            "title": "Demo dinner",
+            "source": "text",
+            "kcal": 650,
+            "proteinG": 18,
+            "confidence": "medium",
+            "tip": "Add a bowl of curd.",
+            "items": [
+              "Demo dinner, 1 plate"
+            ],
+            "demo": true,
+            "time": "11:48 am",
+            "at": "2026-11-23T06:18:40.989Z",
+            "lang": "en"
+          }
+        ]
+      }
+    ],
+    "target": {
+      "kcal": 1840,
+      "proteinG": 77
+    }
+  }
+}

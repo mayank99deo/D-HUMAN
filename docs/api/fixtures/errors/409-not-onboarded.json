@@ -1,0 +1,7 @@
+{
+  "status": 409,
+  "body": {
+    "error": "not_onboarded",
+    "message": "Finish setting up first."
+  }
+}

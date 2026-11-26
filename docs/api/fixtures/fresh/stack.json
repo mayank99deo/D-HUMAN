@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "etag": "W/\"4ayxv6bYmA33fZ_aK7O6eg\"",
+  "body": {
+    "state": "start_with_food",
+    "fullDays": 0,
+    "usualDayShort": false
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "etag": "W/\"r5H6bNduGzFZ1uVNNw4Auw\"",
+  "body": {
+    "id": "75c1421b-2dc1-491c-bbed-7561101e63da",
+    "email": "fresh-f0c33c@demo.dhuman.local",
+    "onboarded": true,
+    "consent": {
+      "at": "2026-11-26T06:18:39.434Z",
+      "version": "2026-11-20",
+      "current": true
+    },
+    "tourDone": true,
+    "healthCheckedAt": null,
+    "hold": null,
+    "reportsVersion": "0.47DEQpj8HBSa-_TI",
+    "persona": {
+      "firstName": "Asha",
+      "initial": "A",
+      "bib": "32",
+      "label": "Regular runner",
+      "archetype": "running",
+      "noun": "runner",
+      "level": "regular",
+      "age": 32
+    },
+    "founder": false,
+    "aiOff": false,
+    "profile": {
+      "name": "Asha",
+      "birthYear": 1994,
+      "sex": "female",
+      "heightCm": 160,
+      "weightKg": 55,
+      "city": "Indore",
+      "country": "India",
+      "timezone": "Asia/Kolkata",
+      "language": "en",
+      "activities": [
+        "running"
+      ],
+      "primaryActivity": "running",
+      "level": "regular",
+      "sessionsPerWeek": 4,
+      "goals": [
+        "energy"
+      ],
+      "eventInMind": null,
+      "diet": "veg",
+      "conditions": [],
+      "medications": null,
+      "currentSupplements": null,
+      "supplementBudget": null
+    }
+  }
+}

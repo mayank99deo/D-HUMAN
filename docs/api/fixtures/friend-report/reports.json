@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "etag": "W/\"X9_MYlHAF7Ria2LOl7o6Rw\"",
+  "body": {
+    "reports": [
+      {
+        "id": "d3c18cb5-9da5-4dc7-ab69-e628944c9547",
+        "status": "ready",
+        "title": "Demo Labs",
+        "when": "Collected 2 Nov 2026",
+        "collectedOn": "2026-11-02",
+        "uploadedOn": "2026-11-26",
+        "markers": 5,
+        "printedFor": "Vikram Singh"
+      }
+    ]
+  }
+}
