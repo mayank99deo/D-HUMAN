@@ -2,10 +2,12 @@ import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
-import { notForApp } from "@/lib/auth/authenticate";
+import { appActor, isAppRequest } from "@/lib/api/actor";
+import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { BUDGET_IDS } from "@/lib/domain/budget";
+import { consentCurrent } from "@/lib/domain/consent";
 import { sendWelcome } from "@/lib/email/jobs";
 import { ACTIVITY_IDS, CONDITION_IDS, DIET_IDS, GOAL_IDS, LANGUAGE_IDS, LEVEL_IDS, SEX_IDS } from "@/lib/domain/options";
 import { ensureEvents } from "@/lib/platform/events";
@@ -13,7 +15,7 @@ import { json, unauthorized } from "@/lib/platform/http";
 import { getProfile, personaFor } from "@/lib/platform/profile";
 import { sheetFieldsChanged } from "@/lib/sheets/user-row";
 import { pushUserRow } from "@/lib/sheets/users";
-import { allowRequest } from "@/lib/waitlist/rate-limit";
+import { allowRequest, secondsUntilReset } from "@/lib/waitlist/rate-limit";
 
 const text = (max: number) => z.string().trim().max(max).nullable().transform((v) => v || null);
 
@@ -51,22 +53,35 @@ const BEFORE_CONSENT = new Set(["language", "timezone"]);
 
 const sameList = (a: readonly string[] | null | undefined, b: readonly string[] | null | undefined) => (a ?? []).join(",") === (b ?? []).join(",");
 
+// What only the apps send (the mobile repo's docs/specs/README.md, gap G2): the health question
+// answered, with the conditions (pregnancy among them, an empty list for none) and the medicines
+// (null for none) in the same save. The web's saves never carry it, and from them it's ignored.
+const appExtra = z.object({ healthChecked: z.literal(true).optional() });
+
 export async function POST(request: Request) {
-  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
-  if (refused) return refused;
-  const user = await apiUser();
-  if (!user) return unauthorized();
+  // A request carrying Authorization is an app's: taken as its token, answered privately. Every
+  // other request is the web's, resolved and answered exactly as before.
+  const app = isAppRequest(request);
+  const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
+  if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
+  const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) => (app ? privateJson(body, status, headers) : json(body, status));
   // Onboarding saves once per step; 30 an hour leaves room for that and for Settings.
-  if (!allowRequest(`profile:${user.id}`, 30, 60 * 60_000)) return json({ error: "rate_limited" }, 429);
-  const parsed = patchSchema(new Date().getFullYear()).safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return json({ error: "invalid", issues: parsed.error.issues.map((i) => i.path.join(".")) }, 400);
+  if (!allowRequest(`profile:${user.id}`, 30, 60 * 60_000)) return reply({ error: "rate_limited" }, 429, app ? { "retry-after": String(secondsUntilReset(`profile:${user.id}`) || 60) } : {});
+  const raw = await request.json().catch(() => null);
+  const parsed = patchSchema(new Date().getFullYear()).safeParse(raw);
+  if (!parsed.success) return reply({ error: "invalid", issues: parsed.error.issues.map((i) => i.path.join(".")) }, 400);
+  const extra = app ? appExtra.safeParse(raw) : null;
+  if (extra && !extra.success) return reply({ error: "invalid", issues: ["healthChecked"] }, 400);
+  const healthChecked = !!extra?.data.healthChecked;
+  // Both halves of the question answered in the same save: conditions and medicines (review finding 2).
+  if (healthChecked && (!parsed.data.conditions || parsed.data.medications === undefined)) return reply({ error: "invalid", issues: ["conditions", "medications"] }, 400);
 
   const { consent, complete, timezone, ...fields } = parsed.data;
   const before = await getProfile(user.id);
 
   // No health answers are stored until the person has agreed.
   const consented = !!before?.consentAt || consent === true;
-  if (!consented && Object.keys(parsed.data).some((k) => !BEFORE_CONSENT.has(k))) return json({ error: "consent_required" }, 403);
+  if (!consented && Object.keys(parsed.data).some((k) => !BEFORE_CONSENT.has(k))) return reply({ error: "consent_required" }, 403);
 
   const values: Partial<typeof schema.profiles.$inferInsert> = { ...fields, updatedAt: new Date() };
   if (timezone) {
@@ -85,13 +100,17 @@ export async function POST(request: Request) {
     values.consentAt = now;
     values.askConsentAt = before?.askConsentAt ?? now;
   }
+  // The apps ask again when the consent wording has changed since the person agreed (their
+  // writes answer 409 consent_needed until then); agreeing records the moment they agreed to it.
+  if (app && consent && before?.consentAt && !consentCurrent(before.consentAt)) values.consentAt = new Date();
+  if (healthChecked) values.healthCheckedAt = new Date();
   if (fields.activities && !fields.primaryActivity && fields.activities.length === 1) values.primaryActivity = fields.activities[0];
 
   if (complete) values.onboardedAt = before?.onboardedAt ?? new Date();
 
   const d = await db();
   const [saved] = await d.update(schema.profiles).set(values).where(eq(schema.profiles.userId, user.id)).returning();
-  if (!saved) return json({ error: "not_found" }, 404);
+  if (!saved) return reply({ error: "not_found" }, 404);
 
   // Event searches cost money, so look them up only when onboarding finishes
   // or something they depend on actually changed.
@@ -112,5 +131,5 @@ export async function POST(request: Request) {
   // The founders' Sheet: once onboarding finishes, and when Settings changes a field it shows.
   // Saves during onboarding (one per step) wait for its end; the daily job has them anyway.
   if (saved.onboardedAt && (justFinished || sheetFieldsChanged(before, saved))) after(() => pushUserRow(user.id));
-  return json({ status: "saved" });
+  return reply({ status: "saved" });
 }

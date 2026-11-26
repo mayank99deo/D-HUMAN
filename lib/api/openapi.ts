@@ -183,6 +183,34 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     method: "post",
+    path: "/api/stack",
+    file: "app/api/stack/route.ts",
+    summary:
+      "Build a stack, or follow the one already building. 409 health_check_needed until the health question is answered (G2); 409 no_data when there's no report and too little food; 429 daily_limit.",
+    auth: "bearer",
+    responses: { 200: s.StackBuildResponse, 401: refusal, 409: refusal, 429: refusal },
+    consent: true,
+  },
+  {
+    method: "get",
+    path: "/api/stack/{id}",
+    file: "app/api/stack/[id]/route.ts",
+    summary: "A stack build's progress. A build that died is ended as failed.",
+    auth: "bearer",
+    responses: { 200: s.StackStatusResponse, 401: refusal, 404: refusal },
+  },
+  {
+    method: "post",
+    path: "/api/profile",
+    file: "app/api/profile/route.ts",
+    summary:
+      "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording.",
+    auth: "bearer",
+    request: s.ProfileRequest,
+    responses: { 200: s.SavedResponse, 400: refusal, 401: refusal, 403: refusal, 429: refusal },
+  },
+  {
+    method: "post",
     path: "/api/food",
     file: "app/api/food/route.ts",
     summary:

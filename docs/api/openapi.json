@@ -1104,6 +1104,20 @@
                     "tourDone": {
                       "type": "boolean"
                     },
+                    "healthCheckedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                          "description": "A moment, ISO 8601 in UTC."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "When the health question was answered (G2). Null: ask it before the first stack build, which otherwise answers 409 health_check_needed."
+                    },
                     "persona": {
                       "anyOf": [
                         {
@@ -1334,6 +1348,7 @@
                     "onboarded",
                     "consent",
                     "tourDone",
+                    "healthCheckedAt",
                     "persona",
                     "founder",
                     "aiOff",
@@ -5811,6 +5826,555 @@
                   "type": "string",
                   "const": "private, no-store"
                 }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Build a stack, or follow the one already building. 409 health_check_needed until the health question is answered (G2); 409 no_data when there's no report and too little food; 429 daily_limit.",
+        "description": "Build a stack, or follow the one already building. 409 health_check_needed until the health question is answered (G2); 409 no_data when there's no report and too little food; 429 daily_limit. An app write: answers 409 consent_needed (with `version`) when the person agreed to older consent wording; ask again, then send the same request once more.",
+        "operationId": "postApiStack",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Poll GET /api/stack/{id} every 3 s; when it's ready, fetch GET /api/stack."
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stack/{id}": {
+      "get": {
+        "summary": "A stack build's progress. A build that died is ended as failed.",
+        "operationId": "getApiStackId",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "building",
+                        "ready",
+                        "failed"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (another person's id looks the same).",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "post": {
+        "summary": "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording.",
+        "operationId": "postApiProfile",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "consent": {
+                    "description": "Agreed to the consent wording. For someone who agreed to older wording, this records agreement to the current one.",
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "complete": {
+                    "description": "Onboarding finished.",
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "healthChecked": {
+                    "description": "The health question answered (G2): send it with conditions (an empty list for none, pregnancy among them) and medications (null for none) in the same save.",
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "conditions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "medications": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "supplementBudget": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "under_1000",
+                          "1000_2000",
+                          "2000_3000",
+                          "3000_4000",
+                          "4000_5000",
+                          "5000_plus",
+                          "not_sure"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": {},
+                "description": "Any profile fields, as onboarding and Settings save them: name, birthYear, sex, heightCm, weightKg, city, country, timezone, language, activities, primaryActivity, level, sessionsPerWeek, goals, eventInMind, diet, conditions, medications, currentSupplements, supplementBudget. Ids from GET /api/app/options."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "saved"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused: the error code says why.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
               }
             },
             "content": {

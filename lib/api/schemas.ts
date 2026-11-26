@@ -81,6 +81,7 @@ export const MeResponse = z.strictObject({
     current: z.boolean().describe("false: they agreed to older wording (or none). Ask again before anything leaves the phone."),
   }),
   tourDone: z.boolean(),
+  healthCheckedAt: IsoTime.nullable().describe("When the health question was answered (G2). Null: ask it before the first stack build, which otherwise answers 409 health_check_needed."),
   persona: z
     .strictObject({ firstName: S, initial: S, bib: S, label: S, archetype: S, noun: S, level: S, age: Int.nullable() })
     .nullable()
@@ -329,8 +330,8 @@ export const ReportsResponse = z.strictObject({
     z.strictObject({
       id: S,
       status: z.enum(REPORT_STATUSES).describe("ready: open its read. reading or interpreting: poll GET /api/reports/{id}. failed: it can be tried again."),
-      title: S.describe("The lab, else \x27Blood report\x27."),
-      when: S.describe("\x27Collected 2 Nov 2026\x27 or \x27Uploaded 4 Nov 2026\x27, as the web lists it."),
+      title: S.describe("The lab, else 'Blood report'."),
+      when: S.describe("'Collected 2 Nov 2026' or 'Uploaded 4 Nov 2026', as the web lists it."),
       collectedOn: IsoDate.nullable(),
       uploadedOn: IsoDate,
       markers: Int,
@@ -345,7 +346,7 @@ export const ReadResponse = z.strictObject({
   collectedOn: IsoDate.nullable(),
   uploadedOn: IsoDate,
   demo: z.boolean(),
-  aiNote: S.describe("Show it under the title: \x27AI-analysed report. Not a diagnosis.\x27"),
+  aiNote: S.describe("Show it under the title: 'AI-analysed report. Not a diagnosis.'"),
   printedFor: S.nullable().describe("Printed for someone else: say so above the verdict."),
   verdict: z.strictObject({ level: VerdictLevel, line: S, detail: S, lang: z.literal("hi").nullable() }),
   headline: S,
@@ -353,7 +354,7 @@ export const ReadResponse = z.strictObject({
   counts: z.strictObject({ markers: Int, out: Int.describe("Outside their range (low or high).") }),
   wins: z.array(S),
   focus: z.array(z.strictObject({ title: S, why: S, action: S })).describe("Most important first."),
-  groups: z.array(z.strictObject({ panel: S, markers: z.array(MarkerView) })).describe("Every marker, by panel, in the catalogue\x27s order."),
+  groups: z.array(z.strictObject({ panel: S, markers: z.array(MarkerView) })).describe("Every marker, by panel, in the catalogue's order."),
   doctorQuestions: z.array(S),
   retest: z.strictObject({
     dueOn: IsoDate,
@@ -374,10 +375,10 @@ export const STACK_BUDGET_IDS = BUDGET_SLABS;
 
 const FitJson = z.strictObject({
   included: z.array(Int).describe("Item indexes that fit, in priority order."),
-  later: z.array(Int).describe("Item indexes for \x27when your budget allows\x27."),
+  later: z.array(Int).describe("Item indexes for 'when your budget allows'."),
   pick: z.array(Int.nullable()).describe("The brand picked for each item (an index into its brands), or null."),
   cost: z.array(N.nullable()).describe("Monthly rupees for each item, or null when unknown."),
-  typical: z.array(z.boolean()).describe("The cost is a typical price, not a brand\x27s."),
+  typical: z.array(z.boolean()).describe("The cost is a typical price, not a brand's."),
   total: N,
   cap: N.nullable(),
 });
@@ -414,13 +415,32 @@ export const StackResponse = z.discriminatedUnion("state", [
     staleReason: z.enum(["report", "profile"]).nullable(),
     basis: z.enum(["report", "meals"]),
     hasReport: z.boolean(),
-    body: S.describe("A meals stack\x27s basis: \x2724, 175 cm, 70 kg, regular lifter\x27."),
+    body: S.describe("A meals stack's basis: '24, 175 cm, 70 kg, regular lifter'."),
     markerNames: z.record(S, S),
     budget: z.enum(BUDGET_SLABS).nullable(),
-    fits: z.record(z.enum(BUDGET_SLABS), FitJson).nullable().describe("The plan fitted to every budget slab, so a change of budget re-fits on the phone. Null when there\x27s no plan to show."),
+    fits: z.record(z.enum(BUDGET_SLABS), FitJson).nullable().describe("The plan fitted to every budget slab, so a change of budget re-fits on the phone. Null when there's no plan to show."),
     flagged: z.array(z.strictObject({ name: S, urgent: z.boolean() })).describe("Results kept out of the stack, from the newest report."),
     hold: z.enum(["urgent", "pregnant"]).nullable(),
-    holdLine: S.nullable().describe("The hold\x27s words, verbatim (G13). Show it at the top whenever hold is set."),
+    holdLine: S.nullable().describe("The hold's words, verbatim (G13). Show it at the top whenever hold is set."),
     aiOff: z.boolean(),
   }),
 ]);
+
+// ── Profile and stack writes ─────────────────────────────────────────────────
+
+export const ProfileRequest = z
+  .looseObject({
+    consent: z.literal(true).optional().describe("Agreed to the consent wording. For someone who agreed to older wording, this records agreement to the current one."),
+    complete: z.literal(true).optional().describe("Onboarding finished."),
+    healthChecked: z.literal(true).optional().describe("The health question answered (G2): send it with conditions (an empty list for none, pregnancy among them) and medications (null for none) in the same save."),
+    conditions: z.array(S).optional(),
+    medications: S.nullable().optional(),
+    supplementBudget: z.enum(BUDGET_SLABS).nullable().optional(),
+  })
+  .describe("Any profile fields, as onboarding and Settings save them: name, birthYear, sex, heightCm, weightKg, city, country, timezone, language, activities, primaryActivity, level, sessionsPerWeek, goals, eventInMind, diet, conditions, medications, currentSupplements, supplementBudget. Ids from GET /api/app/options.");
+
+export const SavedResponse = z.strictObject({ status: z.literal("saved") });
+
+export const StackBuildResponse = z.strictObject({ id: S.describe("Poll GET /api/stack/{id} every 3 s; when it's ready, fetch GET /api/stack.") });
+
+export const StackStatusResponse = z.strictObject({ status: z.enum(["building", "ready", "failed"]), error: S.nullable() });

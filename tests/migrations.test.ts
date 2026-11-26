@@ -128,6 +128,11 @@ async function assertCurrentShape(pg: PGlite) {
     "input_raw text YES null",
     "repeat_of text YES null",
   ]);
+
+  // 0014: when the person answered the apps' health question.
+  const healthCol = await one<{ t: string; nullable: string; d: string | null }>(pg, `select data_type as t, is_nullable as nullable, column_default as d
+    from information_schema.columns where table_name = 'profiles' and column_name = 'health_checked_at'`);
+  assert.deepEqual(healthCol, { t: "timestamp with time zone", nullable: "YES", d: null });
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -318,6 +323,34 @@ describe("migrations", () => {
       await pg.exec(meal("m3"));
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
+      await pg.close();
+    });
+  }
+
+  // Production with 0013 and onboarded profiles; 0014 run by the deploy or pasted first, either
+  // way, twice. Nobody has answered the apps' health question yet, and profiles keep their values.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0014 on production's profiles (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0014_"));
+      assert.ok(at > 0, "0014 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      await pg.exec(`insert into users (id, email) values ('u1', 'a@x'), ('u2', 'b@x');
+        insert into profiles (user_id, name, conditions, onboarded_at) values ('u1', 'Asha', array['pregnant'], now()), ('u2', 'Ravi', '{}', null);`);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.deepEqual((await pg.query(`select user_id, name, conditions, health_checked_at from profiles order by user_id`)).rows, [
+        { user_id: "u1", name: "Asha", conditions: ["pregnant"], health_checked_at: null },
+        { user_id: "u2", name: "Ravi", conditions: [], health_checked_at: null },
+      ]);
       await pg.close();
     });
   }

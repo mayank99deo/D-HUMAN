@@ -269,6 +269,35 @@ describe("the apps' contract", () => {
     await call("delete", "/api/food/{id}", { token: "dht_not-a-real-token", params: { id: mealId } });
   });
 
+  it("profile and stack writes: every status they give", async () => {
+    const d = await db();
+    const { allowRequest } = await import("../lib/waitlist/rate-limit.ts");
+    const bad = "dht_not-a-real-token";
+    // The profile: 200, 400, 401, 403 (health answers before consent), 429.
+    const early = await signIn("profile-contract@example.com");
+    const [u] = await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "profile-contract@example.com"));
+    await call("post", "/api/profile", { token: early, body: { conditions: ["thyroid"] } }); // 403
+    await call("post", "/api/profile", { token: early, body: { consent: true, name: "Meera", birthYear: 1991, primaryActivity: "running", activities: ["running"], complete: true } });
+    await call("post", "/api/profile", { token: early, body: { healthChecked: true } }); // 400
+    await call("post", "/api/profile", { token: bad, body: { name: "x" } }); // 401
+    // The stack: 409 health_check_needed, then 200, 401, 404 on the poll, 429.
+    const reportId = randomUUID();
+    await d.insert(schema.reports).values({ id: reportId, userId: u.id, status: "ready", fileName: "r.pdf", model: "mock" });
+    await d.insert(schema.markers).values({ id: randomUUID(), reportId, userId: u.id, key: "vitamin_d", name: "Vitamin D", value: 18, unit: "ng/mL", refLow: 30, refHigh: 100, rangeSource: "catalog", status: "low" });
+    await call("post", "/api/stack", { token: early, body: {} }); // 409
+    await call("post", "/api/profile", { token: early, body: { healthChecked: true, conditions: [], medications: null } });
+    const built = await call("post", "/api/stack", { token: early, body: {} });
+    for (const job of g.__after.splice(0)) await job();
+    await call("get", "/api/stack/{id}", { token: early, params: { id: (built.body as { id: string }).id } });
+    await call("get", "/api/stack/{id}", { token: early, params: { id: "not-a-stack" } }); // 404
+    await call("get", "/api/stack/{id}", { token: bad, params: { id: "x" } }); // 401
+    await call("post", "/api/stack", { token: bad, body: {} }); // 401
+    for (let i = 0; i < 5; i++) allowRequest(`stack:${u.id}`, 5, 60 * 60_000);
+    await call("post", "/api/stack", { token: early, body: {} }); // 429
+    for (let i = 0; i < 30; i++) allowRequest(`profile:${u.id}`, 30, 60 * 60_000);
+    await call("post", "/api/profile", { token: early, body: { name: "Meera" } }); // 429
+  });
+
   it("lists no status that no route gave", () => {
     const documented = APP_ROUTES.flatMap((r) => Object.keys(r.responses).map((status) => `${r.method} ${r.path} ${status}`));
     assert.deepEqual(documented.filter((x) => !seen.has(x)), [], "statuses the contract lists that no route gave");

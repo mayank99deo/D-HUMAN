@@ -17,6 +17,8 @@ export function meJson(v: MeView) {
     onboarded: v.onboarded,
     consent: { at: at?.toISOString() ?? null, version: CONSENT_VERSION, current: consentCurrent(at) },
     tourDone: !!p?.tourDoneAt,
+    // G2: when the health question (conditions and medicines) was answered; a first stack waits for it.
+    healthCheckedAt: p?.healthCheckedAt?.toISOString() ?? null,
     persona: v.persona
       ? { firstName: v.persona.firstName, initial: v.initial, bib: v.persona.bib, label: v.persona.label, archetype: v.persona.archetype, noun: v.persona.noun, level: v.persona.level, age: v.persona.age }
       : null,

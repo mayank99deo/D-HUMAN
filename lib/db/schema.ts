@@ -112,6 +112,9 @@ export const profiles = pgTable("profiles", {
   tourDoneAt: timestamp("tour_done_at", { withTimezone: true }),
   // When they agreed to Ask's notice (their question and data go to Claude to answer it); null until then.
   askConsentAt: timestamp("ask_consent_at", { withTimezone: true }),
+  // The apps only (0014): when the person answered the health question (conditions, pregnancy
+  // among them, and medicines) the apps ask before a first stack; null until then.
+  healthCheckedAt: timestamp("health_checked_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 

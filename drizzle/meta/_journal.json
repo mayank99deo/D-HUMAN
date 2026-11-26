@@ -99,6 +99,13 @@
       "when": 1795660640462,
       "tag": "0013_app_meals",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795661832499,
+      "tag": "0014_app_health_check",
+      "breakpoints": true
     }
   ]
 }
