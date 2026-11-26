@@ -4,14 +4,11 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DeleteReport } from "@/components/platform/DeleteReport";
 import { MarkerRow } from "@/components/platform/Markers";
-import { retestFrom } from "@/components/platform/retest";
 import { Verdict } from "@/components/platform/Verdict";
 import { askGate } from "@/lib/ask/types";
-import { markerDef, PANELS, type Panel } from "@/lib/domain/markers";
 import { reportView } from "@/lib/platform/dashboard";
 import { requireMember } from "@/lib/platform/member";
-import { localDate } from "@/lib/platform/profile";
-import { printedFor } from "@/lib/platform/reports";
+import { reportReadView } from "@/lib/platform/views/report";
 
 export const metadata: Metadata = { title: "Report" };
 
@@ -22,22 +19,11 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const view = await reportView(user.id, id);
   if (!view) notFound();
-  const { read, markers } = view;
-  const notes = new Map(read.markers.map((m) => [m.id, m.note]));
+  // What the read shows is worked out by reportReadView, which the apps' GET
+  // /api/reports/[id]/read sends too (lib/platform/views/report.ts), so the two can't drift.
+  const v = reportReadView(profile, view);
+  const { read, markers, otherName, out, retest } = v;
   const ask = askGate({ email: user.email, onboardedAt: profile.onboardedAt, birthYear: profile.birthYear }) === "ok";
-
-  const groups = new Map<string, typeof markers>();
-  for (const m of markers) {
-    const panel = markerDef(m.key)?.panel;
-    const label = panel ? PANELS[panel as Panel] : m.panel || "Other";
-    groups.set(label, [...(groups.get(label) ?? []), m]);
-  }
-  const order = Object.values(PANELS);
-  const sorted = [...groups.entries()].sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99));
-
-  const otherName = printedFor(view.nameOnReport, profile.name);
-  const out = markers.filter((m) => m.status === "low" || m.status === "high").length;
-  const retest = retestFrom(view.collectedOn ?? localDate(profile.timezone, view.createdAt), read.retest.weeks, localDate(profile.timezone));
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 lg:pt-12">
@@ -49,12 +35,12 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
       </p>
       <p className="mt-1 inline-flex items-center gap-2 text-sm text-graphite">
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-graphite" />
-        {view.model === "mock" ? "Demo read, written from a template" : "AI-analysed report. Not a diagnosis."}
+        {v.aiNote}
       </p>
       {otherName && <p className="error-mark mt-4 text-sm">This report is printed for {otherName}. Your read assumes it&apos;s yours.</p>}
 
       <div className="mt-8">
-        <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={profile.language === "hi" ? "hi" : undefined} />
+        <Verdict level={read.verdict.level} line={read.verdict.line} detail={read.verdict.detail} as="h1" lang={v.verdictLang} />
       </div>
 
       <section className="mt-12">
@@ -105,12 +91,12 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
         <h2 id="all" className="text-xl font-bold semiwide">
           Every marker
         </h2>
-        {sorted.map(([panel, list]) => (
+        {v.groups.map(({ panel, markers: list }) => (
           <div key={panel} className="mt-8">
             <h3 className="text-sm font-semibold text-graphite">{panel}</h3>
             <ul className="mt-1">
-              {list.map((m) => (
-                <MarkerRow key={m.id} m={m} note={notes.get(m.id) ?? markerDef(m.key)?.what} ask={ask} />
+              {list.map(({ marker: m, note }) => (
+                <MarkerRow key={m.id} m={m} note={note} ask={ask} />
               ))}
             </ul>
           </div>
@@ -139,7 +125,7 @@ async function Report({ params }: { params: Promise<{ id: string }> }) {
         </p>
         <p className="mt-2 text-graphite">{read.retest.why}</p>
         {read.retest.markers.length > 0 && (
-          <p className="mt-2">{read.retest.markers.map((k) => markerDef(k)?.name ?? k).join(", ")}</p>
+          <p className="mt-2">{v.retestMarkers.join(", ")}</p>
         )}
         {read.test_tips.length > 0 && (
           <ul className="mt-4 space-y-1 text-sm text-graphite">

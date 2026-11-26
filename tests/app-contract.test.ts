@@ -136,8 +136,9 @@ describe("the apps' contract", () => {
     const meFirst = await call("get", "/api/me", { token: t });
     await call("get", "/api/me", { token: t, etag: meFirst.etag });
     await call("get", "/api/me");
-    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload"];
-    for (const p of screens) await call("get", p, { token: t });
+    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload", "/api/reports", "/api/reports/{id}/read"];
+    const reportId = randomUUID();
+    for (const p of screens) await call("get", p, { token: t, params: { id: reportId } });
     const d = await db();
     const user = (await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "contract@example.com")))[0].id;
     await d.update(schema.profiles).set({ name: "Asha", birthYear: 1990, primaryActivity: "running", activities: ["running"], consentAt: new Date(), onboardedAt: new Date() }).where(eq(schema.profiles.userId, user));
@@ -147,16 +148,30 @@ describe("the apps' contract", () => {
         items: [{ name: "Dal", portion: "1 bowl" }], kcal: 420, proteinG: 18, carbsG: 60, fatG: 10, fibreG: 8, micros: { iron_mg: 3, tip: "Add curd.", lang: "en" },
       });
     }
+    // A read report, with one flagged marker.
+    await d.insert(schema.reports).values({ id: reportId, userId: user, status: "ready", fileName: "r.pdf", collectedOn: "2026-11-02", model: "mock" });
+    const markerId = randomUUID();
+    await d.insert(schema.markers).values({ id: markerId, reportId, userId: user, key: "vitamin_d", name: "Vitamin D", value: 8, unit: "ng/mL", refLow: 30, refHigh: 100, rangeSource: "catalog", status: "low", flag: "doctor" });
+    await d.insert(schema.analyses).values({
+      reportId,
+      userId: user,
+      read: {
+        headline: "One to fix", verdict: { level: "doctor_first", line: "Show a doctor first.", detail: "Vitamin D is very low." }, summary: "One low result.",
+        focus: [{ marker_key: "vitamin_d", title: "Vitamin D", why: "It's low.", action: "Show a doctor." }], markers: [{ id: markerId, note: "Very low." }],
+        wins: [], doctor_questions: ["Should I take vitamin D?"], retest: { weeks: 12, markers: ["vitamin_d"], why: "To see it move." }, test_tips: [],
+      },
+    });
     for (const p of screens) {
-      const first = await call("get", p, { token: t });
-      await call("get", p, { token: t, etag: first.etag });
-      await call("get", p);
+      const first = await call("get", p, { token: t, params: { id: reportId } });
+      await call("get", p, { token: t, etag: first.etag, params: { id: reportId } });
+      await call("get", p, { params: { id: reportId } });
     }
+    await call("get", "/api/reports/{id}/read", { token: t, params: { id: "not-a-report" } }); // 404
     // A web cookie on the apps' reads: 403, still signed in.
     const webCookie = randomUUID();
     await d.insert(schema.sessions).values({ id: sha256(webCookie), userId: user, expiresAt: new Date(Date.now() + 86_400_000) });
     await call("get", "/api/me", { cookie: webCookie });
-    for (const p of screens) await call("get", p, { cookie: webCookie });
+    for (const p of screens) await call("get", p, { cookie: webCookie, params: { id: reportId } });
 
     // Devices: 200, 304, 401, 403 (a web cookie), 404, and ending one.
     const second = await signIn("contract@example.com");

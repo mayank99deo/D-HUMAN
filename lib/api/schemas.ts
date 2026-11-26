@@ -319,3 +319,50 @@ export const UploadResponse = z.strictObject({
   }),
   aiOff: z.boolean(),
 });
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+
+export const REPORT_STATUSES = ["uploaded", "reading", "interpreting", "ready", "failed"] as const;
+
+export const ReportsResponse = z.strictObject({
+  reports: z.array(
+    z.strictObject({
+      id: S,
+      status: z.enum(REPORT_STATUSES).describe("ready: open its read. reading or interpreting: poll GET /api/reports/{id}. failed: it can be tried again."),
+      title: S.describe("The lab, else \x27Blood report\x27."),
+      when: S.describe("\x27Collected 2 Nov 2026\x27 or \x27Uploaded 4 Nov 2026\x27, as the web lists it."),
+      collectedOn: IsoDate.nullable(),
+      uploadedOn: IsoDate,
+      markers: Int,
+      printedFor: S.nullable().describe("Printed for someone else: say so."),
+    }),
+  ).describe("Newest first."),
+});
+
+export const ReadResponse = z.strictObject({
+  id: S,
+  lab: S.nullable(),
+  collectedOn: IsoDate.nullable(),
+  uploadedOn: IsoDate,
+  demo: z.boolean(),
+  aiNote: S.describe("Show it under the title: \x27AI-analysed report. Not a diagnosis.\x27"),
+  printedFor: S.nullable().describe("Printed for someone else: say so above the verdict."),
+  verdict: z.strictObject({ level: VerdictLevel, line: S, detail: S, lang: z.literal("hi").nullable() }),
+  headline: S,
+  summary: S,
+  counts: z.strictObject({ markers: Int, out: Int.describe("Outside their range (low or high).") }),
+  wins: z.array(S),
+  focus: z.array(z.strictObject({ title: S, why: S, action: S })).describe("Most important first."),
+  groups: z.array(z.strictObject({ panel: S, markers: z.array(MarkerView) })).describe("Every marker, by panel, in the catalogue\x27s order."),
+  doctorQuestions: z.array(S),
+  retest: z.strictObject({
+    dueOn: IsoDate,
+    days: Int,
+    label: S,
+    weeks: N,
+    from: z.enum(["collected", "uploaded"]).describe("Counted from the day the blood was taken, or the upload day."),
+    why: S,
+    markers: z.array(S),
+  }),
+  testTips: z.array(S),
+});

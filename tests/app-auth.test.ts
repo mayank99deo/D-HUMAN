@@ -622,27 +622,29 @@ describe("where app tokens are refused (A6)", () => {
 describe("routes not open to the apps yet (not_for_app)", () => {
   // Sign-in itself: no session is read, so an app token changes nothing there.
   const SIGN_IN = ["app/api/auth/code/route.ts", "app/api/auth/verify/route.ts"];
-  const HANDLER = /export async function (GET|POST|PUT|PATCH|DELETE)\(/g;
-  const GUARDED = /export async function (GET|POST|PUT|PATCH|DELETE)\((\w+)[^)]*\)[^{]*\{\s*const refused = await notForApp\(\2\);[^\n]*\n\s*if \(refused\) return refused;/g;
+  const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+  const guarded = (src: string, m: string) =>
+    new RegExp(`export async function ${m}\\((\\w+)[^)]*\\)[^{]*\\{\\s*const refused = await notForApp\\(\\1\\);[^\\n]*\\n\\s*if \\(refused\\) return refused;`).test(src);
 
+  /** Every handler not open to the apps, file by file: a file may have some methods open (in lib/api/openapi.ts) and others not. */
   async function notOpen() {
     const { APP_ROUTES } = await import("../lib/api/openapi.ts");
-    const open = new Set(APP_ROUTES.map((r) => r.file));
+    const open = new Set(APP_ROUTES.map((r) => `${r.file} ${r.method.toUpperCase()}`));
     return readdirRecursive(path.join(ROOT, "app/api"))
       .filter((f) => f.endsWith("route.ts"))
       .map((f) => path.relative(ROOT, f))
-      .filter((f) => !open.has(f) && !SIGN_IN.includes(f) && !SESSIONLESS.includes(f))
-      .filter((f) => !/writeGuard\(request/.test(readFileSync(path.join(ROOT, f), "utf8")));
+      .filter((f) => !SIGN_IN.includes(f) && !SESSIONLESS.includes(f))
+      .filter((f) => !/writeGuard\(request/.test(readFileSync(path.join(ROOT, f), "utf8")))
+      .map((f) => ({ f, methods: METHODS.filter((m) => new RegExp(`export async function ${m}\\(`).test(readFileSync(path.join(ROOT, f), "utf8")) && !open.has(`${f} ${m}`)) }))
+      .filter((r) => r.methods.length > 0);
   }
 
-  it("every /api route is open to the apps, reads no session, is sign-in itself or /write, or checks notForApp first in every handler", async () => {
+  it("every /api handler is open to the apps, reads no session, is sign-in itself or /write, or checks notForApp first", async () => {
     const rest = await notOpen();
-    assert.ok(rest.length >= 19, `${rest.length} routes`); // lower it as routes open to the apps
-    for (const f of rest) {
+    assert.ok(rest.length >= 18, `${rest.length} routes`); // lower it as routes open to the apps
+    for (const { f, methods } of rest) {
       const src = readFileSync(path.join(ROOT, f), "utf8");
-      const handlers = src.match(HANDLER)?.length ?? 0;
-      assert.ok(handlers > 0, f);
-      assert.equal(src.match(GUARDED)?.length ?? 0, handlers, `${f}: every handler must start with notForApp(request)`);
+      for (const m of methods) assert.ok(guarded(src, m), `${f} ${m}: a handler not open to the apps must start with notForApp(request)`);
     }
     for (const f of SIGN_IN) assert.doesNotMatch(readFileSync(path.join(ROOT, f), "utf8"), /apiUser|getSessionUser|cookies\(\)/, `${f} reads no session`);
   });
@@ -657,9 +659,9 @@ describe("routes not open to the apps yet (not_for_app)", () => {
     const before = JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid)));
     const ctx = { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }) };
     let checked = 0;
-    for (const f of await notOpen()) {
+    for (const { f, methods } of await notOpen()) {
       const mod = (await import(`../${f}`)) as Record<string, Handler>;
-      for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((m) => typeof mod[m] === "function")) {
+      for (const method of methods) {
         const url = `/${f.replace(/^app\//, "").replace(/\/route\.ts$/, "")}`;
         const body = method === "GET" ? undefined : { name: "CHANGED", confirm: "DELETE", eventId: "x", text: "dal" };
         const sent = async (o: Opts) => {

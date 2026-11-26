@@ -1,13 +1,16 @@
 import { eq } from "drizzle-orm";
+import { viewResponse } from "@/lib/api/respond";
+import { reportsJson } from "@/lib/api/views/reports";
 import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
-import { READ_MESSAGES, claimReport, readLimitReached } from "@/lib/platform/analyze";
+import { READ_MESSAGES, claimReport, readLimitReached, settleStaleReads } from "@/lib/platform/analyze";
+import { apiMember } from "@/lib/platform/api-member";
 import { json, sniffMime, unauthorized } from "@/lib/platform/http";
 import { claimRefused, streamAnalysis } from "@/lib/platform/report-stream";
 import { planLimit } from "@/lib/platform/plan";
-import { deleteReports } from "@/lib/platform/reports";
+import { deleteReports, listReports } from "@/lib/platform/reports";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { getProfile } from "@/lib/platform/profile";
 import { allowRequest } from "@/lib/waitlist/rate-limit";
@@ -17,6 +20,16 @@ export const maxDuration = 300;
 // Hosts cap request bodies around 4.5 MB, so the browser shrinks photos first.
 const MAX_TOTAL = 4 * 1024 * 1024;
 const MAX_FILES = 6;
+
+// The apps' list of reports: every upload, newest first, as the web's /reports lists it. A read
+// that died partway is marked failed first, as the page does, so it isn't listed as running.
+// Apps only (a web cookie gets 403 bearer_required); private, no-store, with an ETag.
+export async function GET(request: Request) {
+  const member = await apiMember(request);
+  if (!member.ok) return member.response;
+  await settleStaleReads(member.user.id);
+  return viewResponse(request, reportsJson(member.profile, await listReports(member.user.id)));
+}
 
 export async function POST(request: Request) {
   const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
