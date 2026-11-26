@@ -12,7 +12,7 @@ The running record of this project: where things stand, why they are the way the
   - **The emails:** a welcome when onboarding finishes, a "finish setting up" reminder, the Sunday-evening weekly wrap, and a day-10 feedback quiz whose answers go to the Sheet's Feedback tab.
   - **How they run:** two daily crons, dry until `EMAIL_WEEKLY_LIVE` / `EMAIL_LIFECYCLE_LIVE` are set. A daily budget keeps room for sign-in codes on Resend's free plan. One-click unsubscribe and Settings → Emails.
   - **Sign-in:** returns people to the page they came from (`/signin?next=`, via `proxy.ts`, signed-out app screens only).
-- **Mobile apps (started 2026-11-24):** native iPhone (SwiftUI) first, then Android (Kotlin), in the separate repo `mayank99deo/d-human_mobile-app`. They call this repo's API. Wave 1 (analysis and design) is in `docs/team/mobile/`; no app code yet. Packd Technologies Pvt Ltd publishes; no Apple or Google developer account yet.
+- **Mobile apps (started 2026-11-24):** native iPhone (SwiftUI) first, then Android (Kotlin), in the separate public repo `mayank99deo/d-human_mobile-app`, cloned at `/Users/mayanknarayan/d-human_mobile-app`. They call this repo's API; this repo gets only app-only additions, and the website stays untouched. The plan was approved on 2026-11-25 (`docs/plans/2026-11-24-ios-app.md` there). The threat model and the funnel numbers are local only, in that clone's `docs/private/`. Packd Technologies Pvt Ltd publishes; no Apple or Google developer account yet.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
 - **Live:** https://www.d-human.fit, the main address since 2026-11-13 (Mayank's pick). https://www.dhuman.fit, dhuman.fit, d-human.fit and https://d-human.vercel.app serve the same deployment and send page visits there. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
@@ -40,7 +40,13 @@ The running record of this project: where things stand, why they are the way the
   - **The repo:** all mobile code lives in https://github.com/mayank99deo/d-human_mobile-app.git (public: no secrets or signing keys in it ever). This repo keeps the web and the API, which the apps share.
   - **Builds:** in the cloud for now, tested on Mayank's iPhone 17; a 1 TB Mac later for in-house builds.
   - **The publisher:** Packd Technologies Pvt Ltd (registered in India) publishes D-Human, so the Apple and Google developer accounts are organization accounts under Packd. Neither exists yet (2026-11-24).
-  - **Kickoff docs:** in `docs/team/mobile/`.
+  - **Docs:** in the mobile repo's `docs/`; the plan is `docs/plans/2026-11-24-ios-app.md`.
+  - **The plan (approved 2026-11-25):**
+    - **App only:** the website stays untouched.
+    - **Backend additions:** only ones the app uses, with byte-identical web pages.
+    - **v1 includes the habit pieces:** widget, controls, shortcut and reminders.
+    - **Stack proposals:** A and B now, C after the doctor review.
+    - **The pass in the app:** an in-app purchase at ₹79.
 
 - **The crew (2026-11-11; the SEO lead joined 2026-11-13):** ten role agents in `.claude/agents/`, run by the main session as orchestrator (agents can't start agents). They are AI roles, not people; medical review, legal and money decisions stay with Mayank and qualified humans.
 
@@ -332,26 +338,116 @@ The running record of this project: where things stand, why they are the way the
 Newest first. One entry per change; pushes carry their commit hash.
 
 ### 2026-11-25
-- **Funnel queries in one run (mobile kickoff):** Supabase's SQL editor shows only the last result when a whole file runs, so Mayank's first paste was query 17 alone.
-  - **New file:** `docs/team/mobile/funnel-all-in-one.sql` wraps all 17 queries into one statement: 17 rows, each with its result as single-line JSON. It has one EXCLUDE list for founder and test emails. It's generated from `funnel-queries.sql` by the scratchpad's `funnel/combine.mjs`, and tested read-only on a PGlite copy, with and without an exclusion.
-  - **First production numbers** (query 17, founders included):
-    - **Week of 9 Nov:** 4 people logged a meal; 2 of them on 3+ days.
-    - **Week of 16 Nov:** 8 logged; 2 on 3+ days.
-    - **Week of 23 Nov, still running on Wednesday:** 8 logged; 0 on 3+ days yet.
-    - **Caveat:** with numbers this small, the 3+ day loggers may be the founders. Re-run with founders excluded.
-  - **All 17 queries, run by Mayank the same day:** written up in `docs/team/mobile/FUNNEL-DATA-2026-11-25.md`.
-    - **Size:** 24 accounts, with the founders probably included.
-    - **The real bottleneck is habit after the first meal:**
-      - 67% log a first meal (71% within 24 h lately);
+- **iPhone app plan approved; mobile docs moved to the mobile repo (Mayank):**
+  - **Pushed `0e9b8ff`** to https://github.com/mayank99deo/d-human_mobile-app (`main`, its first commit):
+    - the wave 1 docs, now in `docs/`;
+    - the plan, `docs/plans/2026-11-24-ios-app.md`;
+    - the funnel SQL;
+    - the icon concepts and boards;
+    - a README and a `.gitignore` that blocks keys, `.env` and `docs/private/`.
+  - **Kept out of git,** in that clone's `docs/private/` (`/Users/mayanknarayan/d-human_mobile-app/docs/private/`): the threat model, because it details weaknesses live on the website while web fixes are on hold, and the real funnel numbers. The public plan says "a small base" instead of the account count. `docs/team/mobile/` no longer exists in this repo.
+  - **Mayank's calls on the plan:**
+    - **App only:** the website stays untouched, and the plan's §3 web fixes are on hold.
+    - **The backend** may get additions only the app uses (app sign-in tokens, JSON read endpoints), with the website's pages proven byte-identical.
+    - **Stack proposals:** A (the usual day as the front door) and B (a usual day drafted from the person's own meals) now; C after the doctor review.
+    - **v1 includes the habit pieces:** the Today widget, the lock-screen controls, the "Log a meal" shortcut and opt-in reminders.
+    - **The pass in the iPhone app** is an Apple in-app purchase at ₹79 for 30 days; the web stays ₹49.
+  - **The funnel numbers** (all 17 queries in one run, via the new `funnel-all-in-one.sql`; Supabase shows only the last result of a multi-query run):
+    - **The bottleneck is habit after the first meal:**
+      - 67% log a first meal;
       - the median logger logs 1 meal a day, 1 day a week;
       - day-1 return is 0–14%, day-7 0%;
-      - nobody has logged 3 full days, so a stack from meals is effectively unreachable.
-    - **The email sign-in step loses about 1 in 4** (3 of 11 in 48 h).
-    - **Not bottlenecks:** onboarding (96% finish in about 2–3 minutes) and the free limits (1 person hit the meal wall, after 14.5 days). That overturns the audit's #3 and #4.
-    - **Voice is the main input:** 47% of meals. Dinner is 11% of logs.
-    - **Report uploads are near the limit:** median 3.46 MB against the 4 MB cap; reads take 61 s median, 140 s p90.
-    - **Emails:** no taps yet.
-  - **Resumed at Mayank's "resume" (2026-11-25):** the graphic designer is finishing the boards. `svp-product` is writing `docs/team/plans/2026-11-24-ios-app.md`, told that the funnel data beats the audit's guesses and to plan around the habit loop.
+      - nobody has logged 3 full days.
+    - **The email step loses about 1 in 4.**
+    - **Not bottlenecks:** onboarding (96%) and the free limits.
+    - **Inputs:** voice is 47% of meals; dinner is 11%.
+    - **Caveat:** the base is small and may include the founders. Re-run with founders excluded.
+  - **Build wave 1 started (2026-11-25), six lanes in parallel:**
+    - **1A, `systems-data-engineer`, in a worktree of this repo:**
+      - **Builds:** app sign-in tokens (with Sign in with Apple stubbed until enrolment), the additive `sessions` migration, `authenticate()`, `GET /api/me` and `/api/home` from shared view builders, and `openapi.json`.
+      - **The proof:** byte-identical `/home` HTML for every demo person.
+      - **Not pushed:** the migration waits for Mayank's OK.
+    - **1B, Brig, in the mobile repo on branch `wave1/skeleton`** (worktree `../d-human_mobile-app-wt/skeleton`): the XcodeGen project, DHKit stubs, a placeholder app, and `ios-pr.yml` on `macos-26` with simulator screenshots.
+    - **1C, Brig, on branch `wave1/vectors`:** `shared/tools/sync.mjs`, which reads a D-HUMAN checkout, writes the fixtures, and runs a nightly drift check.
+    - **1D, written into the mobile repo's `docs/`, uncommitted:**
+      - Crag: `docs/specs/`, the screens in funnel order, with the ₹79 in-app purchase paywall and stack proposals A and B;
+      - UX designer: `docs/specs/habit.md`, the widget, controls, shortcut, reminders and "Log again";
+      - graphic designer: widget art and the boards redrawn to the settled tabs.
+    - **Landed in the mobile repo:**
+      - **`6436bf5` on `main`:**
+        - Crag's 16 specs, with `docs/specs/README.md`'s decisions, conflicts and API gaps G1–G9;
+        - the UX designer's `docs/specs/habit.md`, recommending local notifications for reminders, not push;
+        - the widget and habit boards.
+        - The plan now says ₹79 for the in-app purchase.
+      - **Branch `wave1/skeleton`:** 4 commits. 15 DHKit targets build with `swift build`, and 9 tests pass locally. The first CI run is https://github.com/mayank99deo/d-human_mobile-app/actions/runs/45643920757.
+      - **Branch `wave1/vectors`:** 4 commits.
+        - About 5,000 cases from D-HUMAN `b714adb`, with deterministic output, a canary check, and the web code run under Node's permission model;
+        - the nightly `vectors-sync.yml`, which has never run on GitHub yet.
+    - **Disk:** about 7.9 GB free after the lanes; watch it.
+    - **CI on `wave1/skeleton`:**
+      - **Run 1:** everything compiled on the real iOS SDK. Only the accessibility audit timed out (code -56, a slow runner).
+      - **Brig's fix, `4dbacf8`:** wait for the screen to settle, audit one type at a time, retry once on a timeout, and on CI only record a second timeout as a warning. Real findings still fail.
+      - **Run 2 (45656396429):** green, with no audit warning.
+      - **Logs and artifacts need GitHub auth;** without `gh` only status and annotations can be read.
+    - **Lane 1A** stopped on a network outage (ENOTFOUND) with its work uncommitted in the worktree (`.claude/worktrees/agent-ab2ca04cfde7e83cc`). It was resumed and asked to commit in small steps, and to prove that Vercel Cron's `Bearer CRON_SECRET` still passes the app-token check and that existing sessions default to `kind = 'cookie'`.
+    - **Andrew reviewed both mobile branches: OK to merge.** Merged with `--no-ff` and pushed as mobile `c5c1a05`. Both worktrees are removed.
+      - **Andrew's should-fix items for wave 2:**
+        - a PR job running the vector tests (today fixtures are checked only nightly);
+        - stricter audit-timeout matching (the domain as well as code -56; fail on more than one timeout or on `main`);
+        - `check-repo-rules.py` rejecting `write-all`, `workflow_run` and `issue_comment`;
+        - `ios-pr.yml` triggers: pushes to `main` plus PRs, not every branch twice;
+        - proving Hinglish strings per target early;
+        - docs drift.
+      - **vectors-sync has never run on GitHub;** starting it by hand needs auth.
+    - **Lane 1A finished (2026-11-26):** 7 commits on `worktree-agent-ab2ca04cfde7e83cc`, on top of `b714adb`, so it fast-forwards onto web `main`.
+      - **What's in it:**
+        - migration 0012 (additive; existing sessions stay `kind = 'cookie'`);
+        - app tokens with the G9 resend key;
+        - the review account (12–64 digits);
+        - app tokens refused on web-only routes (Vercel Cron's `Bearer CRON_SECRET` still works);
+        - `GET /api/me` and `/api/home` from shared view builders;
+        - `openapi.json`, with a contract test;
+        - `scripts/web-unchanged.mjs`.
+      - **Checked:** 1,609 of 1,609 tests; 59 of 59 on real Postgres 17; 286 of 286 web pages byte-identical.
+      - **Not pushed:** pushing migration 0012 needs Mayank's OK.
+    - **Mayank's answers, 26 Nov** (recorded in mobile `docs/specs/README.md`, `c07305c`):
+      - "Log again" counts as a meal log;
+      - reminders in English, हिंदी and Hinglish in v1, after a native-speaker check;
+      - a gallery photo's time sets the meal slot when it was taken today;
+      - bundle ID `fit.dhuman.app`, product ID `fit.dhuman.app.pass30`.
+    - **"Activate all the team" (Mayank, 2026-11-26): 14 lanes running.**
+      - **Reviewing the 1A branch:**
+        - QA attacks it, and changes unopened routes to answer 403 `not_for_app` instead of 401 (the orchestrator's call: 401 wipes the app's session);
+        - `staff-engineer` reviews it, read-only.
+      - **Code:**
+        - `systems-data-engineer` builds the remaining endpoints in a new worktree, stacked on 1A;
+        - Brig on `wave2/domain` (the DHDomain port and a vectors PR job);
+        - Brig on `wave2/platform` (DHAPI, DHStore, Andrew's CI fixes).
+      - **Docs, in the mobile repo:**
+        - Andrew: `APP-STRUCTURE.md` and the docs drift;
+        - `svp-product`: the plan's waves 2–3;
+        - Crag: `docs/store/LISTING.md`;
+        - `seo-lead`: `docs/store/ASO.md`;
+        - graphic designer: the green ring fix, store screenshot templates and icon layers;
+        - UX designer: `docs/specs/motion.md` and `reminder-strings.md`;
+        - `product-designer`: `docs/reviews/2026-11-26-specs-review.md`;
+        - `ai-efficiency-lead`: `docs/speech/` and `docs/cost/`;
+        - `chief-of-staff`: `docs/legal/` drafts for the lawyer, and `docs/ROADMAP.md`.
+    - **Finished in that round:**
+      - `svp-product` updated the plan: three tap budgets, an 11-lane wave 2, and lane 2K (DHDesign's signature pieces) added and dispatched to Brig on `wave2/design`.
+      - `staff-engineer`'s review: the refactor is faithful, with two must-fix items sent to QA:
+        - the HTML proof ran with Ask closed and skipped `/write`;
+        - `instrumentation.ts` wrapped `console` in every web function, so drop it.
+        - The orchestrator also called for removing app-token refusals from routes that never read a session.
+      - `product-designer`'s specs review: 20 findings, sent to Crag. The top one: a finished read, urgent included, could go unseen.
+      - `chief-of-staff`: the `docs/legal/` drafts (28 [DECIDE] items) and `docs/ROADMAP.md`. It found Google missing from the processors, and that `google-apps-script/Code.gs:94` still says the form "has a doctor review the results" (false since 2026-11-11; Mayank told).
+      - Andrew: `docs/APP-STRUCTURE.md` and the ARCHITECTURE drift fixes. There's no custom URL scheme; actions use `/app/…` paths.
+      - `ai-efficiency-lead`:
+        - the speech food vocabulary (67 English and 69 Hindi phrases) and the probe plan;
+        - the cost doc, moved to `docs/private/cost/`: about ₹4.9 a month per active user, about ₹29 at every cap; one rare worst case passes the ₹79 pass's take.
+      - `seo-lead`: ASO, moved to `docs/private/store/` because it names competitors. It recommends the name "D-Human: AI Calorie & Protein", with English (U.K.) as the primary language.
+    - **Every running lane stopped at the account's 5-hour usage limit** (it reset at 3 am IST). Resumed at Mayank's "resume" at 07:46 IST on 26 Nov: QA, the endpoints lane, Brig ×3, Crag, the UX designer and the graphic designer.
+    - **₹79 as an App Store India price point:** not confirmed. Apple has had about 900 INR points since 2022, but no source shows ₹79. Check in App Store Connect after enrolment.
 - **No welcome emails for two new users, and the Users tab in the Sheet (Mayank), crew running:**
   - **How the welcome works:** it goes from `/api/profile` in `after()` when onboarding first finishes (`sendWelcome`), and the daily job catches up for 48 h. Dry-ledger rows only skip a send while the switch is off, so they don't block a live one.
   - **Possible causes:** the switch isn't effective (no `live` log line seen yet); the users haven't finished onboarding ("finish setting up" waits 24 h); a send failure inside `after()`; spam. Vercel logs last 1 hour, so there's no evidence yet.
@@ -364,8 +460,8 @@ Newest first. One entry per change; pushes carry their commit hash.
     - **Resend → Emails:** both new users got their code, then "You're in, <name>. Here's your number." within a minute, both Delivered. This morning's run sent 4 "Two taps to shape D-Human" feedback emails and 1 "Your bib is half printed", all Delivered.
     - **So:** the live switches work, and `sendWelcome` in `after()` works.
     - **The staff engineer** was told to drop the diagnosis and focus on `/write/status`.
-  - **Resend shows "Pro" with an unpaid-invoice banner** ("pay it to avoid disruption"). Sign-in codes depend on Resend, so Mayank should pay it or move back to the free plan.
-  - **Deliverability:** the other chat's funnel data (`docs/team/mobile/FUNNEL-DATA-2026-11-25.md`) says about 1 in 4 people drop at the email step. DMARC for dhuman.fit is still missing; recommended again.
+  - **Resend shows "Pro" with an unpaid-invoice banner.** Mayank, 2026-11-26: he's clearing the bills by 1 Dec; don't raise it again.
+  - **Deliverability:** the other chat's funnel data (now `docs/private/FUNNEL-DATA-2026-11-25.md` in the mobile repo's local clone, not on GitHub) says about 1 in 4 people drop at the email step. DMARC for dhuman.fit is still missing; recommended again.
   - **`/write/status` (staff engineer, cherry-picked as one commit): a founders-only email status page.**
     - **Access:** `writerAccess`; a non-founder gets 404, and the page is `no-store`.
     - **New people, last 14 days:** a masked address; sign-up and onboarding times; the welcome and "finish setting up" status with the reason, from Delivered through Waits for onboarding, Not yet (with the due time), Due, Failed (Resend's reason) and Never sent.
@@ -398,6 +494,9 @@ Newest first. One entry per change; pushes carry their commit hash.
       - Show the deficiency goal?
       - Local dev already writes waitlist and feedback to the real Sheet; remove those two values from `.env.local` or use a test Sheet.
       - Move feedback deletes to the same in-transaction promise.
+    - **Push `b714adb`** (`363d0b3` and memory): Vercel says "Deployment has completed". The landing and /signin give 200, and `/api/account/delete` gives 401 signed out. The tab fills once Mayank deploys the new Code.gs.
+    - **Mayank confirmed the tab filled (2026-11-26).** Meal, report and pass changes refresh at the 10:30 and 19:30 IST runs; he chose not to make them instant for now. No daily steps are needed from him.
+    - **Mayank deployed it (2026-11-25):** he pasted Code.gs, ran `setupUsers`, deployed a new version and pressed Run in Vercel. The web app's GET now answers `ok`, `feedback` and `users` true (checked from here without printing the URL).
 
 ### 2026-11-24
 - **Blog post 3: HYROX's impact on Indian fitness (Mayank's request), crew running:**
@@ -437,7 +536,7 @@ Newest first. One entry per change; pushes carry their commit hash.
   - **Seven of eight lanes finished;** their docs are complete in `docs/team/mobile/`. The headline findings:
     - **The funnel** (Crag): about 25 taps, 6 things typed, a trip to the email app and 16 screens before the first meal. The top bottlenecks are the code sign-in (no DMARC, only the newest code works, fixed 30-day sessions), Resend's shared 100 a day, 12 onboarding screens, and the 20 free meals running out on day 4–7.
     - **Andrew:** the ₹49 pass must be an Apple in-app purchase in the iPhone app (about ₹35 kept against ₹47.84). The stack's doses risk Guideline 1.4.2 (dosage calculators). iPhone dictation covers only en-IN and hi-IN of the 12 languages, and only English works offline.
-    - **QA** (live on the web today): profile saves that change the event trigger paid event searches (about $0.13 each, limited only to 30 an hour in memory), and deleting an account resets the free reads.
+    - **QA:** found two cost and availability risks live on the web today. Details are in the private threat model, not in this public repo.
   - **Paused by Mayank (2026-11-24, about 22:15 IST), to resume tomorrow:**
     - **The graphic designer** was stopped while re-rendering the bib pins on the visual boards (`docs/team/mobile/assets/boards/`). `VISUAL-SYSTEM.md`, the app-icon concepts and the icons are written; its final report wasn't received.
     - **`svp-product`** was stopped at the start of reconciling everything into `docs/team/plans/2026-11-24-ios-app.md` (no file written yet).
