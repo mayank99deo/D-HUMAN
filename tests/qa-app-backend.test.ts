@@ -418,7 +418,13 @@ describe("consent_needed can't be gone around", () => {
       "post /api/food/typical": { body: { description: "Poha for breakfast, dal rice for lunch, roti sabzi for dinner." } },
       "post /api/stack": { body: {} },
       "post /api/wraps": { body: { period: "week", offset: 0 } },
-      "post /api/reports": { form: form({ files: new Blob([Buffer.from("%PDF-1.4\n% demo\n")], { type: "application/pdf" }), key: key() }) },
+      "post /api/reports": {
+        form: (() => {
+          const f = form({ key: key() });
+          f.append("files", new Blob([Buffer.from("%PDF-1.4\n% demo\n")], { type: "application/pdf" }), "report.pdf");
+          return f;
+        })(),
+      },
     };
     for (const r of APP_ROUTES.filter((x) => x.consent)) {
       const k = `${r.method} ${r.path}`;
