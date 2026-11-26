@@ -103,6 +103,13 @@ async function prepare(dir) {
     join analyses a on a.report_id = r.id where p.onboarded_at is not null and p.birth_year <= extract(year from now()) - 18
     group by u.email order by count(*) desc, u.email limit 1`))?.email;
   if (!writer) throw new Error("the database has no onboarded adult with a read report to be the writer");
+  // The writer's byline row, made here once, as /write makes it on a first visit: otherwise each
+  // server makes its own with a random id, and /write/profile differs by that id alone.
+  if (!(await one(`select 1 from blog_authors where email = $1`, [writer]))) {
+    const { name } = (await one(`select coalesce(nullif(trim(p.name), ''), 'Writer') as name from users u join profiles p on p.user_id = u.id where u.email = $1`, [writer])) ?? { name: "Writer" };
+    await pg.query(`insert into blog_authors (id, email, slug, name) values ($1, $2, $3, $4)`, [randomUUID(), writer, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "writer", name.slice(0, 60)]);
+    added.push("the writer's byline");
+  }
   const tokens = {};
   for (const { id, email } of (await pg.query(`select id, email from users order by email`)).rows) {
     const token = randomBytes(32).toString("base64url");
