@@ -505,7 +505,7 @@ export const OptionsResponse = z.strictObject({
   diets: z.array(Choice),
   conditions: z.array(Choice).describe("Pregnancy among them."),
   sexes: z.array(Choice),
-  languages: z.array(Choice),
+  languages: z.array(Choice).describe("Each hint is the language's sample sentence, as the web's language step shows it."),
   budgets: z.array(z.strictObject({ id: z.enum(BUDGET_SLABS), label: S, cap: N.nullable() })),
   birthYears: z.strictObject({ min: Int, max: Int }).describe("18 to 100 this year."),
   limits: z.strictObject({ goals: Int, activities: Int, conditions: Int }),

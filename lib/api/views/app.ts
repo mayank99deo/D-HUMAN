@@ -22,7 +22,8 @@ export function optionsJson(thisYear = new Date().getFullYear()) {
     diets: pick(DIETS),
     conditions: pick(CONDITIONS),
     sexes: pick(SEXES),
-    languages: pick(LANGUAGES),
+    // Each language's sample, as the web's language step shows it, so the app can too.
+    languages: LANGUAGES.map((l) => ({ id: l.id, label: l.label, hint: l.sample })),
     budgets: BUDGETS.map((b) => ({ id: b.id, label: b.label, cap: b.cap })),
     birthYears: { min: thisYear - MAX_AGE, max: thisYear - MIN_AGE },
     limits: { goals: 3, activities: 10, conditions: 10 },

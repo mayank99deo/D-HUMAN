@@ -8837,7 +8837,8 @@
                           "hint"
                         ],
                         "additionalProperties": false
-                      }
+                      },
+                      "description": "Each hint is the language's sample sentence, as the web's language step shows it."
                     },
                     "budgets": {
                       "type": "array",

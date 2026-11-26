@@ -116,6 +116,8 @@ describe("GET /api/app/options and /api/app/config", () => {
     assert.deepEqual(body.activities.map((a) => a.id), options.ACTIVITY_IDS);
     assert.deepEqual(body.conditions.map((c) => [c.id, c.label]), options.CONDITIONS.map((c) => [c.id, c.label]));
     assert.ok(body.conditions.some((c) => c.id === "pregnant"));
+    assert.deepEqual(body.languages.map((l) => [l.id, l.hint]), options.LANGUAGES.map((l) => [l.id, l.sample]), "each language shows its sample, as the web's step does");
+    assert.ok(body.languages.every((l) => l.hint));
     const year = new Date().getFullYear();
     assert.deepEqual(optionsJson(year).birthYears, { min: year - age.MAX_AGE, max: year - age.MIN_AGE }, "the same ages as components/platform/age.ts");
     assert.equal((await call(optionsRoute, { etag: r.res.headers.get("etag")! })).status, 304);
