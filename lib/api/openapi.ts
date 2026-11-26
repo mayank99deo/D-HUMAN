@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.3.0";
+export const CONTRACT_VERSION = "0.4.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -206,7 +206,7 @@ export const APP_ROUTES: AppRoute[] = [
     path: "/api/profile",
     file: "app/api/profile/route.ts",
     summary:
-      "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording.",
+      "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, then 429 with Retry-After (nothing saved); 429 paused when the apps' daily limit is reached.",
     auth: "bearer",
     request: s.ProfileRequest,
     responses: { 200: s.SavedResponse, 400: refusal, 401: refusal, 403: refusal, 429: refusal },
@@ -216,7 +216,7 @@ export const APP_ROUTES: AppRoute[] = [
     path: "/api/food/typical",
     file: "app/api/food/typical/route.ts",
     summary:
-      "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save. Never queue it offline.",
+      "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save, uncounted. 5 saves a day, then 429 with Retry-After; 429 paused when the apps' daily limit is reached. Never queue it offline.",
     auth: "bearer",
     request: s.TypicalRequest,
     responses: { 200: s.TypicalAnswer, 400: refusal, 401: refusal, 409: refusal, 422: refusal, 429: refusal, 500: refusal, 503: refusal },

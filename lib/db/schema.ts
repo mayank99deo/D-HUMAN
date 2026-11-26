@@ -620,6 +620,20 @@ export const feedbackAnswers = pgTable(
 
 // A lease per scheduled job, so a cron that fires twice runs once; also its last result
 // (counts only, never addresses). Also holds once-a-week markers such as "alert:weekly-cap".
+// The apps' cost guards (0016): how often an app token set off something paid in a window, per
+// person ("events:<user id>" a week, "usual:<user id>" a day) and for everyone ("app-ai" a day).
+// `window` is the window's first day in IST. Counts only; the web's requests never touch it.
+export const appRateCounts = pgTable(
+  "app_rate_counts",
+  {
+    subject: text("subject").notNull(),
+    window: date("window").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.subject, t.window] })],
+).enableRLS();
+
 export const jobRuns = pgTable("job_runs", {
   job: text("job").primaryKey(),
   leaseUntil: timestamp("lease_until", { withTimezone: true }),

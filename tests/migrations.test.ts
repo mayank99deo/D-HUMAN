@@ -139,6 +139,11 @@ async function assertCurrentShape(pg: PGlite) {
   assert.deepEqual(tokenCol, { t: "text", nullable: "YES" });
   const tokenUnique = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'users_store_account_token_unique'`);
   assert.equal(tokenUnique?.def, "UNIQUE (store_account_token)");
+
+  // 0016: the apps' cost-guard counts, one row a subject a window, row-level security on.
+  const rateCols = await pg.query<{ c: string }>(`select column_name || ' ' || data_type as c from information_schema.columns where table_name = 'app_rate_counts' order by column_name`);
+  assert.deepEqual(rateCols.rows.map((r) => r.c), ["count integer", "subject text", "updated_at timestamp with time zone", "window date"]);
+  assert.equal((await one<{ r: boolean }>(pg, `select relrowsecurity as r from pg_class where relname = 'app_rate_counts'`)).r, true);
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -329,6 +334,31 @@ describe("migrations", () => {
       await pg.exec(meal("m3"));
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
+      await pg.close();
+    });
+  }
+
+  // 0016 on a database at 0015, by the deploy or pasted first, either way, twice; a count survives.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0016 on production (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0016_"));
+      assert.ok(at > 0, "0016 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(`insert into app_rate_counts (subject, "window", count) values ('usual:u1', '2026-11-26', 2)`);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(`insert into app_rate_counts (subject, "window", count) values ('usual:u1', '2026-11-26', 2)`);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.equal((await one<{ n: number }>(pg, `select count::int as n from app_rate_counts where subject = 'usual:u1'`)).n, 2);
+      await assert.rejects(pg.exec(`insert into app_rate_counts (subject, "window") values ('usual:u1', '2026-11-26')`), /app_rate_counts_subject_window_pk/);
       await pg.close();
     });
   }

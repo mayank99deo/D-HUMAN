@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
   },
   "servers": [
@@ -6176,7 +6176,7 @@
     },
     "/api/profile": {
       "post": {
-        "summary": "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording.",
+        "summary": "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, then 429 with Retry-After (nothing saved); 429 paused when the apps' daily limit is reached.",
         "operationId": "postApiProfile",
         "security": [
           {
@@ -6426,8 +6426,8 @@
     },
     "/api/food/typical": {
       "post": {
-        "summary": "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save. Never queue it offline.",
-        "description": "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save. Never queue it offline. An app write: answers 409 consent_needed (with `version`) when the person agreed to older consent wording; ask again, then send the same request once more.",
+        "summary": "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save, uncounted. 5 saves a day, then 429 with Retry-After; 429 paused when the apps' daily limit is reached. Never queue it offline.",
+        "description": "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save, uncounted. 5 saves a day, then 429 with Retry-After; 429 paused when the apps' daily limit is reached. Never queue it offline. An app write: answers 409 consent_needed (with `version`) when the person agreed to older consent wording; ask again, then send the same request once more.",
         "operationId": "postApiFoodTypical",
         "security": [
           {
