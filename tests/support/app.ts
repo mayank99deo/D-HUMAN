@@ -32,6 +32,8 @@ export function allowAppImports(stubs: Record<string, string> = {}) {
       if (specifier in stubs) return asModule(stubs[specifier]);
       if (specifier in NEXT_DEFAULTS) return asModule(NEXT_DEFAULTS[specifier]);
       if (specifier === "server-only") return asModule("export {}");
+      // next/server loads in plain Node, but only by its file name (the package has no exports map).
+      if (specifier === "next/server") return next("next/server.js", context);
       const target = specifier.startsWith("@/") ? pathToFileURL(path.join(root, specifier.slice(2))).href : specifier;
       const local = target.startsWith(".") || target.startsWith("file:");
       if (local && !/\.(m?js|tsx?|json)$/.test(target)) {

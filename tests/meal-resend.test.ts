@@ -8,17 +8,21 @@
 // PGlite runs one query at a time, so these races interleave between queries, not inside them;
 // tests/pg/meal-parallel.mts runs the same races on a real Postgres.
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { after, describe, it } from "node:test";
 import { allowAppImports, tempDatabase } from "./support/app.ts";
 
+type TestUser = { id: string; email: string };
 type TestGlobals = {
-  __testUser?: { id: string; email: string } | null;
+  // Who each request is, per request as in production (racing sends each keep theirs).
+  __testUser: AsyncLocalStorage<TestUser>;
   __mealCalls: number;
   __dayCalls: number;
   __mealDelayMs: number;
   __mealFails: number;
 };
 const g = globalThis as unknown as TestGlobals;
+g.__testUser = new AsyncLocalStorage<TestUser>();
 g.__mealCalls = 0;
 g.__dayCalls = 0;
 g.__mealDelayMs = 0;
@@ -37,7 +41,7 @@ allowAppImports({
     const day = { meals: [{ name: "Lunch", kcal: 2400, protein_g: 80, carbs_g: 300, fat_g: 80, fibre_g: 30 }], micros: { iron_mg: 10, calcium_mg: 600, magnesium_mg: 300, zinc_mg: 8, b12_ug: 1, folate_ug: 200, vitamin_c_mg: 50, vitamin_d_iu: 100 }, patterns: ["Rice at lunch."], runs: 3 };
     export const estimateUsualDay = async () => { globalThis.__dayCalls++; return { data: day, model: "test" }; };
     export const estimateTypicalDay = estimateUsualDay;`,
-  "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
+  "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser.getStore() ?? null;",
   "@/lib/billing/razorpay": `export const paymentsOn = () => false; export const keyMode = () => "test";`,
 });
 const removeDatabase = tempDatabase();
@@ -73,15 +77,12 @@ async function quietly<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** One send to /api/food as `user`. The test user is read before the first await, so racing sends each keep theirs. */
+/** One send to /api/food as `user`. */
 async function send(user: { id: string; email: string }, fields: Record<string, string>) {
   const form = new FormData();
   form.append("source", "text");
   for (const [k, v] of Object.entries(fields)) form.append(k, v);
-  g.__testUser = user;
-  const pending = foodRoute(new Request("http://localhost/api/food", { method: "POST", body: form }));
-  g.__testUser = null;
-  const res = await pending;
+  const res = await g.__testUser.run(user, () => foodRoute(new Request("http://localhost/api/food", { method: "POST", body: form })));
   return { status: res.status, body: (await res.json()) as { log?: { id: string; title: string }; repeat?: boolean; error?: string } };
 }
 async function rows(userId: string) {
@@ -257,10 +258,7 @@ describe("the meal route with a key", () => {
 // id of its own, so the key is a new meal that meets the plan.
 describe("a meal's key sent again after the meal was deleted", () => {
   async function remove(user: { id: string; email: string }, id: string) {
-    g.__testUser = user;
-    const pending = deleteRoute(new Request(`http://localhost/api/food/${id}`, { method: "DELETE" }), { params: Promise.resolve({ id }) } as never);
-    g.__testUser = null;
-    return (await pending).status;
+    return (await g.__testUser.run(user, () => deleteRoute(new Request(`http://localhost/api/food/${id}`, { method: "DELETE" }), { params: Promise.resolve({ id }) } as never))).status;
   }
 
   it("is a new meal at once, counted as one: not a wait, not a free re-log", async () => {
@@ -338,10 +336,9 @@ describe("the usual day sent twice", () => {
   it("reads the same words once when they were saved moments ago, and again for new words", async () => {
     const user = await person();
     const post = async (description: string) => {
-      g.__testUser = user;
-      const pending = typicalRoute(new Request("http://localhost/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description }) }));
-      g.__testUser = null;
-      const res = await pending;
+      const res = await g.__testUser.run(user, () =>
+        typicalRoute(new Request("http://localhost/api/food/typical", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ description }) })),
+      );
       return { status: res.status, body: (await res.json()) as { day?: { patterns: string[] } } };
     };
     const calls = g.__dayCalls;

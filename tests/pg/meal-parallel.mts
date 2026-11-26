@@ -12,6 +12,7 @@
 //   TEST_DATABASE_URL=postgres://user:pass@host:5432/db node tests/pg/meal-parallel.mts
 // Without TEST_DATABASE_URL it says so and exits 0. It migrates the database, then removes only its own rows.
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowAppImports } from "../support/app.ts";
@@ -21,8 +22,10 @@ if (!url) {
   console.log("skipped: set TEST_DATABASE_URL to a Postgres you can write to");
   process.exit(0);
 }
-type G = { __testUser?: { id: string; email: string } | null; __calls: number; __fails: number };
+// Who each request is, per request as in production, so racing sends each keep theirs.
+type G = { __testUser: AsyncLocalStorage<{ id: string; email: string }>; __calls: number; __fails: number };
 const g = globalThis as unknown as G;
+g.__testUser = new AsyncLocalStorage();
 g.__calls = 0;
 g.__fails = 0;
 allowAppImports({
@@ -36,7 +39,7 @@ allowAppImports({
       return { data: { is_food: true, reply_language: input.words.reply.id, title: input.words.said, meal_guess: null, items: [item], confidence: "high", tip: null }, model: "test" };
     };
     export const estimateUsualDay = () => { throw new Error("AI in a test"); }; export const estimateTypicalDay = estimateUsualDay;`,
-  "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser ?? null;",
+  "@/lib/auth/session": "export const apiUser = async () => globalThis.__testUser.getStore() ?? null;",
   "@/lib/billing/razorpay": `export const paymentsOn = () => false; export const keyMode = () => "test";`,
 });
 process.env.DATABASE_URL = url;
@@ -70,10 +73,7 @@ async function send(user: { id: string; email: string }, key: string, text = "2 
   form.append("source", "text");
   form.append("text", text);
   form.append("key", key);
-  g.__testUser = user;
-  const pending = foodRoute(new Request("http://localhost/api/food", { method: "POST", body: form }));
-  g.__testUser = null;
-  const res = await pending;
+  const res = await g.__testUser.run(user, () => foodRoute(new Request("http://localhost/api/food", { method: "POST", body: form })));
   return { status: res.status, body: (await res.json()) as { log?: { id: string; userId: string }; repeat?: boolean } };
 }
 async function counts(userId: string) {
