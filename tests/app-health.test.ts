@@ -96,7 +96,7 @@ describe("POST /api/profile from an app", () => {
 });
 
 describe("POST /api/stack from an app", () => {
-  it("waits for the health question, then builds; a second tap follows the same build; the poll follows it", async () => {
+  it("waits for the health question, then builds; a second tap mid-build follows the same build; the poll follows it", async () => {
     const p = await person("build@example.com");
     await withReport(p);
     const first = await call(build, { token: p.token, body: {} });
@@ -106,7 +106,12 @@ describe("POST /api/stack from an app", () => {
     const started = await call(build, { token: p.token, body: {} });
     assert.equal(started.status, 200);
     const { id } = contract.StackBuildResponse.parse(started.body);
-    assert.equal(contract.StackBuildResponse.parse((await call(build, { token: p.token, body: {} })).body).id, id, "already building: the same one");
+    // A second tap while it still builds follows the same one; on a fast database the first may
+    // already be done, and then it's a new build. Either way: 200 with an id.
+    const again = contract.StackBuildResponse.parse((await call(build, { token: p.token, body: {} })).body).id;
+    const d = await db();
+    const firstDone = (await d.select().from(schema.stacks).where(eq(schema.stacks.id, id)))[0].status !== "building";
+    if (!firstDone) assert.equal(again, id, "already building: the same one");
     assert.ok(["building", "ready"].includes(String((await call(poll, { token: p.token, params: { id } })).body!.status)));
     await runAfter();
     const done = await call(poll, { token: p.token, params: { id } });
