@@ -21,8 +21,6 @@ const body = z.object({
 export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/again">) {
   const member = await appOnly(request, { write: true });
   if (!member.ok) return member.response;
-  // The "again" switch (GET /api/app/config) turns Log again off on the server too.
-  if (switchOff("again")) return switchedOff("again");
   const { user, profile } = member;
   // Shares the meal route's hourly speed bump.
   if (!allowRequest(`food:${user.id}`, 40, 60 * 60_000)) return appRefusal("rate_limited", 429, { retryAfter: secondsUntilReset(`food:${user.id}`) });
@@ -31,6 +29,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/a
   // A resend of a repeat already logged answers with it, before its eatenAt is judged again.
   const had = await mealForKey(user.id, parsed.data.key);
   if (had) return privateJson({ meal: mealJson(had, profile.timezone), repeat: true });
+  // The "again" switch (GET /api/app/config) turns Log again off on the server too. After the
+  // resend check, as on POST /api/food: a repeat already logged still answers as it did.
+  if (switchOff("again")) return switchedOff("again");
   const eatenAt = parsed.data.eatenAt ? new Date(parsed.data.eatenAt) : undefined;
   if (eatenAt && !eatenAtInReach(eatenAt)) return appRefusal("bad_time", 400);
   const { id } = await ctx.params;

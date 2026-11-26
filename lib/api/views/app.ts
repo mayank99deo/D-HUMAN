@@ -37,20 +37,25 @@ export function optionsJson(thisYear = new Date().getFullYear()) {
 export const APP_SWITCHES = ["voice", "snap", "again", "reminders", "appleSignIn", "iap", "doses"] as const;
 export type AppSwitch = (typeof APP_SWITCHES)[number];
 
+/**
+ * The names APP_SWITCHES_OFF turns off. Matched without regard to case or spaces, so a typo like
+ * "Doses" in Vercel still turns doses off rather than leaving them on (QA, round 2).
+ */
+const offNames = (env: Record<string, string | undefined>) => new Set((env.APP_SWITCHES_OFF ?? "").split(",").map((s) => s.trim().toLowerCase()));
+
 /** Whether a switch is off on this server: the server honours it for app requests too, not only the apps. */
-export const switchOff = (name: AppSwitch, env: Record<string, string | undefined> = process.env) =>
-  (env.APP_SWITCHES_OFF ?? "").split(",").map((s) => s.trim()).includes(name);
+export const switchOff = (name: AppSwitch, env: Record<string, string | undefined> = process.env) => offNames(env).has(name.toLowerCase());
 
 /** GET /api/app/config: versions, the store link, the API's address and the switches turned off. From the server's settings only. */
 export function configJson(env: Record<string, string | undefined> = process.env) {
-  const asked = (env.APP_SWITCHES_OFF ?? "").split(",").map((s) => s.trim());
+  const asked = offNames(env);
   const url = (v: string | undefined) => (v && /^https:\/\//.test(v) ? v : null);
   return {
     minSupported: env.APP_MIN_VERSION_IOS?.trim() || "1.0.0",
     latest: env.APP_LATEST_VERSION_IOS?.trim() || null,
     updateUrl: url(env.APP_STORE_URL_IOS),
     apiBase: "https://www.d-human.fit",
-    off: APP_SWITCHES.filter((s) => asked.includes(s)),
+    off: APP_SWITCHES.filter((s) => asked.has(s.toLowerCase())),
     links: { privacy: url(env.APP_PRIVACY_URL), terms: url(env.APP_TERMS_URL), support: url(env.APP_SUPPORT_URL) },
     notice: env.APP_NOTICE?.trim() || null,
   };

@@ -123,7 +123,8 @@ describe("GET /api/app/options and /api/app/config", () => {
 
   it("config: switches only ever turn off, unknown names are ignored, links only https; public for 5 minutes", async () => {
     assert.deepEqual(configJson({}).off, []);
-    assert.deepEqual(configJson({ APP_SWITCHES_OFF: "doses, voice,teleport,IAP" }).off, ["voice", "doses"]);
+    // Any case and spacing counts, so a typo turns a switch off rather than leaving it on (QA, round 2).
+    assert.deepEqual(configJson({ APP_SWITCHES_OFF: "doses, voice,teleport,IAP" }).off, ["voice", "iap", "doses"]);
     assert.deepEqual(configJson({ APP_SWITCHES_OFF: APP_SWITCHES.join(",") }).off, [...APP_SWITCHES]);
     assert.deepEqual(contract.APP_SWITCH_NAMES, APP_SWITCHES);
     const c = configJson({ APP_MIN_VERSION_IOS: "1.2.0", APP_STORE_URL_IOS: "https://apps.apple.com/app/id1", APP_PRIVACY_URL: "http://insecure.example" });
