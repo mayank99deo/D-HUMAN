@@ -251,6 +251,14 @@ export const APP_ROUTES: AppRoute[] = [
     etag: true,
   },
   {
+    method: "post",
+    path: "/api/billing/store-token",
+    file: "app/api/billing/store-token/route.ts",
+    summary: "The appAccountToken for an in-app purchase (G8): made on first use, the same ever after. Never our user id.",
+    auth: "bearer",
+    responses: { 200: s.StoreTokenResponse, 401: refusal, 403: refusal, 409: refusal },
+  },
+  {
     method: "get",
     path: "/api/app/options",
     file: "app/api/app/options/route.ts",

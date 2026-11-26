@@ -346,6 +346,12 @@ describe("the apps' contract", () => {
     for (let i = 0; i < 12; i++) allowRequest(`wrap:${u.id}`, 12, 60 * 60_000);
     await wrap(early, { period: "week", offset: 0 });
 
+    // The purchase token: 200, 401, 403 (a web cookie), 409 (before onboarding).
+    await call("post", "/api/billing/store-token", { token: early });
+    await call("post", "/api/billing/store-token", { token: bad });
+    await call("post", "/api/billing/store-token", { cookie: "web-cookie" });
+    await call("post", "/api/billing/store-token", { token: await signIn("token-not-onboarded@example.com") });
+
     // The public ones: 200 and 304, no sign-in.
     for (const path of ["/api/app/options", "/api/app/config"]) {
       const first = await call("get", path);

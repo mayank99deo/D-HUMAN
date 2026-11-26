@@ -35,6 +35,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   createdAt: created(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  // The apps only (0015): the UUID an in-app purchase carries as Apple's appAccountToken, made on
+  // first use, so our own user id never goes to Apple (the mobile repo's docs/API.md §8, gap G8).
+  storeAccountToken: text("store_account_token").unique(),
 }).enableRLS();
 
 // One-time sign-in codes. Only a hash of the code is stored.

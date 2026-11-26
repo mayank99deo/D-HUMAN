@@ -133,6 +133,12 @@ async function assertCurrentShape(pg: PGlite) {
   const healthCol = await one<{ t: string; nullable: string; d: string | null }>(pg, `select data_type as t, is_nullable as nullable, column_default as d
     from information_schema.columns where table_name = 'profiles' and column_name = 'health_checked_at'`);
   assert.deepEqual(healthCol, { t: "timestamp with time zone", nullable: "YES", d: null });
+
+  // 0015: the apps' purchase token, unique when set.
+  const tokenCol = await one<{ t: string; nullable: string }>(pg, `select data_type as t, is_nullable as nullable from information_schema.columns where table_name = 'users' and column_name = 'store_account_token'`);
+  assert.deepEqual(tokenCol, { t: "text", nullable: "YES" });
+  const tokenUnique = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'users_store_account_token_unique'`);
+  assert.equal(tokenUnique?.def, "UNIQUE (store_account_token)");
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -323,6 +329,32 @@ describe("migrations", () => {
       await pg.exec(meal("m3"));
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
+      await pg.close();
+    });
+  }
+
+  // Production with 0014 and accounts; 0015 run by the deploy or pasted first, either way, twice.
+  // Nobody has a purchase token yet; two people can't share one.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0015 on production's users (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0015_"));
+      assert.ok(at > 0, "0015 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      await pg.exec(`insert into users (id, email) values ('u1', 'a@x'), ('u2', 'b@x');`);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.deepEqual((await pg.query(`select id, store_account_token from users order by id`)).rows, [{ id: "u1", store_account_token: null }, { id: "u2", store_account_token: null }]);
+      await pg.exec(`update users set store_account_token = 't1' where id = 'u1'`);
+      await assert.rejects(pg.exec(`update users set store_account_token = 't1' where id = 'u2'`), /users_store_account_token_unique/);
       await pg.close();
     });
   }

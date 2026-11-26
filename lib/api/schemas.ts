@@ -519,3 +519,7 @@ export const ConfigResponse = z.strictObject({
   links: z.strictObject({ privacy: S.nullable(), terms: S.nullable(), support: S.nullable() }),
   notice: S.nullable(),
 });
+
+export const StoreTokenResponse = z.strictObject({
+  appAccountToken: z.uuid().describe("Pass it as the purchase's appAccountToken (G8). The same for this person every time."),
+});
