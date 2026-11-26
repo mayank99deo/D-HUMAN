@@ -525,3 +525,17 @@ export const ConfigResponse = z.strictObject({
 export const StoreTokenResponse = z.strictObject({
   appAccountToken: z.uuid().describe("Pass it as the purchase's appAccountToken (G8). The same for this person every time."),
 });
+
+// ── Report progress, deletes, the event target, the tour ─────────────────────
+
+export const ReportStatusResponse = z.strictObject({
+  status: z.enum(REPORT_STATUSES),
+  stage: S.nullable(),
+  error: S.nullable(),
+  step: Int.nullable().describe("Which of the read's steps it's on (1 uploaded, 2 reading, 3 interpreting, 4 ready); null when it failed."),
+  steps: Int,
+  markersFound: Int.describe("How many markers have been found so far: a count only, for 'Reading your report, 12 markers'."),
+});
+export const EventTargetRequest = z.object({ eventId: z.uuid().nullable().describe("One of the events GET /api/home lists, or null to clear the pick.") });
+export const TourRequest = z.object({ outcome: z.enum(["finished", "skipped"]).optional(), stop: Int.min(1).optional() });
+export const TourResponse = z.strictObject({ status: z.literal("done") });

@@ -24,6 +24,9 @@ const { readJson } = await import("../lib/api/views/reports.ts");
 const contract = await import("../lib/api/schemas.ts");
 const list = (await import("../app/api/reports/route.ts")).GET as Handler;
 const readRoute = (await import("../app/api/reports/[id]/read/route.ts")).GET as Handler;
+const one = await import("../app/api/reports/[id]/route.ts");
+const poll = one.GET as Handler;
+const remove = one.DELETE as Handler;
 type Marker = import("../lib/db/schema.ts").Marker;
 type ReportView = import("../lib/platform/dashboard.ts").ReportView;
 
@@ -159,5 +162,22 @@ describe("GET /api/reports", () => {
     const other = await person("list-other@example.com");
     assert.deepEqual((await call(list, { token: other.token })).body, { reports: [] });
     assert.equal((await call(list)).status, 401);
+  });
+});
+
+describe("GET and DELETE /api/reports/[id] from an app", () => {
+  it("progress is the step and a count of markers found, never a name or value; delete takes only the person's own", async () => {
+    const p = await person("progress@example.com");
+    const id = await stored(p, { status: "reading", read: false, startedAt: new Date() });
+    const r = await call(poll, { token: p.token, params: { id } });
+    const body = contract.ReportStatusResponse.parse(r.body);
+    assert.deepEqual([body.status, body.step, body.steps, body.markersFound], ["reading", 2, 4, 1]);
+    assert.ok(!r.text.includes("Vitamin D") && !r.text.includes("8"), r.text);
+    const other = await person("progress-other@example.com");
+    assert.equal((await call(poll, { token: other.token, params: { id } })).status, 404);
+    assert.equal((await call(remove, { token: other.token, params: { id } })).status, 200, "answers the same for someone else's");
+    assert.equal((await call(poll, { token: p.token, params: { id } })).status, 200, "and leaves it");
+    assert.deepEqual((await call(remove, { token: p.token, params: { id } })).body, { status: "deleted" });
+    assert.equal((await call(poll, { token: p.token, params: { id } })).status, 404);
   });
 });

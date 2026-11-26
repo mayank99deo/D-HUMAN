@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.4.1";
+export const CONTRACT_VERSION = "0.5.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -257,6 +257,40 @@ export const APP_ROUTES: AppRoute[] = [
     summary: "The appAccountToken for an in-app purchase (G8): made on first use, the same ever after. Never our user id.",
     auth: "bearer",
     responses: { 200: s.StoreTokenResponse, 401: refusal, 403: refusal, 409: refusal },
+  },
+  {
+    method: "get",
+    path: "/api/reports/{id}",
+    file: "app/api/reports/[id]/route.ts",
+    summary: "A report's progress while it's read: status, step of steps, and how many markers have been found so far (counts only). A read that died is ended as failed.",
+    auth: "bearer",
+    responses: { 200: s.ReportStatusResponse, 401: refusal, 404: refusal },
+  },
+  {
+    method: "delete",
+    path: "/api/reports/{id}",
+    file: "app/api/reports/[id]/route.ts",
+    summary: "Delete one report with its files, markers, read, stack and any wrap that counted it. The read it used still counts. One that's gone answers the same.",
+    auth: "bearer",
+    responses: { 200: s.DeletedResponse, 401: refusal },
+  },
+  {
+    method: "post",
+    path: "/api/events/target",
+    file: "app/api/events/target/route.ts",
+    summary: "Pick the event the read and the bib aim at, from the person's list, or clear it. No search, no cost. Naming a new event in mind is POST /api/profile (eventInMind), which counts against the week's searches.",
+    auth: "bearer",
+    request: s.EventTargetRequest,
+    responses: { 200: s.SavedResponse, 400: refusal, 401: refusal, 404: refusal },
+  },
+  {
+    method: "post",
+    path: "/api/profile/tour",
+    file: "app/api/profile/tour/route.ts",
+    summary: "The first-run tour finished or skipped. Only the first time is kept.",
+    auth: "bearer",
+    request: s.TourRequest,
+    responses: { 200: s.TourResponse, 401: refusal, 429: refusal },
   },
   {
     method: "get",

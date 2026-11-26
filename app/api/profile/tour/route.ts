@@ -1,7 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TOUR } from "@/components/platform/tour-stops";
-import { notForApp } from "@/lib/auth/authenticate";
+import { appActor, isAppRequest } from "@/lib/api/actor";
+import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -11,13 +12,14 @@ import { allowRequest } from "@/lib/waitlist/rate-limit";
 const bodySchema = z.object({ outcome: z.enum(["finished", "skipped"]), stop: z.number().int().min(1).max(TOUR.length) }).partial();
 
 // The first-run tour shows once per person, on any device: finishing or skipping
-// it lands here. Only the first time is kept; calling again changes nothing.
+// it lands here. Only the first time is kept; calling again changes nothing. The web's request is
+// answered exactly as before; an app's is taken as its token and answered privately.
 export async function POST(request: Request) {
-  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
-  if (refused) return refused;
-  const user = await apiUser();
-  if (!user) return unauthorized();
-  if (!allowRequest(`tour:${user.id}`, 20, 60 * 60_000)) return json({ error: "rate_limited" }, 429);
+  const app = isAppRequest(request);
+  const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
+  if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
+  const reply = app ? privateJson : json;
+  if (!allowRequest(`tour:${user.id}`, 20, 60 * 60_000)) return reply({ error: "rate_limited" }, 429);
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
 
   const d = await db();
@@ -31,5 +33,5 @@ export async function POST(request: Request) {
   if (first.length && parsed.success && parsed.data.outcome) {
     console.info(`[tour] ${parsed.data.outcome} at stop ${parsed.data.stop ?? "?"} of ${TOUR.length}`);
   }
-  return json({ status: "done" });
+  return reply({ status: "done" });
 }

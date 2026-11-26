@@ -355,6 +355,24 @@ describe("the apps' contract", () => {
     await call("post", "/api/billing/store-token", { cookie: "web-cookie" });
     await call("post", "/api/billing/store-token", { token: await signIn("token-not-onboarded@example.com") });
 
+    // A report's progress and its delete; the event pick; the tour.
+    await call("get", "/api/reports/{id}", { token: early, params: { id: reportId } });
+    await call("get", "/api/reports/{id}", { token: early, params: { id: "not-a-report" } }); // 404
+    await call("get", "/api/reports/{id}", { token: bad, params: { id: reportId } }); // 401
+    await call("delete", "/api/reports/{id}", { token: early, params: { id: reportId } });
+    await call("delete", "/api/reports/{id}", { token: bad, params: { id: reportId } }); // 401
+    const eventId = randomUUID();
+    await d.insert(schema.events).values({ id: eventId, activity: "running", region: "india", name: "Demo 10K", startsOn: "2027-02-01" });
+    await d.insert(schema.userEvents).values({ userId: u.id, eventId, target: false });
+    await call("post", "/api/events/target", { token: early, body: { eventId } });
+    await call("post", "/api/events/target", { token: early, body: { eventId: "nope" }, bad: true }); // 400
+    await call("post", "/api/events/target", { token: early, body: { eventId: randomUUID() } }); // 404
+    await call("post", "/api/events/target", { token: bad, body: { eventId: null } }); // 401
+    await call("post", "/api/profile/tour", { token: early, body: { outcome: "finished", stop: 3 } });
+    await call("post", "/api/profile/tour", { token: bad, body: {} }); // 401
+    for (let i = 0; i < 20; i++) allowRequest(`tour:${u.id}`, 20, 60 * 60_000);
+    await call("post", "/api/profile/tour", { token: early, body: {} }); // 429
+
     // The public ones: 200 and 304, no sign-in.
     for (const path of ["/api/app/options", "/api/app/config"]) {
       const first = await call("get", path);
