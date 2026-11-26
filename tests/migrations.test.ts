@@ -144,6 +144,9 @@ async function assertCurrentShape(pg: PGlite) {
   const rateCols = await pg.query<{ c: string }>(`select column_name || ' ' || data_type as c from information_schema.columns where table_name = 'app_rate_counts' order by column_name`);
   assert.deepEqual(rateCols.rows.map((r) => r.c), ["count integer", "subject text", "updated_at timestamp with time zone", "window date"]);
   assert.equal((await one<{ r: boolean }>(pg, `select relrowsecurity as r from pg_class where relname = 'app_rate_counts'`)).r, true);
+
+  // 0017: the first agreement, kept beside consent_at.
+  assert.deepEqual(await one(pg, `select data_type as t, is_nullable as n from information_schema.columns where table_name = 'profiles' and column_name = 'consent_first_at'`), { t: "timestamp with time zone", n: "YES" });
 }
 
 const BLOG_AND_EMAIL_TABLES = [
@@ -334,6 +337,29 @@ describe("migrations", () => {
       await pg.exec(meal("m3"));
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
+      await pg.close();
+    });
+  }
+
+  // 0017 on profiles that agreed, by the deploy or pasted first, either way, twice: nothing moves.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0017 on production's profiles (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0017_"));
+      assert.ok(at > 0, "0017 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      await pg.exec(`insert into users (id, email) values ('u1', 'a@x'); insert into profiles (user_id, consent_at) values ('u1', '2026-11-02 10:00:00+00');`);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.deepEqual(await one(pg, `select consent_at::text as a, consent_first_at as f from profiles`), { a: "2026-11-02 10:00:00+00", f: null });
       await pg.close();
     });
   }

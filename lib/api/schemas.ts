@@ -76,9 +76,11 @@ export const MeResponse = z.strictObject({
   email: S,
   onboarded: z.boolean(),
   consent: z.strictObject({
-    at: IsoTime.nullable(),
+    at: IsoTime.nullable().describe("When they agreed to the wording they last agreed to."),
     version: IsoDate.describe("The consent wording's version."),
     current: z.boolean().describe("false: they agreed to older wording (or none). Ask again before anything leaves the phone."),
+    firstAt: IsoTime.nullable().describe("When they first agreed. Kept when agreement to newer wording moves at."),
+    newLines: z.array(z.enum(["health_data", "ai_processing", "ask_questions"])).describe("The consent lines added since they agreed: mark them New. All of them before any agreement."),
   }),
   tourDone: z.boolean(),
   healthCheckedAt: IsoTime.nullable().describe("When the health question was answered (G2). Null: ask it before the first stack build, which otherwise answers 409 health_check_needed."),

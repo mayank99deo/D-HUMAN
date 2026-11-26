@@ -5,7 +5,7 @@ import { aiMode } from "@/lib/ai/client";
 import { isOwnerEmail } from "@/lib/auth/owners";
 import { db, schema } from "@/lib/db";
 import type { Profile } from "@/lib/db/schema";
-import { CONSENT_VERSION, consentCurrent } from "@/lib/domain/consent";
+import { CONSENT_VERSION, consentCurrent, newConsentLines } from "@/lib/domain/consent";
 import type { MeView } from "@/lib/platform/views/me";
 
 // The apps' "who am I" (lib/api/schemas.ts MeResponse), shaped from the web layout's own view
@@ -50,7 +50,14 @@ export function meJson(v: MeView, reports: MeReports) {
     id: v.user.id,
     email: v.user.email,
     onboarded: v.onboarded,
-    consent: { at: at?.toISOString() ?? null, version: CONSENT_VERSION, current: consentCurrent(at) },
+    consent: {
+      at: at?.toISOString() ?? null,
+      // The first agreement, kept when an app records agreement to newer wording (a DPDP record).
+      firstAt: (p?.consentFirstAt ?? at)?.toISOString() ?? null,
+      version: CONSENT_VERSION,
+      current: consentCurrent(at),
+      newLines: newConsentLines(at),
+    },
     tourDone: !!p?.tourDoneAt,
     // G2: when the health question (conditions and medicines) was answered; a first stack waits for it.
     healthCheckedAt: p?.healthCheckedAt?.toISOString() ?? null,

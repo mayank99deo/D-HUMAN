@@ -103,7 +103,11 @@ export async function POST(request: Request) {
   }
   // The apps ask again when the consent wording has changed since the person agreed (their
   // writes answer 409 consent_needed until then); agreeing records the moment they agreed to it.
-  if (app && consent && before?.consentAt && !consentCurrent(before.consentAt)) values.consentAt = new Date();
+  if (app && consent && before?.consentAt && !consentCurrent(before.consentAt)) {
+    // The first agreement stays on record (a DPDP record); consent_at becomes this agreement.
+    values.consentFirstAt = before.consentFirstAt ?? before.consentAt;
+    values.consentAt = new Date();
+  }
   if (healthChecked) values.healthCheckedAt = new Date();
   if (fields.activities && !fields.primaryActivity && fields.activities.length === 1) values.primaryActivity = fields.activities[0];
 

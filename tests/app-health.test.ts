@@ -74,6 +74,13 @@ describe("POST /api/profile from an app", () => {
     const now = (await row(p)).consentAt!;
     assert.ok(now.getTime() > old.getTime(), "agreed again, to the current wording");
     assert.equal(contract.MeResponse.parse((await call(me, { token: p.token })).body).consent.current, true);
+    const c = contract.MeResponse.parse((await call(me, { token: p.token })).body).consent;
+    assert.deepEqual([c.firstAt, c.newLines], [old.toISOString(), []], "the first agreement stays on record");
+    assert.equal((await row(p)).consentFirstAt!.getTime(), old.getTime());
+    const mid = await person("consent-mid@example.com", { consentAt: new Date("2026-11-15T10:00:00Z") });
+    assert.deepEqual(contract.MeResponse.parse((await call(me, { token: mid.token })).body).consent.newLines, ["ask_questions"]);
+    const early = await person("consent-early@example.com", { consentAt: old });
+    assert.deepEqual(contract.MeResponse.parse((await call(me, { token: early.token })).body).consent.newLines, ["health_data", "ai_processing", "ask_questions"]);
     const w = await person("consent-web@example.com", { consentAt: old });
     g.__testUser = { id: w.id, email: w.email };
     const r = await call(profileRoute, { body: { consent: true } });

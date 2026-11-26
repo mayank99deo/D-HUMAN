@@ -120,6 +120,13 @@
       "when": 1795675728351,
       "tag": "0016_app_rate_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795707835610,
+      "tag": "0017_app_consent_first",
+      "breakpoints": true
     }
   ]
 }

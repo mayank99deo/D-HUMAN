@@ -1082,7 +1082,8 @@
                             {
                               "type": "null"
                             }
-                          ]
+                          ],
+                          "description": "When they agreed to the wording they last agreed to."
                         },
                         "version": {
                           "type": "string",
@@ -1092,12 +1093,40 @@
                         "current": {
                           "type": "boolean",
                           "description": "false: they agreed to older wording (or none). Ask again before anything leaves the phone."
+                        },
+                        "firstAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                              "description": "A moment, ISO 8601 in UTC."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "When they first agreed. Kept when agreement to newer wording moves at."
+                        },
+                        "newLines": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "health_data",
+                              "ai_processing",
+                              "ask_questions"
+                            ]
+                          },
+                          "description": "The consent lines added since they agreed: mark them New. All of them before any agreement."
                         }
                       },
                       "required": [
                         "at",
                         "version",
-                        "current"
+                        "current",
+                        "firstAt",
+                        "newLines"
                       ],
                       "additionalProperties": false
                     },

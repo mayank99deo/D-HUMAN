@@ -110,6 +110,9 @@ export const profiles = pgTable("profiles", {
   // Monthly supplement budget, one of BUDGET_IDS in lib/domain/budget.ts; null until they pick one.
   supplementBudget: text("supplement_budget"),
   consentAt: timestamp("consent_at", { withTimezone: true }),
+  // The apps only (0017): when the person first agreed, kept when an app records agreement to newer
+  // consent wording (which moves consent_at). Null means consent_at is still the first agreement.
+  consentFirstAt: timestamp("consent_first_at", { withTimezone: true }),
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   // When they finished or skipped the first-run tour; null means it's still to show.
   tourDoneAt: timestamp("tour_done_at", { withTimezone: true }),
