@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
 import { appRefusal } from "@/lib/api/errors";
-import { changeSlot } from "@/lib/api/meals";
+import { changeSlot } from "@/lib/api/meal-writes";
 import { privateJson } from "@/lib/api/respond";
 import { mealJson } from "@/lib/api/views/parts";
 

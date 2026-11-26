@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
 import { appPlanLimit, appRefusal } from "@/lib/api/errors";
-import { eatenAtInReach, logAgain } from "@/lib/api/meals";
+import { eatenAtInReach, logAgain } from "@/lib/api/meal-writes";
 import { privateJson } from "@/lib/api/respond";
 import { mealJson } from "@/lib/api/views/parts";
 import { MEAL_KEY } from "@/lib/platform/food";
 import { allowRequest, secondsUntilReset } from "@/lib/waitlist/rate-limit";
 
 // "Log again", for the apps only: one of the person's own meals from the last 28 days logged
-// again as a new meal, copied with no AI call (lib/api/meals.ts). It counts as a meal log like
+// again as a new meal, copied with no AI call (lib/api/meal-writes.ts). It counts as a meal log like
 // any other (Mayank, 2026-11-26); the app sends it after its 4-second Undo, so a mistap costs
 // nothing. Idempotent on `key`: the same try sent again answers with the meal it logged.
 const body = z.object({

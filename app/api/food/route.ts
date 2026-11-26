@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S } from "@/lib/api/errors";
 import { privateJson } from "@/lib/api/respond";
-import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach } from "@/lib/api/meals";
+import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach } from "@/lib/api/meal-writes";
 import { mealJson } from "@/lib/api/views/parts";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { appActor, isAppRequest } from "@/lib/api/actor";
