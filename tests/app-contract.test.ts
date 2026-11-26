@@ -128,7 +128,7 @@ describe("the apps' contract", () => {
     const meFirst = await call("get", "/api/me", { token: t });
     await call("get", "/api/me", { token: t, etag: meFirst.etag });
     await call("get", "/api/me");
-    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts"];
+    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload"];
     for (const p of screens) await call("get", p, { token: t });
     const d = await db();
     const user = (await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "contract@example.com")))[0].id;

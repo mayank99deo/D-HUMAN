@@ -3275,6 +3275,705 @@
         }
       }
     },
+    "/api/plan": {
+      "get": {
+        "summary": "The plan: reads and meal logs used and allowed, the pass and when it ends, and why one more isn't allowed now. No words or price.",
+        "operationId": "getApiPlan",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pass": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "until": {
+                              "type": "string",
+                              "description": "'14 Dec 2026'"
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                              "description": "A moment, ISO 8601 in UTC."
+                            }
+                          },
+                          "required": [
+                            "until",
+                            "endsAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "queued": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "until": {
+                              "type": "string"
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                              "description": "A moment, ISO 8601 in UTC."
+                            }
+                          },
+                          "required": [
+                            "until",
+                            "endsAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "A pass bought ahead, starting when the current one ends."
+                    },
+                    "reads": {
+                      "type": "object",
+                      "properties": {
+                        "used": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "free": {
+                          "type": "boolean",
+                          "description": "true: the reads the person started with; false: a pass's."
+                        }
+                      },
+                      "required": [
+                        "used",
+                        "limit",
+                        "free"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "meals": {
+                      "type": "object",
+                      "properties": {
+                        "today": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "perDay": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "used": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "freeLimit": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null with a pass."
+                        }
+                      },
+                      "required": [
+                        "today",
+                        "perDay",
+                        "used",
+                        "freeLimit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "readBlock": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "free_reads_used",
+                            "pass_reads_used",
+                            "free_meals_used",
+                            "meals_today_used"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why one more read isn't allowed now, or null."
+                    },
+                    "mealBlock": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "free_reads_used",
+                            "pass_reads_used",
+                            "free_meals_used",
+                            "meals_today_used"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why one more meal log isn't allowed now, or null."
+                    },
+                    "canBuy": {
+                      "type": "boolean"
+                    },
+                    "paymentsOn": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "pass",
+                    "queued",
+                    "reads",
+                    "meals",
+                    "readBlock",
+                    "mealBlock",
+                    "canBuy",
+                    "paymentsOn"
+                  ],
+                  "additionalProperties": false,
+                  "description": "What the person may use. No words and no price: the apps write their own, with the store's price."
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/upload": {
+      "get": {
+        "summary": "The Upload screen: the plan, the event the read aims at, facts for the wait, and the upload limits.",
+        "operationId": "getApiUpload",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The ETag of the app's copy."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "pass": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "until": {
+                                  "type": "string",
+                                  "description": "'14 Dec 2026'"
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "A moment, ISO 8601 in UTC."
+                                }
+                              },
+                              "required": [
+                                "until",
+                                "endsAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "queued": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "until": {
+                                  "type": "string"
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                                  "description": "A moment, ISO 8601 in UTC."
+                                }
+                              },
+                              "required": [
+                                "until",
+                                "endsAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "A pass bought ahead, starting when the current one ends."
+                        },
+                        "reads": {
+                          "type": "object",
+                          "properties": {
+                            "used": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "limit": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "free": {
+                              "type": "boolean",
+                              "description": "true: the reads the person started with; false: a pass's."
+                            }
+                          },
+                          "required": [
+                            "used",
+                            "limit",
+                            "free"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "meals": {
+                          "type": "object",
+                          "properties": {
+                            "today": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "perDay": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "used": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "freeLimit": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Null with a pass."
+                            }
+                          },
+                          "required": [
+                            "today",
+                            "perDay",
+                            "used",
+                            "freeLimit"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "readBlock": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "free_reads_used",
+                                "pass_reads_used",
+                                "free_meals_used",
+                                "meals_today_used"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Why one more read isn't allowed now, or null."
+                        },
+                        "mealBlock": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "free_reads_used",
+                                "pass_reads_used",
+                                "free_meals_used",
+                                "meals_today_used"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Why one more meal log isn't allowed now, or null."
+                        },
+                        "canBuy": {
+                          "type": "boolean"
+                        },
+                        "paymentsOn": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pass",
+                        "queued",
+                        "reads",
+                        "meals",
+                        "readBlock",
+                        "mealBlock",
+                        "canBuy",
+                        "paymentsOn"
+                      ],
+                      "additionalProperties": false,
+                      "description": "What the person may use. No words and no price: the apps write their own, with the store's price."
+                    },
+                    "target": {
+                      "description": "The event the read will aim at, by name.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "noun": {
+                      "type": "string",
+                      "description": "What the persona is called: 'runner', 'lifter'."
+                    },
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kicker": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kicker",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "Facts about markers for the wait while a report is read."
+                    },
+                    "limits": {
+                      "type": "object",
+                      "properties": {
+                        "maxFiles": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "maxTotalBytes": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "Every file together. Shrink photos first; send a bigger PDF as page images (spec 13)."
+                        },
+                        "types": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Checked by the files' bytes. One PDF, or up to maxFiles photos; never a PDF with photos."
+                        }
+                      },
+                      "required": [
+                        "maxFiles",
+                        "maxTotalBytes",
+                        "types"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "aiOff": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "plan",
+                    "target",
+                    "noun",
+                    "facts",
+                    "limits",
+                    "aiOff"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/food": {
       "post": {
         "summary": "Log a meal from words, a photo or speech. Idempotent on `key`. 402 carries `refusal`; 409 is not_onboarded, consent_needed or in_progress (with Retry-After: send the same try again).",

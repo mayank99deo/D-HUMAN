@@ -302,3 +302,18 @@ export const AgainRequest = z.object({
 });
 
 export const SlotRequest = z.object({ meal: z.enum(MEAL_SLOTS) });
+
+// ── Plan and upload ──────────────────────────────────────────────────────────
+
+export const UploadResponse = z.strictObject({
+  plan: PlanJson,
+  target: S.nullable().describe("The event the read will aim at, by name."),
+  noun: S.describe("What the persona is called: 'runner', 'lifter'."),
+  facts: z.array(z.strictObject({ kicker: S, text: S })).describe("Facts about markers for the wait while a report is read."),
+  limits: z.strictObject({
+    maxFiles: Int,
+    maxTotalBytes: Int.describe("Every file together. Shrink photos first; send a bigger PDF as page images (spec 13)."),
+    types: z.array(S).describe("Checked by the files' bytes. One PDF, or up to maxFiles photos; never a PDF with photos."),
+  }),
+  aiOff: z.boolean(),
+});
