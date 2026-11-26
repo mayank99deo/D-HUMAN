@@ -27,10 +27,13 @@ export function matches(ifNoneMatch: string | null, etag: string): boolean {
 }
 
 /** A screen's JSON with its ETag, or 304 when the app already holds this exact body. */
-export function viewResponse(request: Request, body: unknown): Response {
+export function viewResponse(request: Request, body: unknown, cacheControl = PRIVATE): Response {
   const text = JSON.stringify(body);
   const etag = etagOf(text);
-  const headers = { "cache-control": PRIVATE, etag };
+  const headers = { "cache-control": cacheControl, etag };
   if (matches(request.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers });
   return new Response(text, { status: 200, headers: { ...headers, "content-type": "application/json" } });
 }
+
+/** Answers that hold nothing personal (option lists, the apps' config): cacheable for `maxAge` seconds, with an ETag. */
+export const publicView = (request: Request, body: unknown, maxAge: number) => viewResponse(request, body, `public, max-age=${maxAge}`);

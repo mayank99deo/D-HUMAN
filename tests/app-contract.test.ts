@@ -92,7 +92,7 @@ async function call(
   if (schema) schema.parse(JSON.parse(text));
   else assert.equal(text, "", `${label}: no body`);
   // The apps' routes are private, no-store; the web's own route keeps the web's headers, unchanged.
-  assert.equal(res.headers.get("cache-control"), route.web ? null : "private, no-store", label);
+  assert.equal(res.headers.get("cache-control"), route.web ? null : route.publicFor ? `public, max-age=${route.publicFor}` : "private, no-store", label);
   seen.add(`${method} ${p} ${res.status}`);
   return { status: res.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : null, etag: res.headers.get("etag") ?? "" };
 }
@@ -150,7 +150,7 @@ describe("the apps' contract", () => {
     const meFirst = await call("get", "/api/me", { token: t });
     await call("get", "/api/me", { token: t, etag: meFirst.etag });
     await call("get", "/api/me");
-    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload", "/api/reports", "/api/reports/{id}/read", "/api/stack"];
+    const screens = ["/api/home", "/api/fuel", "/api/fuel/past", "/api/fuel/facts", "/api/plan", "/api/upload", "/api/reports", "/api/reports/{id}/read", "/api/stack", "/api/wraps", "/api/settings"];
     const reportId = randomUUID();
     for (const p of screens) await call("get", p, { token: t, params: { id: reportId } });
     const d = await db();
@@ -330,6 +330,27 @@ describe("the apps' contract", () => {
     g.__meal = "food";
     for (let i = 0; i < 10; i++) allowRequest(`typical:${u.id}`, 10, 60 * 60_000);
     await typical(early, "Dosa, sambar rice, roti sabzi, fruit");
+
+    // Making a wrap: 200 (nothing to wrap), 400, 401, 409, 429, 500 (Claude unreachable), 503 (AI off).
+    const wrap = (token: string, body: unknown, bad?: true) => call("post", "/api/wraps", { token, body, bad });
+    g.__aiMode = "live";
+    await wrap(early, { period: "week", offset: -3 });
+    await wrap(early, { period: "fortnight", offset: 0 }, true);
+    await wrap(bad, { period: "week", offset: 0 });
+    await wrap(stale, { period: "week", offset: 0 });
+    await d.insert(schema.foodLogs).values({ id: randomUUID(), userId: u.id, localDate: new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10), meal: "lunch", source: "text", title: "Dal", items: [], kcal: 400, proteinG: 15, carbsG: 60, fatG: 10, fibreG: 8, micros: {} });
+    await wrap(early, { period: "week", offset: 0 }); // 500: no key to reach Claude here
+    g.__aiMode = "off";
+    await wrap(early, { period: "week", offset: 0 });
+    g.__aiMode = "live";
+    for (let i = 0; i < 12; i++) allowRequest(`wrap:${u.id}`, 12, 60 * 60_000);
+    await wrap(early, { period: "week", offset: 0 });
+
+    // The public ones: 200 and 304, no sign-in.
+    for (const path of ["/api/app/options", "/api/app/config"]) {
+      const first = await call("get", path);
+      await call("get", path, { etag: first.etag });
+    }
   });
 
   it("lists no status that no route gave", () => {

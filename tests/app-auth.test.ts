@@ -641,7 +641,7 @@ describe("routes not open to the apps yet (not_for_app)", () => {
 
   it("every /api handler is open to the apps, reads no session, is sign-in itself or /write, or checks notForApp first", async () => {
     const rest = await notOpen();
-    assert.ok(rest.length >= 15, `${rest.length} routes`); // lower it as routes open to the apps
+    assert.ok(rest.length >= 14, `${rest.length} routes`); // lower it as routes open to the apps
     for (const { f, methods } of rest) {
       const src = readFileSync(path.join(ROOT, f), "utf8");
       for (const m of methods) assert.ok(guarded(src, m), `${f} ${m}: a handler not open to the apps must start with notForApp(request)`);
@@ -681,7 +681,7 @@ describe("routes not open to the apps yet (not_for_app)", () => {
         checked++;
       }
     }
-    assert.ok(checked >= 20, `${checked} handlers`); // lower it as routes open to the apps
+    assert.ok(checked >= 19, `${checked} handlers`); // lower it as routes open to the apps
     assert.equal(JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid))), before, "nothing ran");
 
     // Without Authorization it's nothing at all, cookie or none, and the route runs as before.

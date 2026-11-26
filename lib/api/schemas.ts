@@ -454,3 +454,68 @@ export const TypicalAnswer = z.strictObject({
   short: z.boolean().describe("Too light to count: under 60% of the energy target, so it won't start a stack. Ask for the rest of the day."),
   runs: Int.describe("How many estimates were averaged."),
 });
+
+// ── Wraps, Settings, options, config ─────────────────────────────────────────
+
+const WrapCard = z.strictObject({
+  kind: z.enum(["stat", "streak", "food", "gap", "marker", "win", "next"]),
+  big: S,
+  label: S,
+  line: S,
+  flag: z.enum(["doctor", "urgent"]).nullable().describe("Marker cards only (G12): the card names a result flagged for a doctor. Leave such a card out."),
+});
+
+export const WrapsResponse = z.strictObject({
+  day: IsoDate,
+  cards: z.array(
+    z.strictObject({
+      key: S,
+      period: z.enum(["week", "month", "year"]),
+      offset: Int,
+      name: S.describe("This week, Last week, Earlier week, This month…"),
+      label: S,
+      start: IsoDate,
+      end: IsoDate,
+      ongoing: z.boolean(),
+      hasData: z.boolean().describe("Meals (or a report) in the period: a wrap can be made with POST /api/wraps."),
+      wrap: z.strictObject({ id: S, title: S, cards: z.array(WrapCard), oneThing: S, demo: z.boolean(), made: IsoTime }).nullable(),
+    }),
+  ),
+  aiOff: z.boolean(),
+});
+
+export const WrapMakeRequest = z.object({ period: z.enum(["week", "month", "year"]), offset: Int.min(-60).max(0) });
+export const WrapMakeResponse = z.union([z.strictObject({ id: S }), z.strictObject({ empty: z.literal(true) })]);
+
+export const SettingsResponse = z.strictObject({
+  email: S,
+  plan: PlanJson,
+  passes: z.array(z.strictObject({ paidOn: S, from: S, until: S })).describe("Dates only: never an amount."),
+  emails: z.strictObject({ weekly: z.boolean(), questions: z.boolean(), weeklyPaused: z.boolean() }),
+  weekly: z.strictObject({ channel: z.enum(["email", "push"]).describe("G6: how the weekly wrap reaches this person.") }),
+});
+
+const Choice = z.strictObject({ id: S, label: S, hint: S.nullable() });
+export const OptionsResponse = z.strictObject({
+  activities: z.array(Choice),
+  levels: z.array(Choice),
+  goals: z.array(Choice),
+  diets: z.array(Choice),
+  conditions: z.array(Choice).describe("Pregnancy among them."),
+  sexes: z.array(Choice),
+  languages: z.array(Choice),
+  budgets: z.array(z.strictObject({ id: z.enum(BUDGET_SLABS), label: S, cap: N.nullable() })),
+  birthYears: z.strictObject({ min: Int, max: Int }).describe("18 to 100 this year."),
+  limits: z.strictObject({ goals: Int, activities: Int, conditions: Int }),
+});
+
+export const APP_SWITCH_NAMES = ["voice", "snap", "again", "reminders", "appleSignIn", "iap", "doses"] as const;
+export const ConfigResponse = z.strictObject({
+  minSupported: S.describe("Below this version, every app request answers 426 update_required."),
+  latest: S.nullable(),
+  updateUrl: S.nullable(),
+  apiBase: S,
+  off: z.array(z.enum(APP_SWITCH_NAMES)).describe("Switches turned off. They only ever turn a thing off; anything not listed is on. doses stays off for the build once seen."),
+  links: z.strictObject({ privacy: S.nullable(), terms: S.nullable(), support: S.nullable() }),
+  notice: S.nullable(),
+});

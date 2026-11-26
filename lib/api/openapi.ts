@@ -23,6 +23,8 @@ export type AppRoute = {
   auth: "bearer" | "open";
   /** The web's own route, used by the apps as it is: its answers keep the web's headers (no Cache-Control). */
   web?: true;
+  /** Nothing personal in it: public, cacheable for this many seconds (instead of private, no-store). */
+  publicFor?: number;
   request?: z.ZodType;
   /** The request is multipart/form-data, with these fields, rather than JSON. */
   form?: true;
@@ -221,6 +223,54 @@ export const APP_ROUTES: AppRoute[] = [
     consent: true,
   },
   {
+    method: "get",
+    path: "/api/wraps",
+    file: "app/api/wraps/route.ts",
+    summary: "Wraps, as the web lists them: each period's card, with its story when made. ?period=week: weeks only (G5). ?week=YYYY-MM-DD adds that week. Marker cards carry a flag (G12).",
+    auth: "bearer",
+    responses: { 200: s.WrapsResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
+    etag: true,
+  },
+  {
+    method: "post",
+    path: "/api/wraps",
+    file: "app/api/wraps/route.ts",
+    summary: "Make a period's wrap from its meals: { id } to fetch with GET /api/wraps, or { empty: true } when there's nothing to wrap.",
+    auth: "bearer",
+    request: s.WrapMakeRequest,
+    responses: { 200: s.WrapMakeResponse, 400: refusal, 401: refusal, 409: refusal, 429: refusal, 500: refusal, 503: refusal },
+    consent: true,
+  },
+  {
+    method: "get",
+    path: "/api/settings",
+    file: "app/api/settings/route.ts",
+    summary: "Settings: the plan, the passes bought (dates only), the email settings and how the weekly wrap arrives (G6). The profile is in GET /api/me; devices in GET /api/me/sessions.",
+    auth: "bearer",
+    responses: { 200: s.SettingsResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
+    etag: true,
+  },
+  {
+    method: "get",
+    path: "/api/app/options",
+    file: "app/api/app/options/route.ts",
+    summary: "Every list onboarding and Settings show, with ids and labels. Not personal: no sign-in, public for an hour.",
+    auth: "open",
+    responses: { 200: s.OptionsResponse, 304: null },
+    etag: true,
+    publicFor: 3600,
+  },
+  {
+    method: "get",
+    path: "/api/app/config",
+    file: "app/api/app/config/route.ts",
+    summary: "The apps' remote config: versions, the store link, the API's address, links, and the switches turned off. No sign-in; public for 5 minutes.",
+    auth: "open",
+    responses: { 200: s.ConfigResponse, 304: null },
+    etag: true,
+    publicFor: 300,
+  },
+  {
     method: "post",
     path: "/api/food",
     file: "app/api/food/route.ts",
@@ -301,7 +351,7 @@ export function openapi() {
     const responses: Record<string, unknown> = {};
     for (const [status, schema] of Object.entries(r.responses)) {
       const headers = {
-        ...(r.web ? {} : { "Cache-Control": { schema: { type: "string", const: "private, no-store" } } }),
+        ...(r.web ? {} : { "Cache-Control": { schema: { type: "string", const: r.publicFor ? `public, max-age=${r.publicFor}` : "private, no-store" } } }),
         ...(r.etag && (status === "200" || status === "304") ? { ETag: { schema: { type: "string" } } } : {}),
         ...((status === "429" || (status === "409" && r.method !== "get")) && !r.web
           ? { "Retry-After": { schema: { type: "integer" }, description: "Seconds. Sent with 429, and with 409 in_progress." } }
