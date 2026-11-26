@@ -34,7 +34,12 @@ allowAppImports({
       const item = { name: "Dal", portion: "1 bowl", grams: null, kcal: 180, protein_g: 9, carbs_g: 24, fat_g: 5, fibre_g: 6 };
       return { data: { is_food: how === "food", reply_language: input.words.reply.id, title: "Dal", meal_guess: null, items: [item], confidence: "high", tip: null }, model: "test" };
     };
-    export const estimateUsualDay = async () => { throw new Error("not in this test"); };`,
+    export const estimateUsualDay = async () => {
+      const how = globalThis.__meal ?? "food";
+      if (how === "refuse") throw new AiRefusalError("declined");
+      if (how === "fail") throw new Error("AI hiccup");
+      return { data: { meals: [{ name: "Day", kcal: 2200, protein_g: 70, carbs_g: 280, fat_g: 70, fibre_g: 28 }], micros: { iron_mg: 9 }, patterns: [], runs: 3 }, model: "test" };
+    };`,
 });
 const removeDatabase = tempDatabase();
 
@@ -98,6 +103,15 @@ async function signIn(email: string, extra: Record<string, unknown> = {}) {
   const r = await call("post", "/api/auth/token", { body: { email, code: issued.code, device: { label: "iPhone18,1" }, ...extra } });
   assert.equal(r.status, 200);
   return r.body!.token as string;
+}
+
+/** A signed-in, onboarded person whose consent dates from `consentAt`. */
+async function onboardFor(email: string, consentAt = new Date()) {
+  const t = await signIn(email);
+  const d = await db();
+  const [u] = await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
+  await d.update(schema.profiles).set({ name: "Ravi", birthYear: 1992, primaryActivity: "gym", activities: ["gym"], consentAt, onboardedAt: new Date() }).where(eq(schema.profiles.userId, u.id));
+  return t;
 }
 
 describe("the apps' contract", () => {
@@ -296,6 +310,26 @@ describe("the apps' contract", () => {
     await call("post", "/api/stack", { token: early, body: {} }); // 429
     for (let i = 0; i < 30; i++) allowRequest(`profile:${u.id}`, 30, 60 * 60_000);
     await call("post", "/api/profile", { token: early, body: { name: "Meera" } }); // 429
+
+    // The usual day: 200, 400, 401, 409 (old consent), 422, 429, 500, 503.
+    const typical = (token: string, description = "Poha, dal chawal with sabzi, roti and paneer") => call("post", "/api/food/typical", { token, body: { description }, bad: description.length < 10 ? true : undefined });
+    g.__aiMode = "live";
+    g.__meal = "food";
+    await typical(early);
+    await typical(early, "dal");
+    await typical(bad);
+    const stale = await onboardFor("typical-old@example.com", new Date("2026-11-01T00:00:00Z"));
+    await typical(stale);
+    g.__meal = "refuse";
+    await typical(early, "Idli sambar, rajma chawal, roti and dal");
+    g.__meal = "fail";
+    await typical(early, "Upma, chole kulche, khichdi and curd");
+    g.__aiMode = "off";
+    await typical(early, "Paratha, dal makhani, jeera rice, salad");
+    g.__aiMode = "live";
+    g.__meal = "food";
+    for (let i = 0; i < 10; i++) allowRequest(`typical:${u.id}`, 10, 60 * 60_000);
+    await typical(early, "Dosa, sambar rice, roti sabzi, fruit");
   });
 
   it("lists no status that no route gave", () => {

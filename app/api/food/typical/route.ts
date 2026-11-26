@@ -1,33 +1,46 @@
 import { z } from "zod";
+import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { appRefusal } from "@/lib/api/errors";
+import { privateJson } from "@/lib/api/respond";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
-import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
-import { saveTypicalDay } from "@/lib/platform/food";
+import { dietPictureFrom, saveTypicalDay } from "@/lib/platform/food";
 import { json, unauthorized } from "@/lib/platform/http";
 import { getProfile } from "@/lib/platform/profile";
-import { allowRequest } from "@/lib/waitlist/rate-limit";
+import { allowRequest, secondsUntilReset } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 120;
 
 const body = z.object({ description: z.string().trim().min(10).max(2000) });
 
+const REFUSED = "We couldn't read that description. Try listing what you eat, meal by meal.";
+
+// Saves the person's usual day. The web's request is resolved and answered exactly as before.
+// An app's is taken as its token (409 consent_needed for old consent), answered privately with
+// words, and its answer adds `short` and `runs` (gap G7): whether the day is too light to count
+// (the diet picture's own rule) and how many estimates were averaged, so the result screen needs
+// no second fetch. A save sent again with the same words within 3 minutes returns that save.
 export async function POST(request: Request) {
-  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
-  if (refused) return refused;
-  const user = await apiUser();
+  const app = isAppRequest(request);
+  const member = app ? await appOnly(request, { write: true }) : null;
+  if (member && !member.ok) return member.response;
+  const user = member ? member.user : await apiUser();
   if (!user) return unauthorized();
-  if (!allowRequest(`typical:${user.id}`, 10, 60 * 60_000)) return json({ error: "rate_limited" }, 429);
-  const profile = await getProfile(user.id);
+  if (!allowRequest(`typical:${user.id}`, 10, 60 * 60_000))
+    return app ? appRefusal("rate_limited", 429, { message: "That's a lot of saves in an hour. Try again a bit later.", retryAfter: secondsUntilReset(`typical:${user.id}`) }) : json({ error: "rate_limited" }, 429);
+  const profile = member ? member.profile : await getProfile(user.id);
   if (!profile) return json({ error: "not_onboarded" }, 409);
   const parsed = body.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return json({ error: "too_short" }, 400);
+  if (!parsed.success) return app ? appRefusal("too_short", 400, { message: "Describe a whole day, meal by meal, in a few more words." }) : json({ error: "too_short" }, 400);
   try {
     const day = await saveTypicalDay(user.id, profile, parsed.data.description);
-    return json({ day });
+    if (!app) return json({ day });
+    const short = dietPictureFrom(profile, [], { estimate: day }).usualDayShort;
+    return privateJson({ day, short, runs: day.runs ?? 1 });
   } catch (error) {
-    if (error instanceof AiUnavailableError) return json({ error: "ai_off" }, 503);
-    if (error instanceof AiRefusalError) return json({ error: "refused", message: "We couldn't read that description. Try listing what you eat, meal by meal." }, 422);
+    if (error instanceof AiUnavailableError) return app ? appRefusal("ai_off", 503, { message: "Food reading isn't switched on yet on this server." }) : json({ error: "ai_off" }, 503);
+    if (error instanceof AiRefusalError) return app ? appRefusal("refused", 422, { message: REFUSED }) : json({ error: "refused", message: REFUSED }, 422);
     console.error("[typical-day]", error);
-    return json({ error: "failed" }, 500);
+    return app ? appRefusal("failed", 500) : json({ error: "failed" }, 500);
   }
 }

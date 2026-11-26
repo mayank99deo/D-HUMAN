@@ -446,3 +446,11 @@ export const SavedResponse = z.strictObject({ status: z.literal("saved") });
 export const StackBuildResponse = z.strictObject({ id: S.describe("Poll GET /api/stack/{id} every 3 s; when it's ready, fetch GET /api/stack.") });
 
 export const StackStatusResponse = z.strictObject({ status: z.enum(["building", "ready", "failed"]), error: S.nullable() });
+
+export const TypicalRequest = z.object({ description: S.min(10).max(2000).describe("A whole usual day, meal by meal, with amounts where possible.") });
+
+export const TypicalAnswer = z.strictObject({
+  day: z.looseObject({ meals: z.array(z.looseObject({})), micros: z.record(S, N), patterns: z.array(S) }).describe("The saved estimate: its meals, the day's micronutrients and the patterns noticed."),
+  short: z.boolean().describe("Too light to count: under 60% of the energy target, so it won't start a stack. Ask for the rest of the day."),
+  runs: Int.describe("How many estimates were averaged."),
+});

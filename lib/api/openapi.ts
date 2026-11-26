@@ -211,6 +211,17 @@ export const APP_ROUTES: AppRoute[] = [
   },
   {
     method: "post",
+    path: "/api/food/typical",
+    file: "app/api/food/typical/route.ts",
+    summary:
+      "Save the usual day, estimated three times and averaged. Answers the day with short (too light to count) and runs (G7). The same words again within 3 minutes return that save. Never queue it offline.",
+    auth: "bearer",
+    request: s.TypicalRequest,
+    responses: { 200: s.TypicalAnswer, 400: refusal, 401: refusal, 409: refusal, 422: refusal, 429: refusal, 500: refusal, 503: refusal },
+    consent: true,
+  },
+  {
+    method: "post",
     path: "/api/food",
     file: "app/api/food/route.ts",
     summary:
