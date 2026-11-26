@@ -625,3 +625,141 @@ describe("round 2: the health gate", () => {
     assert.equal(held.body!.healthCheckNeeded, false);
   });
 });
+
+// ── Round 3 (2026-11-26): uploads, progress, report delete, 426, consent's first agreement, G15 ──
+
+describe("round 3: app uploads, progress and report delete", () => {
+  const pdf = () => new Blob([Buffer.from("%PDF-1.4\n% demo\n")], { type: "application/pdf" });
+  const uploadForm = (f: Record<string, string>) => {
+    const fd = form(f);
+    fd.append("files", pdf(), "report.pdf");
+    return fd;
+  };
+  const reads = async (p: Person) => (await (await db()).select().from(schema.usage).where(and(eq(schema.usage.userId, p.id), eq(schema.usage.kind, "read")))).length;
+  const reportsOf = async (p: Person) => (await db()).select().from(schema.reports).where(eq(schema.reports.userId, p.id));
+
+  it("one key, sent four times at once and again after the read: one report, one read", async () => {
+    const p = await person("upload-race@example.com");
+    const k = key();
+    const send = () => hit("post", "/api/reports", { token: p.token, headers: { prefer: "respond-async" }, form: uploadForm({ key: k }) });
+    const rs = await Promise.all([send(), send(), send(), send()]);
+    assert.ok(rs.every((r) => r.status === 202), rs.map((r) => r.status).join(","));
+    assert.equal(new Set(rs.map((r) => r.body!.reportId)).size, 1);
+    await runAfter();
+    const again = await send();
+    assert.deepEqual([again.status, again.body!.repeat], [202, true]);
+    assert.equal(g.__after.length, 0, "no second read started");
+    assert.deepEqual([(await reportsOf(p)).length, await reads(p)], [1, 1]);
+    // Another person's same key is their own try.
+    const q = await person("upload-race-2@example.com");
+    const theirs = await hit("post", "/api/reports", { token: q.token, headers: { prefer: "respond-async" }, form: uploadForm({ key: k }) });
+    assert.equal(theirs.status, 202);
+    assert.notEqual(theirs.body!.reportId, rs[0].body!.reportId);
+    await runAfter();
+  });
+
+  it("odd page counts never mark a whole report as part-read, and bad ones are refused", async () => {
+    const p = await person("upload-pages@example.com");
+    for (const [sent, of, want] of [["6", "6", null], ["7", "6", null], ["0", "6", 400], ["1", "501", 400], ["1.5", "6", 400], ["2", "x", 400]] as const) {
+      const r = await hit("post", "/api/reports", { token: p.token, headers: { prefer: "respond-async" }, form: uploadForm({ key: key(), pagesSent: sent, pagesOf: of }) });
+      if (want === 400) assert.equal(r.status, 400, `${sent} of ${of}`);
+      else {
+        assert.equal(r.status, 202, `${sent} of ${of}`);
+        const [row] = await (await db()).select().from(schema.reports).where(eq(schema.reports.id, String(r.body!.reportId)));
+        assert.equal(row.pages, null, `${sent} of ${of}`);
+        // The read itself isn't needed here: drop it, and hand the read back for the next try.
+        g.__after.splice(0);
+        await (await db()).delete(schema.usage).where(eq(schema.usage.userId, p.id));
+        await (await db()).update(schema.reports).set({ status: "failed" }).where(eq(schema.reports.userId, p.id));
+      }
+    }
+  });
+
+  it("progress is counts only, owner-only; delete is owner-only and takes the report's markers, read and stack", async () => {
+    const owner = await person("progress-owner@example.com", { healthCheckedAt: new Date() });
+    const other = await person("progress-other@example.com");
+    const id = await readReport(owner, { tag: "PROGCANARY", flag: "doctor" });
+    const stackId = await readyStack(owner, id);
+    const mine = await hit("get", "/api/reports/{id}", { token: owner.token, id });
+    assert.deepEqual(Object.keys(mine.body!).sort(), ["error", "markersFound", "stage", "status", "step", "steps"]);
+    assert.deepEqual([mine.body!.markersFound, mine.body!.step, mine.body!.steps], [1, 4, 4]);
+    assert.ok(!mine.text.includes("PROGCANARY") && !mine.text.includes("12"), "no marker name or value");
+    assert.equal(mine.res.headers.get("cache-control"), "private, no-store");
+    for (const [m, extra] of [["get", undefined], ["delete", undefined]] as const) {
+      const theirs = await hit(m, "/api/reports/{id}", { token: other.token, id, body: extra });
+      const none = await hit(m, "/api/reports/{id}", { token: other.token, id: randomUUID(), body: extra });
+      assert.deepEqual([theirs.status, theirs.text], [none.status, none.text], m);
+    }
+    const d = await db();
+    assert.equal((await d.select().from(schema.reports).where(eq(schema.reports.id, id))).length, 1, "the other person's delete did nothing");
+    assert.equal((await hit("delete", "/api/reports/{id}", { token: owner.token, id })).status, 200);
+    const left = await Promise.all([
+      d.select().from(schema.reports).where(eq(schema.reports.id, id)),
+      d.select().from(schema.markers).where(eq(schema.markers.reportId, id)),
+      d.select().from(schema.analyses).where(eq(schema.analyses.reportId, id)),
+    ]);
+    assert.deepEqual(left.map((x) => x.length), [0, 0, 0]);
+    assert.equal((await d.select().from(schema.stacks).where(eq(schema.stacks.id, stackId))).length, 0, "its stack went with it");
+    assert.equal((await hit("get", "/api/reports/{id}/read", { token: owner.token, id })).status, 404);
+  });
+});
+
+describe("round 3: 426, consent's first agreement, and the review address", () => {
+  it("426 stops an old app everywhere but sign-out, config, account delete and sign-in; no header, or the web, is never stopped", async () => {
+    process.env.APP_MIN_VERSION_IOS = "9.0.0";
+    try {
+      const p = await person("old-app@example.com");
+      const old = { "x-dhuman-client": "ios/1.4.2 (31)" };
+      assert.equal((await hit("get", "/api/me", { token: p.token, headers: old })).status, 426);
+      assert.equal((await hit("post", "/api/profile/tour", { token: p.token, headers: old, body: {} })).status, 426);
+      assert.equal((await hit("get", "/api/app/config", { headers: old })).status, 200);
+      assert.equal((await hit("post", "/api/auth/code", { headers: old, body: { email: "old-app@example.com" } })).status, 200);
+      assert.equal((await hit("get", "/api/me", { token: p.token })).status, 200, "no header: no check");
+      assert.equal((await hit("get", "/api/me", { token: p.token, headers: { "x-dhuman-client": "ios/9.0.0 (90)" } })).status, 200);
+      const del = await person("old-app-delete@example.com");
+      assert.notEqual((await hit("post", "/api/account/delete", { token: del.token, headers: old, body: { confirm: "DELETE" } })).status, 426);
+      assert.equal((await hit("post", "/api/auth/signout", { token: p.token, headers: old, body: {} })).status, 200);
+      assert.equal((await hit("get", "/api/me", { token: p.token })).status, 401, "signed out");
+    } finally {
+      delete process.env.APP_MIN_VERSION_IOS;
+    }
+  });
+
+  it("the first agreement is never overwritten: not by agreeing again, twice, nor by the web", async () => {
+    const first = new Date("2026-11-10T06:00:00Z");
+    const p = await person("first-consent@example.com", { consentAt: first });
+    const firstAt = async () => (await hit("get", "/api/me", { token: p.token })).body!.consent as { firstAt: string; at: string; newLines: string[] };
+    assert.deepEqual((await firstAt()).newLines, ["ai_processing", "ask_questions"]);
+    await hit("post", "/api/profile", { token: p.token, body: { consent: true } });
+    assert.equal((await firstAt()).firstAt, first.toISOString());
+    // A later wording change asks again; the first stays.
+    await (await db()).update(schema.profiles).set({ consentAt: new Date("2026-11-12T00:00:00Z") }).where(eq(schema.profiles.userId, p.id));
+    await hit("post", "/api/profile", { token: p.token, body: { consent: true } });
+    assert.equal((await firstAt()).firstAt, first.toISOString());
+    for (const body of [{ consentFirstAt: new Date().toISOString() }, { consent_first_at: new Date().toISOString() }]) await hit("post", "/api/profile", { token: p.token, body });
+    g.__cookie = p.cookie;
+    await call(route("post", "/api/profile"), { cookie: p.cookie, origin: SITE, body: { consent: true } });
+    g.__cookie = undefined;
+    assert.equal((await firstAt()).firstAt, first.toISOString());
+  });
+
+  it("the review address skips its email only while review sign-in is on", async () => {
+    const email = "review-qa@demo.dhuman.local";
+    await person(email);
+    const codes = async () => (await (await db()).select().from(schema.loginCodes).where(eq(schema.loginCodes.email, email))).length;
+    const app = { "x-dhuman-client": "ios/1.0.0 (1)" };
+    Object.assign(process.env, { REVIEW_ACCOUNT_EMAIL: email, REVIEW_CODE_HASH: "a".repeat(43) });
+    try {
+      assert.equal((await hit("post", "/api/auth/code", { headers: app, body: { email } })).status, 200);
+      assert.equal(await codes(), 1, "switched off: a real code, as for anyone");
+      process.env.REVIEW_SIGNIN_ON = "1";
+      assert.deepEqual((await hit("post", "/api/auth/code", { headers: app, body: { email } })).body, { status: "sent" });
+      assert.equal(await codes(), 1, "on: no code made, no email");
+      assert.equal((await hit("post", "/api/auth/code", { headers: app, body: { email: "someone@example.com" } })).status, 200);
+      assert.equal((await hit("post", "/api/auth/code", { body: { email } })).status, 200);
+      assert.equal(await codes(), 2, "the web's request for the address still gets its code");
+    } finally {
+      for (const k of ["REVIEW_ACCOUNT_EMAIL", "REVIEW_CODE_HASH", "REVIEW_SIGNIN_ON"]) delete process.env[k];
+    }
+  });
+});
