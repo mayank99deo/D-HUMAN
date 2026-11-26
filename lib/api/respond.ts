@@ -6,7 +6,10 @@ import { createHash } from "node:crypto";
 //   URL cache, a proxy, Vercel's CDN) may keep one person's data. The apps keep their own copy.
 // - Screen reads add a weak ETag. The app sends it back in If-None-Match and gets 304 with no
 //   body when nothing changed: it saves bytes on slow networks, not database work. A 304 can't
-//   leak, because the tag is checked against the asker's own freshly built body.
+//   leak, because the tag is checked against the asker's own freshly built body. A private
+//   answer's tag is also bound to the token that asked, so two people whose answers happen to
+//   be byte for byte the same (a fresh plan, the same facts) never share a tag: one person's
+//   tag never earns another a 304 (QA, 2026-11-26).
 
 export const PRIVATE = "private, no-store";
 
@@ -29,7 +32,8 @@ export function matches(ifNoneMatch: string | null, etag: string): boolean {
 /** A screen's JSON with its ETag, or 304 when the app already holds this exact body. */
 export function viewResponse(request: Request, body: unknown, cacheControl = PRIVATE): Response {
   const text = JSON.stringify(body);
-  const etag = etagOf(text);
+  // Private: the tag covers the asker's Authorization too (the token, never shown or stored).
+  const etag = etagOf(cacheControl === PRIVATE ? `${request.headers.get("authorization") ?? ""}\n${text}` : text);
   const headers = { "cache-control": cacheControl, etag };
   if (matches(request.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers });
   return new Response(text, { status: 200, headers: { ...headers, "content-type": "application/json" } });
