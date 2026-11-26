@@ -370,6 +370,7 @@ export const ReadResponse = z.strictObject({
     markers: z.array(S),
   }),
   testTips: z.array(S),
+  pages: z.strictObject({ sent: Int, of: Int }).nullable().describe("G10: read from only some of the report's pages. Say so: 'Read from 6 of 24 pages.'"),
 });
 
 // ── Stack ────────────────────────────────────────────────────────────────────
@@ -541,3 +542,13 @@ export const ReportStatusResponse = z.strictObject({
 export const EventTargetRequest = z.object({ eventId: z.uuid().nullable().describe("One of the events GET /api/home lists, or null to clear the pick.") });
 export const TourRequest = z.object({ outcome: z.enum(["finished", "skipped"]).optional(), stop: Int.min(1).optional() });
 export const TourResponse = z.strictObject({ status: z.literal("done") });
+
+export const UploadForm = z
+  .object({
+    files: S.describe("One PDF, or up to 6 photos (JPEG, PNG, WebP), 4 MB in all. Repeat the field for each file."),
+    key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("One try's key: a resend with it returns the same report and never claims a second read."),
+    pagesSent: z.string().regex(/^\d+$/).optional().describe("G10: how many pages the phone could send (a whole number, as form text)…"),
+    pagesOf: z.string().regex(/^\d+$/).optional().describe("…of how many the report has."),
+  })
+  .describe("multipart/form-data. Send Prefer: respond-async to get 202 at once and poll GET /api/reports/{id}; without it the answer is the web's NDJSON progress stream.");
+export const UploadAccepted = z.strictObject({ reportId: S, repeat: z.literal(true).optional().describe("This key's try already made the report; no second read was claimed.") });

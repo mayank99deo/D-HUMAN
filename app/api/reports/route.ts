@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import { viewResponse } from "@/lib/api/respond";
 import { reportsJson } from "@/lib/api/views/reports";
+import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { appUpload } from "@/lib/api/report-uploads";
 import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { newId } from "@/lib/auth/crypto";
@@ -32,8 +34,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
-  if (refused) return refused;
+  // An app's upload (key, Prefer: respond-async, part-read pages): lib/api/report-uploads.ts. The
+  // web's request takes the path below, exactly as before.
+  if (isAppRequest(request)) {
+    const member = await appOnly(request, { write: true });
+    return member.ok ? appUpload(request, member) : member.response;
+  }
   const user = await apiUser();
   if (!user) return unauthorized();
   const profile = await getProfile(user.id);

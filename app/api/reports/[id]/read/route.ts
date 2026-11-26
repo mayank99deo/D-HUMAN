@@ -1,3 +1,5 @@
+import { and, eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db";
 import { viewResponse, privateJson } from "@/lib/api/respond";
 import { readJson } from "@/lib/api/views/reports";
 import { apiMember } from "@/lib/platform/api-member";
@@ -13,7 +15,12 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]
   const member = await apiMember(request);
   if (!member.ok) return member.response;
   const { id } = await ctx.params;
-  const view = await reportView(member.user.id, id);
+  const d = await db();
+  const [view, [row]] = await Promise.all([
+    reportView(member.user.id, id),
+    d.select({ pages: schema.reports.pages }).from(schema.reports).where(and(eq(schema.reports.id, id), eq(schema.reports.userId, member.user.id))).limit(1),
+  ]);
   if (!view) return privateJson({ error: "not_found", message: "That report is gone, or it hasn't been read yet." }, 404);
-  return viewResponse(request, readJson(reportReadView(member.profile, view), view, member.profile.timezone));
+  const pages = (row?.pages as { sent: number; of: number } | null) ?? null;
+  return viewResponse(request, readJson(reportReadView(member.profile, view), view, member.profile.timezone, pages));
 }

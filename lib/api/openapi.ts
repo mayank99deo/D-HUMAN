@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.5.0";
+export const CONTRACT_VERSION = "0.6.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -293,6 +293,18 @@ export const APP_ROUTES: AppRoute[] = [
     responses: { 200: s.TourResponse, 401: refusal, 429: refusal },
   },
   {
+    method: "post",
+    path: "/api/reports",
+    file: "app/api/reports/route.ts",
+    summary:
+      "Upload a blood report to be read. With Prefer: respond-async: 202 { reportId } and Location at once, then poll GET /api/reports/{id}. Idempotent on key. pagesSent and pagesOf record a part-read report (G10). 402 carries refusal; 429 daily_limit or rate_limited with Retry-After.",
+    auth: "bearer",
+    request: s.UploadForm,
+    form: true,
+    responses: { 202: s.UploadAccepted, 400: refusal, 401: refusal, 402: refusal, 409: refusal, 413: refusal, 415: refusal, 429: refusal },
+    consent: true,
+  },
+  {
     method: "get",
     path: "/api/app/options",
     file: "app/api/app/options/route.ts",
@@ -357,6 +369,7 @@ export const APP_ROUTES: AppRoute[] = [
 
 const STATUS_WORDS: Record<number, string> = {
   200: "OK",
+  202: "Accepted: the work goes on after the answer.",
   304: "Not modified: the app's copy (sent as If-None-Match) is current. No body.",
   400: "Refused: the error code says why.",
   401: "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",

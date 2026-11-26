@@ -32,7 +32,7 @@ export function reportsJson(profile: Pick<Profile, "name" | "timezone">, rows: R
 }
 
 /** GET /api/reports/[id]/read: the read as the web's report page shows it, every word as stored. */
-export function readJson(v: ReportReadView, view: ReportView, tz: string | null | undefined) {
+export function readJson(v: ReportReadView, view: ReportView, tz: string | null | undefined, pages: { sent: number; of: number } | null = null) {
   const { read } = v;
   return {
     id: view.id,
@@ -60,5 +60,7 @@ export function readJson(v: ReportReadView, view: ReportView, tz: string | null 
       markers: v.retestMarkers,
     },
     testTips: read.test_tips,
+    // G10: read from only some of the report's pages; the app says "Read from 6 of 24 pages."
+    pages,
   };
 }

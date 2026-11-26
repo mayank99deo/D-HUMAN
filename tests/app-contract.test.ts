@@ -65,12 +65,13 @@ let ip = 0;
 async function call(
   method: "get" | "post" | "delete",
   p: string,
-  o: { token?: string; cookie?: string; body?: unknown; form?: Record<string, string | Blob>; bad?: true; etag?: string; ip?: string; params?: Record<string, string> } = {},
+  o: { token?: string; cookie?: string; body?: unknown; form?: Record<string, string | Blob>; bad?: true; etag?: string; ip?: string; params?: Record<string, string>; prefer?: string } = {},
 ) {
   const route = routeOf(method, p);
   const headers = new Headers({ "x-forwarded-for": o.ip ?? `10.1.${Math.floor(++ip / 250)}.${ip % 250}` });
   if (o.token) headers.set("authorization", `Bearer ${o.token}`);
   if (o.etag) headers.set("if-none-match", o.etag);
+  if (o.prefer) headers.set("prefer", o.prefer);
   if (o.body !== undefined) headers.set("content-type", "application/json");
   // What the test sends is what the contract allows, unless it's a deliberately bad request.
   if (o.body !== undefined && route.request && !o.bad) route.request.parse(o.body);
@@ -372,6 +373,25 @@ describe("the apps' contract", () => {
     await call("post", "/api/profile/tour", { token: bad, body: {} }); // 401
     for (let i = 0; i < 20; i++) allowRequest(`tour:${u.id}`, 20, 60 * 60_000);
     await call("post", "/api/profile/tour", { token: early, body: {} }); // 429
+
+    // An app's report upload: 202 (and a resend's 202), 400, 401, 402, 409, 413, 415, 429.
+    const pdf = () => new Blob([Buffer.from("%PDF-1.4\n% demo report\n")], { type: "application/pdf" });
+    const up = (token: string, form: Record<string, string | Blob>, bad?: true) => call("post", "/api/reports", { token, form, prefer: "respond-async", bad });
+    const upKey = "contract-upload-key-0001";
+    await up(early, { files: pdf(), key: upKey, pagesSent: "6", pagesOf: "24" });
+    await up(early, { files: pdf(), key: upKey });
+    await up(early, { key: "contract-upload-key-0002" }, true); // 400: no file
+    await up(bad, { files: pdf() });
+    await up(stale, { files: pdf() });
+    await up(early, { files: new Blob([new Uint8Array(4 * 1024 * 1024 + 1)], { type: "application/pdf" }) });
+    await up(early, { files: new Blob(["just words"], { type: "text/plain" }) });
+    for (let i = 0; i < 6; i++) allowRequest(`report:${u.id}`, 6, 60 * 60_000);
+    await up(early, { files: pdf() }); // 429
+    const reader = await onboardFor("upload-limit@example.com");
+    const [ru] = await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, "upload-limit@example.com"));
+    for (let i = 0; i < 2; i++) await d.insert(schema.usage).values({ id: randomUUID(), userId: ru.id, kind: "read", refId: randomUUID() });
+    await up(reader, { files: pdf() }); // 402
+    g.__after.splice(0);
 
     // The public ones: 200 and 304, no sign-in.
     for (const path of ["/api/app/options", "/api/app/config"]) {

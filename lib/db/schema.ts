@@ -148,8 +148,12 @@ export const reports = pgTable(
     // When the current read started; a read older than this by many minutes is stale and may be retried.
     startedAt: timestamp("started_at", { withTimezone: true }),
     analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+    // The apps only (0018). upload_key: the try's key, so a resend returns the same report and
+    // never claims a second read. pages: { sent, of } when the phone had to send only some pages (G10).
+    uploadKey: text("upload_key"),
+    pages: jsonb("pages"),
   },
-  (t) => [index("reports_user_idx").on(t.userId, t.createdAt)],
+  (t) => [index("reports_user_idx").on(t.userId, t.createdAt), uniqueIndex("reports_user_upload_key_idx").on(t.userId, t.uploadKey).where(sql`${t.uploadKey} is not null`)],
 ).enableRLS();
 
 export const reportFiles = pgTable(

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers. Every signed-in route answers 426 update_required ({ error, message, minVersion, updateUrl }) when X-DHuman-Client names an iOS version below GET /api/app/config's minSupported; config and sign-out stay open."
   },
   "servers": [
@@ -4560,6 +4560,339 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Upload a blood report to be read. With Prefer: respond-async: 202 { reportId } and Location at once, then poll GET /api/reports/{id}. Idempotent on key. pagesSent and pagesOf record a part-read report (G10). 402 carries refusal; 429 daily_limit or rate_limited with Retry-After.",
+        "description": "Upload a blood report to be read. With Prefer: respond-async: 202 { reportId } and Location at once, then poll GET /api/reports/{id}. Idempotent on key. pagesSent and pagesOf record a part-read report (G10). 402 carries refusal; 429 daily_limit or rate_limited with Retry-After. An app write: answers 409 consent_needed (with `version`) when the person agreed to older consent wording; ask again, then send the same request once more.",
+        "operationId": "postApiReports",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "string",
+                    "description": "One PDF, or up to 6 photos (JPEG, PNG, WebP), 4 MB in all. Repeat the field for each file."
+                  },
+                  "key": {
+                    "description": "One try's key: a resend with it returns the same report and never claims a second read.",
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{16,64}$"
+                  },
+                  "pagesSent": {
+                    "description": "G10: how many pages the phone could send (a whole number, as form text)…",
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "pagesOf": {
+                    "description": "…of how many the report has.",
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  }
+                },
+                "required": [
+                  "files"
+                ],
+                "description": "multipart/form-data. Send Prefer: respond-async to get 202 at once and poll GET /api/reports/{id}; without it the answer is the web's NDJSON progress stream."
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted: the work goes on after the answer.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reportId": {
+                      "type": "string"
+                    },
+                    "repeat": {
+                      "description": "This key's try already made the report; no second read was claimed.",
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "reportId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused: the error code says why.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan doesn't allow one more: `refusal` says which limit. Show the app's own words for it, never `message`.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Too large.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a file type we read.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds. Sent with 429, and with 409 in_progress."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/reports/{id}/read": {
@@ -4972,6 +5305,34 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "pages": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "sent": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "of": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "sent",
+                            "of"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "G10: read from only some of the report's pages. Say so: 'Read from 6 of 24 pages.'"
                     }
                   },
                   "required": [
@@ -4991,7 +5352,8 @@
                     "groups",
                     "doctorQuestions",
                     "retest",
-                    "testTips"
+                    "testTips",
+                    "pages"
                   ],
                   "additionalProperties": false
                 }

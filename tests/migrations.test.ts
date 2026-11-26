@@ -145,6 +145,11 @@ async function assertCurrentShape(pg: PGlite) {
   assert.deepEqual(rateCols.rows.map((r) => r.c), ["count integer", "subject text", "updated_at timestamp with time zone", "window date"]);
   assert.equal((await one<{ r: boolean }>(pg, `select relrowsecurity as r from pg_class where relname = 'app_rate_counts'`)).r, true);
 
+  // 0018: an app upload's key, unique per person when set, and its part-read pages.
+  assert.deepEqual((await pg.query<{ c: string }>(`select column_name || ' ' || data_type as c from information_schema.columns where table_name = 'reports' and column_name in ('upload_key', 'pages') order by 1`)).rows.map((r) => r.c), ["pages jsonb", "upload_key text"]);
+  const keyIdx = await one<{ def: string }>(pg, `select indexdef as def from pg_indexes where indexname = 'reports_user_upload_key_idx'`);
+  assert.ok(keyIdx?.def.includes("UNIQUE INDEX") && keyIdx.def.includes("WHERE (upload_key IS NOT NULL)"), keyIdx?.def);
+
   // 0017: the first agreement, kept beside consent_at.
   assert.deepEqual(await one(pg, `select data_type as t, is_nullable as n from information_schema.columns where table_name = 'profiles' and column_name = 'consent_first_at'`), { t: "timestamp with time zone", n: "YES" });
 }
@@ -337,6 +342,31 @@ describe("migrations", () => {
       await pg.exec(meal("m3"));
       await pg.exec(`delete from users where id = 'u1'`);
       assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from food_logs`)).n, 0, "meals still go with the account");
+      await pg.close();
+    });
+  }
+
+  // 0018 on reports already uploaded, by the deploy or pasted first, either way, twice.
+  for (const order of ["deploy then paste", "paste then deploy"] as const) {
+    it(`0018 on production's reports (${order})`, async () => {
+      const at = journal.entries.findIndex((e) => e.tag.startsWith("0018_"));
+      assert.ok(at > 0, "0018 is in the journal");
+      const pg = new PGlite();
+      await deploy(pg, at);
+      await pg.exec(`insert into users (id, email) values ('u1', 'a@x'); insert into reports (id, user_id) values ('r1', 'u1'), ('r2', 'u1');`);
+      if (order === "deploy then paste") {
+        await deploy(pg);
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+      } else {
+        await pg.exec(files[at]);
+        await pg.exec(files[at]);
+        await deploy(pg);
+      }
+      await assertCurrentShape(pg);
+      assert.deepEqual((await pg.query(`select id, upload_key, pages from reports order by id`)).rows, [{ id: "r1", upload_key: null, pages: null }, { id: "r2", upload_key: null, pages: null }]);
+      await pg.exec(`update reports set upload_key = 'k' where id = 'r1'`);
+      await assert.rejects(pg.exec(`update reports set upload_key = 'k' where id = 'r2'`), /reports_user_upload_key_idx/);
       await pg.close();
     });
   }

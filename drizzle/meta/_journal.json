@@ -127,6 +127,13 @@
       "when": 1795707835610,
       "tag": "0017_app_consent_first",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795708345498,
+      "tag": "0018_app_report_uploads",
+      "breakpoints": true
     }
   ]
 }

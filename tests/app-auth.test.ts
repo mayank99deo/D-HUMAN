@@ -681,7 +681,7 @@ describe("routes not open to the apps yet (not_for_app)", () => {
         checked++;
       }
     }
-    assert.ok(checked >= 15, `${checked} handlers`); // lower it as routes open to the apps
+    assert.ok(checked >= 14, `${checked} handlers`); // lower it as routes open to the apps
     assert.equal(JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid))), before, "nothing ran");
 
     // Without Authorization it's nothing at all, cookie or none, and the route runs as before.
