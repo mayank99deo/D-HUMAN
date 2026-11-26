@@ -22,7 +22,7 @@
   "paths": {
     "/api/auth/code": {
       "post": {
-        "summary": "Email a 6-digit sign-in code, then exchange it at POST /api/auth/token. The web's own route, unchanged: no token needed, and its answers carry no Cache-Control.",
+        "summary": "Email a 6-digit sign-in code, then exchange it at POST /api/auth/token. The web's own route: no token needed, and its answers carry no Cache-Control. From an app (X-DHuman-Client sent): 503 unavailable_today with Retry-After when the day's email allowance is used up (G14), and the App Review address gets no email while review sign-in is on (G15).",
         "operationId": "postApiAuthCode",
         "security": [],
         "parameters": [

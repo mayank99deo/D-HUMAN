@@ -4,7 +4,8 @@ import { SITE_ORIGIN, siteUrl } from "@/lib/site-url";
 
 const FONT = "Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-export async function sendSignInCode(email: string, code: string) {
+/** Sends a sign-in code. `why` hears the failure's name (Resend's, e.g. daily_quota_exceeded) when it doesn't go. */
+export async function sendSignInCode(email: string, code: string, o: { why?: (reason: string) => void } = {}) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV !== "production") {
@@ -13,6 +14,7 @@ export async function sendSignInCode(email: string, code: string) {
       return true;
     }
     console.error("[auth] RESEND_API_KEY is not set; cannot send sign-in codes");
+    o.why?.("not_configured");
     return false;
   }
   if (process.env.NODE_ENV !== "production") console.info(`[auth] Sign-in code for ${email}: ${code}`);
@@ -27,6 +29,7 @@ export async function sendSignInCode(email: string, code: string) {
   });
   if (error) {
     console.error("[auth] Sign-in email failed:", error.name, error.message);
+    o.why?.(error.name);
     return false;
   }
   return true;
