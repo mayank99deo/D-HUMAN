@@ -1,14 +1,16 @@
 {
   "status": 200,
-  "etag": "W/\"_6CqjBkEPEtA7lRqVxsbiw\"",
+  "etag": "W/\"z6JbEZJsts6GHzhu9AB0Ug\"",
   "body": {
-    "id": "071eb343-0878-4e48-bfd6-b42724d2621c",
+    "id": "67671786-7050-4671-8bcf-23c88109581c",
     "email": "noreport@demo.dhuman.local",
     "onboarded": true,
     "consent": {
-      "at": "2026-11-26T06:55:01.527Z",
+      "at": "2026-11-26T15:57:46.739Z",
+      "firstAt": "2026-11-26T15:57:46.739Z",
       "version": "2026-11-20",
-      "current": true
+      "current": true,
+      "newLines": []
     },
     "tourDone": true,
     "healthCheckedAt": null,

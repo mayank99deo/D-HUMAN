@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"O80sgegIvk3BiqasE310Kw\"",
+  "etag": "W/\"lo4OM8j7xC_5fCLMVEdTlg\"",
   "body": {
     "activities": [
       {
@@ -218,17 +218,17 @@
       {
         "id": "en",
         "label": "English",
-        "hint": null
+        "hint": "Your vitamin D is low."
       },
       {
         "id": "hi",
         "label": "हिंदी",
-        "hint": null
+        "hint": "आपका विटामिन D कम है।"
       },
       {
         "id": "hinglish",
         "label": "Hinglish",
-        "hint": null
+        "hint": "Aapka vitamin D low hai."
       }
     ],
     "budgets": [

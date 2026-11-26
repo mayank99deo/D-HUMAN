@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"WEfA-esTgyS-4It_lBZobQ\"",
+  "etag": "W/\"yEmERCOKRaTV_xhq25s11A\"",
   "body": {
     "day": "2026-11-26",
     "totals": {
@@ -76,7 +76,7 @@
     ],
     "meals": [
       {
-        "id": "b8eca01f-0e50-48fe-8712-cbf402bfad78",
+        "id": "531a2af1-5f6d-4f52-9e71-59f571209dd7",
         "meal": "breakfast",
         "title": "Demo breakfast",
         "source": "text",
@@ -88,12 +88,12 @@
           "Demo breakfast, 1 plate"
         ],
         "demo": true,
-        "time": "2:25 am",
-        "at": "2026-11-25T20:55:01.745Z",
+        "time": "11:27 am",
+        "at": "2026-11-26T05:57:47.135Z",
         "lang": "en"
       },
       {
-        "id": "5421219b-9337-4abf-8e5c-532d698efc5e",
+        "id": "6203edbe-9386-4168-9ce0-42abdc499626",
         "meal": "lunch",
         "title": "Demo lunch",
         "source": "text",
@@ -105,12 +105,12 @@
           "Demo lunch, 1 plate"
         ],
         "demo": true,
-        "time": "7:25 am",
-        "at": "2026-11-26T01:55:01.745Z",
+        "time": "4:27 pm",
+        "at": "2026-11-26T10:57:47.136Z",
         "lang": "en"
       },
       {
-        "id": "b74ef448-dec0-4d94-a104-32dc450b3c52",
+        "id": "ac7460f0-85fd-46cf-a94d-1229d654584f",
         "meal": "dinner",
         "title": "Demo dinner",
         "source": "text",
@@ -122,8 +122,8 @@
           "Demo dinner, 1 plate"
         ],
         "demo": true,
-        "time": "12:25 pm",
-        "at": "2026-11-26T06:55:01.745Z",
+        "time": "9:27 pm",
+        "at": "2026-11-26T15:57:47.136Z",
         "lang": "en"
       }
     ],

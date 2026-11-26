@@ -1,19 +1,21 @@
 {
   "status": 200,
-  "etag": "W/\"GPMgCxWVNYUEP8JE2QXAHQ\"",
+  "etag": "W/\"FmItngawu97M5cHbW1y1Rw\"",
   "body": {
-    "id": "4e7fffa6-719b-44f1-9236-c6628705291a",
+    "id": "de38362e-4500-4df0-a416-81953429d00e",
     "email": "report@demo.dhuman.local",
     "onboarded": true,
     "consent": {
-      "at": "2026-11-26T06:55:01.588Z",
+      "at": "2026-11-26T15:57:46.818Z",
+      "firstAt": "2026-11-26T15:57:46.818Z",
       "version": "2026-11-20",
-      "current": true
+      "current": true,
+      "newLines": []
     },
     "tourDone": true,
     "healthCheckedAt": null,
     "hold": null,
-    "reportsVersion": "1.YoeC2N4zvxwk4gIC",
+    "reportsVersion": "1.1bYQhmM7GTZDoTU0",
     "persona": {
       "firstName": "Priya",
       "initial": "P",

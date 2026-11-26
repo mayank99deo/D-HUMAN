@@ -1,9 +1,9 @@
 {
   "status": 200,
-  "etag": "W/\"C2mawE9LuMPdivfS9jPCCA\"",
+  "etag": "W/\"lxrTY0sbn5dxAGYjZo0VVw\"",
   "body": {
     "day": "2026-11-26",
-    "greeting": "Good afternoon",
+    "greeting": "Good evening",
     "noun": "runner",
     "bib": {
       "number": "32",
@@ -46,7 +46,7 @@
       "state": "ready",
       "line": "1 supplement, each tied to a gap in what you eat. A blood report adds what food can't show.",
       "button": "Open my stack",
-      "id": "e85a2132-e70d-46aa-bb9d-e720d28352b0"
+      "id": "b0c7cca8-91fe-4b91-9325-7347be8fe04e"
     }
   }
 }
