@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "description": "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
   },
   "servers": [
@@ -6186,7 +6186,7 @@
     },
     "/api/profile": {
       "post": {
-        "summary": "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, then 429 with Retry-After (nothing saved); 429 paused when the apps' daily limit is reached.",
+        "summary": "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, and none while the apps' daily limit is reached. Past either, the save still goes through (200) and only the search is skipped, so a health answer in the same save is never lost. 429 is the hourly save limit.",
         "operationId": "postApiProfile",
         "security": [
           {

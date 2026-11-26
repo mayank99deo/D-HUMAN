@@ -46,16 +46,19 @@ const counts = async (subject: string) => {
 const profileOf = async (p: Person) => (await (await db()).select().from(schema.profiles).where(eq(schema.profiles.userId, p.id)))[0];
 
 describe("event searches set off by an app's profile saves", () => {
-  it("3 a week after onboarding; the 4th change is refused with Retry-After and not saved; other fields aren't counted", async () => {
+  it("3 a week after onboarding; past them the save goes through and only the search is skipped; other fields aren't counted", async () => {
     const p = await person("events-cap@example.com");
-    for (const city of ["Pune", "Nagpur", "Bhopal"]) assert.equal((await call(profileRoute, { token: p.token, body: { city } })).status, 200, city);
+    for (const city of ["Pune", "Nagpur"]) assert.equal((await call(profileRoute, { token: p.token, body: { city } })).status, 200, city);
+    g.__after.splice(0);
+    assert.equal((await call(profileRoute, { token: p.token, body: { eventInMind: "Pune Half" } })).status, 200);
+    assert.equal(g.__after.length, 1, "within the cap: the search is queued");
     assert.equal((await call(profileRoute, { token: p.token, body: { name: "Asha K", diet: "vegan" } })).status, 200, "no search depends on these");
-    const r = await call(profileRoute, { token: p.token, body: { eventInMind: "Mumbai Marathon" } });
-    assert.deepEqual([r.status, r.body!.error], [429, "rate_limited"]);
-    const wait = Number(r.res.headers.get("retry-after"));
-    assert.ok(wait > 0 && wait <= 7 * 86_400, String(wait));
-    assert.equal((await profileOf(p)).eventInMind, null, "nothing saved");
-    assert.equal((await profileOf(p)).city, "Bhopal");
+    g.__after.splice(0);
+    // QA, round 2: the app's Settings saves every field at once, so a refusal would drop a health answer too.
+    const r = await call(profileRoute, { token: p.token, body: { eventInMind: "Mumbai Marathon", conditions: ["pregnant"] } });
+    assert.deepEqual([r.status, r.body], [200, { status: "saved" }]);
+    assert.deepEqual([(await profileOf(p)).eventInMind, (await profileOf(p)).conditions], ["Mumbai Marathon", ["pregnant"]], "saved, health answer included");
+    assert.equal(g.__after.length, 0, "past the cap: no event search queued");
     assert.equal(await counts(`events:${p.id}`), 3);
   });
 
@@ -110,7 +113,9 @@ describe("the apps' daily breaker", () => {
     assert.equal((await call(profileRoute, { token: q.token, body: { city: "Surat" } })).status, 200);
     const r = await call(typical, { token: q.token, body: { description: "Paratha, dal makhani, rice, salad" } });
     assert.deepEqual([r.status, r.body!.error], [429, "paused"]);
-    assert.equal((await call(profileRoute, { token: p.token, body: { city: "Vadodara" } })).status, 429);
+    // A profile save past the breaker is saved; only its search is skipped (QA, round 2).
+    assert.equal((await call(profileRoute, { token: p.token, body: { city: "Vadodara" } })).status, 200);
+    assert.equal((await call(typical, { token: p.token, body: { description: "Idli, sambar, rice, curd and fruit" } })).status, 429);
     assert.equal(g.__alerts.length, 1, "once a day, however many are refused");
     assert.match(g.__alerts[0], /apps reached today's limit/);
   });

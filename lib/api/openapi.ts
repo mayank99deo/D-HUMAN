@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.4.0";
+export const CONTRACT_VERSION = "0.4.1";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -206,7 +206,7 @@ export const APP_ROUTES: AppRoute[] = [
     path: "/api/profile",
     file: "app/api/profile/route.ts",
     summary:
-      "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, then 429 with Retry-After (nothing saved); 429 paused when the apps' daily limit is reached.",
+      "Save profile answers (onboarding, Settings, the budget, the health question). Health answers need consent first (403 consent_required). With consent: true, agrees to the current consent wording. After onboarding, a save that changes city, sport or named event sets off a paid event search: 3 a week, and none while the apps' daily limit is reached. Past either, the save still goes through (200) and only the search is skipped, so a health answer in the same save is never lost. 429 is the hourly save limit.",
     auth: "bearer",
     request: s.ProfileRequest,
     responses: { 200: s.SavedResponse, 400: refusal, 401: refusal, 403: refusal, 429: refusal },

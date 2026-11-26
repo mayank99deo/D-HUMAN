@@ -82,7 +82,7 @@ async function globalBreaker(now: Date): Promise<Response | null> {
   return appRefusal("paused", 429, { message: "This is resting for everyone until midnight. Try again tomorrow.", retryAfter: secondsUntil(addDays(day, 1), now) });
 }
 
-/** An app save that would set off an event search: null when allowed, else the 429 to send. */
+/** An app save that would set off an event search: null when allowed, else a 429 (the profile route saves anyway and skips the search). */
 export async function claimEventSearch(userId: string, now = new Date()): Promise<Response | null> {
   const week = istWeekStart(now);
   if (!(await claim(`events:${userId}`, week, EVENT_SEARCHES_PER_WEEK)))
@@ -92,6 +92,14 @@ export async function claimEventSearch(userId: string, now = new Date()): Promis
     });
   return globalBreaker(now);
 }
+
+/**
+ * Onboarding's own event search, which isn't counted: once a person. Finishing saves sent at the
+ * same moment all look like the first (each read the profile before any saved), so without this
+ * ten at once set off ten free searches (QA, round 2). The one that claims it is free; the rest
+ * count as changes. The window is a fixed day: it never resets.
+ */
+export const claimOnboardingSearch = (userId: string) => claim(`onboarding:${userId}`, "1970-01-01", 1);
 
 /** An app usual-day save that will call the AI: null when allowed, else the 429 to send. */
 export async function claimUsualDay(userId: string, now = new Date()): Promise<Response | null> {

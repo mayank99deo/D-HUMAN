@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
 import { appActor, isAppRequest } from "@/lib/api/actor";
-import { claimEventSearch } from "@/lib/api/app-limits";
+import { claimEventSearch, claimOnboardingSearch } from "@/lib/api/app-limits";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -110,14 +110,20 @@ export async function POST(request: Request) {
   if (complete) values.onboardedAt = before?.onboardedAt ?? new Date();
 
   // Apps only: a save after onboarding that changes what event searches depend on sets off a paid
-  // search, so it counts against the week's few (lib/api/app-limits.ts); past them, nothing is
-  // saved and the app gets 429 with Retry-After. Onboarding's own search doesn't count.
+  // search, so it counts against the week's few (lib/api/app-limits.ts). Past them, or past the
+  // apps' daily breaker, the save still goes through and only the search is skipped: the app's
+  // Settings saves every field at once, so refusing it would also drop a new condition (pregnancy)
+  // or medicine the safety floor needs (QA, round 2). Onboarding's own search doesn't count.
+  let searchCapped = false;
   if (app && before?.onboardedAt) {
     const next = { ...before, ...values };
     const changes = next.city !== before.city || next.primaryActivity !== before.primaryActivity || next.eventInMind !== before.eventInMind || !sameList(next.activities, before.activities);
-    const refused = changes ? await claimEventSearch(user.id) : null;
-    if (refused) return refused;
+    searchCapped = changes && (await claimEventSearch(user.id)) !== null;
+  } else if (app && complete) {
+    // Onboarding's free search is one, however many finishing saves arrive at once.
+    searchCapped = !(await claimOnboardingSearch(user.id)) && (await claimEventSearch(user.id)) !== null;
   }
+  if (searchCapped) console.info("[profile] app save past the event-search cap: saved, search skipped");
 
   const d = await db();
   const [saved] = await d.update(schema.profiles).set(values).where(eq(schema.profiles.userId, user.id)).returning();
@@ -132,7 +138,7 @@ export async function POST(request: Request) {
       saved.primaryActivity !== before.primaryActivity ||
       saved.eventInMind !== before.eventInMind ||
       !sameList(saved.activities, before.activities));
-  if (saved.onboardedAt && (justFinished || searchChanged)) {
+  if (saved.onboardedAt && (justFinished || searchChanged) && !searchCapped) {
     const persona = personaFor(saved);
     after(() => ensureEvents(saved, persona));
   }
