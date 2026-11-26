@@ -46,6 +46,7 @@ const { APP_ROUTES } = await import("../lib/api/openapi.ts");
 const { APP_MEAL_ERRORS, APP_REFUSALS } = await import("../lib/api/errors.ts");
 const { NOT_FOR_APP_WORDS } = await import("../lib/auth/app-token.ts");
 const { SIGN_IN_WORDS } = await import("../lib/auth/sign-in-words.ts");
+const { istWeekStart, EVENT_SEARCHES_PER_WEEK } = await import("../lib/api/app-limits.ts");
 
 after(async () => {
   await removeDatabase();
@@ -475,5 +476,139 @@ describe("the committed demo fixtures (docs/api/fixtures)", () => {
       assert.ok(body.hold);
       assert.deepEqual([body.stack?.plan ?? null, body.fits], [null, null], s);
     }
+  });
+});
+
+// ── Round 2 (2026-11-26): the endpoints lane's cost caps, server-side switches and health gate ──
+
+describe("round 2: the cost caps on app profile saves and usual days", () => {
+  const rate = async (subject: string) => {
+    const d = await db();
+    return (await d.select().from(schema.appRateCounts).where(eq(schema.appRateCounts.subject, subject))).reduce((n, r) => n + r.count, 0);
+  };
+  const searches = async () => (await (await db()).select().from(schema.eventSearches)).length;
+  const profileOf = async (p: Person) => (await (await db()).select().from(schema.profiles).where(eq(schema.profiles.userId, p.id)))[0];
+
+  it("a capped city change never costs a health answer: Settings' whole-profile save still records pregnancy, and the stack holds", async () => {
+    const p = await person("cap-health@example.com", { healthCheckedAt: new Date() });
+    await readyStack(p, await readReport(p, { tag: "CAPH" }));
+    for (const city of ["Pune", "Nagpur", "Bhopal"]) assert.equal((await hit("post", "/api/profile", { token: p.token, body: { city } })).status, 200, city);
+    await runAfter();
+    const before = await searches();
+    // The app's Settings sends every field in one save (its spec 15, "Your details").
+    const settings = { name: "Asha", city: "Indore Two", conditions: ["pregnant"], medications: "Iron tablets", diet: "veg" };
+    const r = await hit("post", "/api/profile", { token: p.token, body: settings });
+    assert.deepEqual([r.status, r.body], [200, { status: "saved" }], "the save goes through");
+    const row = await profileOf(p);
+    assert.deepEqual([row.conditions, row.medications, row.city], [["pregnant"], "Iron tablets", "Indore Two"]);
+    await runAfter();
+    assert.equal(await searches(), before, "but no paid search past the cap");
+    assert.equal(await rate(`events:${p.id}`), EVENT_SEARCHES_PER_WEEK);
+    const s = await hit("get", "/api/stack", { token: p.token });
+    assert.equal(s.body!.hold, "pregnant");
+    assert.ok(!s.text.includes("CANARYDOSE"));
+  });
+
+  it("the daily breaker never costs a health answer either, and still stops the search", async () => {
+    process.env.APP_AI_DAILY_MAX = "0";
+    try {
+      const p = await person("cap-breaker@example.com");
+      const r = await hit("post", "/api/profile", { token: p.token, body: { city: "Kota", conditions: ["kidney"], medications: null } });
+      assert.equal(r.status, 200);
+      assert.deepEqual((await profileOf(p)).conditions, ["kidney"]);
+      const u = await hit("post", "/api/food/typical", { token: p.token, body: { description: "Poha, dal rice, roti sabzi and curd at night." } });
+      assert.deepEqual([u.status, u.body!.error], [429, "paused"], "a usual day is its own paid call: refused");
+    } finally {
+      delete process.env.APP_AI_DAILY_MAX;
+    }
+  });
+
+  it("parallel changes and resends can't pass 3 a week", async () => {
+    const p = await person("cap-parallel@example.com");
+    const rs = await Promise.all(Array.from({ length: 8 }, (_, i) => hit("post", "/api/profile", { token: p.token, body: { eventInMind: `Race ${i}` } })));
+    assert.ok(rs.every((r) => r.status === 200));
+    assert.equal(await rate(`events:${p.id}`), EVENT_SEARCHES_PER_WEEK);
+    const last = (await profileOf(p)).eventInMind;
+    for (let i = 0; i < 3; i++) await hit("post", "/api/profile", { token: p.token, body: { eventInMind: last } });
+    assert.equal(await rate(`events:${p.id}`), EVENT_SEARCHES_PER_WEEK, "a resend changes nothing, so counts nothing");
+  });
+
+  it("onboarding's free search is one, even when the finishing save is sent many times at once", async () => {
+    const p = await person("cap-onboard@example.com", { onboardedAt: null, eventInMind: null });
+    await runAfter();
+    const before = await searches();
+    const rs = await Promise.all(Array.from({ length: 10 }, (_, i) => hit("post", "/api/profile", { token: p.token, body: { complete: true, eventInMind: `Onboard Race ${i}` } })));
+    assert.ok(rs.every((r) => r.status === 200));
+    await runAfter();
+    // One free (onboarding's), then at most the week's 3.
+    assert.ok((await searches()) - before <= 1 + EVENT_SEARCHES_PER_WEEK, `${(await searches()) - before} searches`);
+  });
+
+  it("the week turns at Monday 00:00 IST exactly", () => {
+    assert.equal(istWeekStart(new Date("2026-11-29T18:29:59Z")), "2026-11-23");
+    assert.equal(istWeekStart(new Date("2026-11-29T18:30:00Z")), "2026-11-30");
+  });
+});
+
+describe("round 2: the switches, on the server", () => {
+  const withOff = async (value: string, fn: () => Promise<void>) => {
+    process.env.APP_SWITCHES_OFF = value;
+    try {
+      await fn();
+    } finally {
+      delete process.env.APP_SWITCHES_OFF;
+    }
+  };
+  const jpeg = () => new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 0, 0, 0, 0, 0xff, 0xd9])], { type: "image/jpeg" });
+  const photoForm = (source: string) => {
+    const f = form({ source, key: key(), text: "" });
+    f.set("photo", jpeg(), "meal.jpg");
+    return f;
+  };
+
+  it("snap off refuses any photo, whatever source it claims", async () => {
+    const p = await person("snap-off@example.com");
+    await withOff("snap", async () => {
+      for (const source of ["photo", "text", "voice"]) {
+        const r = await hit("post", "/api/food", { token: p.token, form: photoForm(source) });
+        assert.deepEqual([r.status, r.body!.error], [403, "switched_off"], source);
+      }
+      assert.equal((await logText(p)).status, 200, "typing still works");
+    });
+    assert.equal((await mealRows(p)).length, 1);
+  });
+
+  it("every switch is off on its route, a typo in its case doesn't leave it on, and each comes back when unset", async () => {
+    const p = await person("all-off@example.com", { healthCheckedAt: new Date() });
+    await readyStack(p, await readReport(p, { tag: "SWI" }));
+    const source = await meal(p, { title: "Poha", daysAgo: 1 });
+    for (const value of ["voice,snap,again,iap,doses", " Doses , AGAIN ,Voice,SNAP,Iap "]) {
+      await withOff(value, async () => {
+        assert.deepEqual((await hit("get", "/api/app/config")).body!.off, ["voice", "snap", "again", "iap", "doses"], value);
+        const s = await hit("get", "/api/stack", { token: p.token });
+        assert.ok(!s.text.includes("CANARYDOSE") && s.body!.dosesOff === true, `${value}: doses`);
+        assert.equal((await again(p, source)).status, 403, `${value}: again`);
+        assert.equal((await logText(p, { source: "voice", spoken: "en" })).status, 403, `${value}: voice`);
+        assert.equal((await hit("post", "/api/billing/store-token", { token: p.token, body: {} })).status, 403, `${value}: iap`);
+      });
+    }
+    await withOff("nonsense, dosesx", async () => {
+      assert.ok((await hit("get", "/api/stack", { token: p.token })).text.includes("CANARYDOSE"), "an unknown name turns nothing off");
+    });
+    assert.ok((await hit("get", "/api/stack", { token: p.token })).text.includes("CANARYDOSE"));
+    assert.equal((await again(p, source)).status, 200);
+  });
+});
+
+describe("round 2: the health gate", () => {
+  it("a web-built stack sends no dose on any app read until the question is answered", async () => {
+    const p = await person("gate@example.com");
+    await readyStack(p, await readReport(p, { tag: "GATE" }));
+    for (const r of GETS.filter((x) => !/\{/.test(x.path))) assert.ok(!(await hit("get", r.path, { token: p.token })).text.includes("CANARYDOSE"), r.path);
+    assert.equal((await hit("get", "/api/stack", { token: p.token })).body!.healthCheckNeeded, true);
+    await hit("post", "/api/profile", { token: p.token, body: { healthChecked: true, conditions: ["pregnant"], medications: null } });
+    const held = await hit("get", "/api/stack", { token: p.token });
+    assert.ok(!held.text.includes("CANARYDOSE"), "answered with pregnancy: held, still no dose");
+    assert.equal(held.body!.healthCheckNeeded, false);
   });
 });
