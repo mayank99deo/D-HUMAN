@@ -10,6 +10,7 @@ import { deriveMarkers } from "@/lib/domain/derived";
 import { differentialKey, flagFor, markerDef, matchMarkerKey, sameUnit, statusFor, typicalRange, unitKnown, type Sex } from "@/lib/domain/markers";
 import { labelOf, ACTIVITIES, GOALS, LEVELS, DIETS, CONDITIONS } from "@/lib/domain/options";
 import type { Refusal } from "@/lib/domain/plan";
+import { withPagesNote } from "@/lib/domain/report-pages";
 import { asFlag, floorVerdict, keepMostSevere } from "@/lib/domain/safety";
 import { ensureEvents, targetEvent } from "./events";
 import { dietPicture, dietText } from "./food";
@@ -275,7 +276,7 @@ export async function runAnalysis(reportId: string, userId: string, startedAt: D
       .update(schema.reports)
       .set({ status: "interpreting", stage: "weighing", labName: x.lab_name, collectedOn, nameOnReport: x.name_on_report })
       .where(mine)
-      .returning({ id: schema.reports.id });
+      .returning({ id: schema.reports.id, pages: schema.reports.pages });
     if (!moved) throw new LostClaimError();
 
     emit({ type: "stage", stage: "weighing" });
@@ -335,6 +336,8 @@ export async function runAnalysis(reportId: string, userId: string, startedAt: D
       diet,
       labName: x.lab_name,
       collectedOn,
+      // Set only for an app upload that sent some of the report's pages (G10); null for the web.
+      pages: moved.pages,
     };
 
     emit({ type: "stage", stage: "writing" });
@@ -348,6 +351,8 @@ export async function runAnalysis(reportId: string, userId: string, startedAt: D
       eventName: event ? event.name.slice(0, 80) : null,
     });
     read.markers = read.markers.map((m) => ({ ...m, id: shortIds.get(m.id) ?? m.id }));
+    // A part-read report's read says how many pages it came from (G10); any other summary is untouched.
+    read.summary = withPagesNote(read.summary, moved.pages);
 
     // Markers, read and status change together, or not at all.
     await d.transaction(async (tx) => {

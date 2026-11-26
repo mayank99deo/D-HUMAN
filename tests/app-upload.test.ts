@@ -54,6 +54,31 @@ describe("POST /api/reports from an app", () => {
     assert.deepEqual(r.pages, { sent: 6, of: 24 });
   });
 
+  it("a part-read upload's read starts with how many pages it came from; a whole report's read doesn't", async () => {
+    // The demo read (no AI): the same runAnalysis, so the note comes from code, not the model.
+    delete process.env.ANTHROPIC_API_KEY;
+    process.env.D_HUMAN_AI_MOCK = "1";
+    const d = await db();
+    const summaryOf = async (email: string, fields: Record<string, string>) => {
+      const p = await person(email);
+      const r = await call(upload, { token: p.token, headers: { prefer: "respond-async" }, form: form({ files: pdf(), ...fields }) });
+      assert.equal(r.status, 202);
+      const { reportId } = contract.UploadAccepted.parse(r.body);
+      const runs = g.__after.splice(0);
+      assert.equal(runs.length, 1);
+      await runs[0]();
+      const [row] = await d.select().from(schema.reports).where(eq(schema.reports.id, reportId));
+      assert.equal(row.status, "ready");
+      const [a] = await d.select().from(schema.analyses).where(eq(schema.analyses.reportId, reportId));
+      return (a.read as { summary: string }).summary;
+    };
+    const part = await summaryOf("upload-part@example.com", { key: "upload-key-000000003", pagesSent: "6", pagesOf: "24" });
+    assert.match(part, /^Read from 6 of 24 pages\. This is a demo read/);
+    const whole = await summaryOf("upload-whole@example.com", { key: "upload-key-000000004", pagesSent: "3", pagesOf: "3" });
+    assert.match(whole, /^This is a demo read/);
+    delete process.env.D_HUMAN_AI_MOCK;
+  });
+
   it("without Prefer, the web's NDJSON stream; a whole report keeps no pages; the web's own upload is as before", async () => {
     const p = await person("upload-stream@example.com");
     const r = await call(upload, { token: p.token, form: form({ files: pdf(), pagesSent: "3", pagesOf: "3" }) });

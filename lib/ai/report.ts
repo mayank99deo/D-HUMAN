@@ -1,6 +1,7 @@
 import "server-only";
 import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { EXTRACT_MARKERS, MARKERS } from "@/lib/domain/markers";
+import { pagesNote, partRead, type PartPages } from "@/lib/domain/report-pages";
 import { AiRefusalError, MODELS, VOICE, anthropic, assertComplete, fallbackFor, languageRule, logUsage } from "./client";
 import { strictOutputFormat } from "./output-format";
 import { ExtractedSchema, ReadSchema, type Extracted, type Read } from "./schemas";
@@ -124,6 +125,8 @@ export type ReadInput = {
   diet: string | null; // a short summary of logged eating, when there is any
   labName: string | null;
   collectedOn: string | null;
+  /** reports.pages: { sent, of } when an app sent only some of the report's pages (G10). */
+  pages?: unknown;
 };
 
 const READ_SYSTEM = `${VOICE}
@@ -150,11 +153,20 @@ Fields:
 - retest: when to retest (weeks) and which marker keys.
 - test_tips: 0–3 tips for a cleaner next test, only if relevant (fasting, rest day before, morning sample).`;
 
+/**
+ * The line a part-read report's request gets (G10), right under the report's heading. It goes in
+ * the request, not READ_SYSTEM, so every other read's request stays byte for byte as it was. It
+ * asks for an honest read only; the verdict stays with the safety floor in code.
+ */
+export const partReadLine = (p: PartPages) =>
+  `Only ${p.sent} of its ${p.of} pages were sent, so this report is not complete: results on the other ${p.of - p.sent} pages weren't seen. Never call it a complete or full report, and never say a marker is missing, untested or fine unless it's in the table below. The app starts your summary with "${pagesNote(p)}", so don't repeat the page count.`;
+
 // Event names and cities come from web pages and other people's typing: one line, no quotes, capped.
 const quoted = (s: string) => s.replace(/["“”\r\n]+/g, " ").trim().slice(0, 120);
 
 export async function interpretReport(input: ReadInput): Promise<{ data: Read; model: string }> {
   const { person, target } = input;
+  const part = partRead(input.pages);
   const targetText =
     target.kind === "event"
       ? `Their target event: "${quoted(target.name)}"${target.date ? `, on ${target.date}` : " (date not announced)"}${
@@ -183,7 +195,7 @@ export async function interpretReport(input: ReadInput): Promise<{ data: Read; m
 - ${targetText}
 ${input.diet ? `- What they've been eating (from their food log): ${input.diet}` : ""}
 
-The report${input.labName ? ` from ${input.labName}` : ""}${input.collectedOn ? `, collected ${input.collectedOn}` : ""}
+The report${input.labName ? ` from ${input.labName}` : ""}${input.collectedOn ? `, collected ${input.collectedOn}` : ""}${part ? `\n${partReadLine(part)}` : ""}
 id | marker [catalogue key] | value | range (source) | status | flag | priority
 ${markerLines}
 
