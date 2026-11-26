@@ -1,6 +1,6 @@
 # The D-Human crew
 
-Thirteen AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
+Sixteen AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
 
 | Agent | Role | Call them for |
 | --- | --- | --- |
@@ -17,6 +17,9 @@ Thirteen AI agents, each set up as a specialist with the working standards of a 
 | `mobile-architect` (Andrew) | Senior mobile app architect | The iOS and Android apps' architecture: framework choice, auth for native clients, offline and retries, push, deep links, store review rules, release pipeline |
 | `mobile-engineer` (Brig) | Senior staff mobile engineer | Building the apps in Dart/Flutter, Swift or Kotlin: screens, native speech, camera and gallery, payments, tests, performance, mobile code review |
 | `mobile-product-lead` (Crag) | Mobile product, design and growth lead | What the apps are and how they feel: mobile design system, onboarding and activation funnels, ethical notifications, store listings and store search, app metrics |
+| `flutter-engineer` | Principal cross-platform mobile engineer | The Flutter app for iPhone and Android in `flutter/` of the mobile repo: architecture, the Dart domain port against the shared vectors, the API client from the shared contract, design system, native speech and camera, golden and integration tests, Flutter CI |
+| `mobile-security-engineer` | Mobile security and release engineer | Security of both apps on device, in transit and in CI; taking apps live on the App Store and Google Play: signing, store accounts and review, privacy labels and Data Safety, staged rollouts, incident response |
+| `backend-test-engineer` | Mobile backend test engineer | Hunting every kind of bug in the API the apps call: contract drift, auth edges, races and idempotency, limits, migrations, dates, performance, with tests that keep them fixed |
 
 ## How work flows
 
@@ -25,7 +28,7 @@ Thirteen AI agents, each set up as a specialist with the working standards of a 
 3. **Designers go first** when a feature is new: `product-designer` specs it, and `ux-retention-designer` and `graphic-designer` shape how it feels and looks.
 4. **`seo-lead` shapes anything public** (pages, URLs, titles, copy meant to be found) before it's built.
 5. **Engineers build:** `staff-engineer` leads; `systems-data-engineer` owns data and infrastructure; `ai-efficiency-lead` signs off on any Claude call.
-   For the mobile apps (since 2026-11-24): `mobile-architect` sets the architecture, `mobile-product-lead` owns design and the funnel, and `mobile-engineer` builds; API changes go through `systems-data-engineer`.
+   For the mobile apps (since 2026-11-24): `mobile-architect` sets the architecture, `mobile-product-lead` owns design and the funnel, `mobile-engineer` builds the SwiftUI app and `flutter-engineer` the Flutter app (since 2026-11-26); API changes go through `systems-data-engineer`, `backend-test-engineer` hunts backend bugs, and `mobile-security-engineer` owns mobile security and store release.
 6. **`qa-security-engineer` tests and attacks it.**
 7. **`svp-product` reviews the integrated result** against the acceptance criteria, and `chief-of-staff` checks it's ready for users.
 8. **The main session (the orchestrator) logs it in `MEMORY.md`,** and commits and pushes only after Mayank agrees.

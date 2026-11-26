@@ -612,6 +612,15 @@ Newest first. One entry per change; pushes carry their commit hash.
               - `/api/cron/daily` without the secret gives 401;
               - no `Access-Control-*` headers; served from `bom1`.
             - **Optional env vars, all safe unset:** `APP_SWITCHES_OFF`, `APP_AI_DAILY_MAX` (default 2000), `APP_MIN_VERSION_IOS`, `APP_STORE_URL_IOS`, and `REVIEW_SIGNIN_ON`, `REVIEW_ACCOUNT_EMAIL`, `REVIEW_CODE_HASH` (App Review sign-in, off).
+          - **Three new crew members (Mayank, 2026-11-26):**
+            - `flutter-engineer`: Flutter for iPhone and Android.
+            - `mobile-security-engineer`: mobile security, plus App Store and Play release, end to end.
+            - `backend-test-engineer`: hunts bugs in the app backend.
+            - **On credentials:** Mayank described them as 12+ years each, Ivy League (UPenn, MIT), with Google, Figma, Apple, Reddit and Stripe behind them. Per the crew rule, the role files hold that bar but claim no real employers or degrees.
+            - `CREW.md` and `CLAUDE.md` now say sixteen. New agent files load only at session start, so this session runs them as general agents told to read their role files.
+          - **The Flutter app (Mayank, 2026-11-26): build the complete app in Flutter too,** in its own folder `flutter/` of the mobile repo, beside the SwiftUI app in `ios/`, so the two can be looked at separately and Flutter carries cross-platform work later.
+            - **The orchestrator's call (Mayank can override):** the Flutter app targets iPhone and Android. The separate Kotlin Android app is paused, because Flutter covers Android. SwiftUI continues as the native iPhone app.
+            - **Both apps share** `shared/contract`, `shared/fixtures` and the vectors, plus `docs/specs`, `VISUAL-SYSTEM.md` and `motion.md`.
           - **Still open on the web side, by Mayank's choice:** X6/T4 (unlimited event searches with a web cookie), T5 (sign-in emails used up), T6 (free-tier farming).
       - **The type-record test no longer gates** (mobile `347bff6`). Main's iOS run is still red on the sign-in "Text clipped": the headline's descenders ("p" in "speaks") are cut by the display style's tight leading. That's sent to lane S1.
       - **Real-data testing deferred (Mayank, 2026-11-26):** Vercel marks `DATABASE_URL` Sensitive, so it can't be read, and Mayank doesn't have the Supabase database password to hand. He'll retrieve it and say when. Until then the app and the parked backend are built and tested on demo data only.
