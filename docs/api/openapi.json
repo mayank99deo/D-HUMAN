@@ -815,7 +815,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -941,7 +941,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -1430,7 +1430,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2274,7 +2274,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2929,7 +2929,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3243,7 +3243,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3452,7 +3452,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3796,7 +3796,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4217,7 +4217,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4465,7 +4465,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5019,7 +5019,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5731,6 +5731,14 @@
                             "null"
                           ]
                         },
+                        "dosesOff": {
+                          "type": "boolean",
+                          "description": "The doses switch is off on the server: no plan or fits are sent. Show nutrients without amounts, or nothing."
+                        },
+                        "healthCheckNeeded": {
+                          "type": "boolean",
+                          "description": "A stack exists but the health question hasn't been answered (it was built on the web): no plan is sent. Ask it, then rebuild."
+                        },
                         "aiOff": {
                           "type": "boolean"
                         }
@@ -5748,6 +5756,8 @@
                         "flagged",
                         "hold",
                         "holdLine",
+                        "dosesOff",
+                        "healthCheckNeeded",
                         "aiOff"
                       ],
                       "additionalProperties": false
@@ -5807,7 +5817,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6350,7 +6360,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7055,7 +7065,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7782,7 +7792,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7935,7 +7945,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -8823,6 +8833,39 @@
               }
             }
           },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
           "409": {
             "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
@@ -9444,7 +9487,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -9827,7 +9870,7 @@
             }
           },
           "403": {
-            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {

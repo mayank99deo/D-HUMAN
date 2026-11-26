@@ -60,11 +60,16 @@ function planJson(plan: StackPlan) {
   };
 }
 
-/** GET /api/stack. A held or out-of-date stack carries no plan and no fits: no doses reach the phone (QA test 32). */
-export function stackJson(v: StackView) {
+/**
+ * GET /api/stack. No plan and no fits, so no dose reaches the phone, when the stack is held or out
+ * of date (QA test 32), when the doses switch is off (dosesOff), and when the person hasn't
+ * answered the health question yet (healthCheckNeeded: a stack built on the web before the app
+ * asked it). The web's own Stack screen is unchanged.
+ */
+export function stackJson(v: StackView, o: { dosesOff: boolean; healthCheckNeeded: boolean } = { dosesOff: false, healthCheckNeeded: false }) {
   if (v.state === "start_with_food") return v;
   const plan = v.stack?.status === "ready" ? v.stack.plan : null;
-  const shown = plan && !v.hold && !v.staleReason ? plan : null;
+  const shown = plan && !v.hold && !v.staleReason && !o.dosesOff && !o.healthCheckNeeded ? plan : null;
   const fits = shown ? (Object.fromEntries(BUDGET_IDS.map((id) => [id, fitBudget(shown.items, id)])) as Record<BudgetId, Fit>) : null;
   return {
     state: v.state,
@@ -79,6 +84,8 @@ export function stackJson(v: StackView) {
     flagged: v.flagged,
     hold: v.hold,
     holdLine: v.hold ? holdLine(v.hold, v.flagged.filter((f) => f.urgent).map((f) => f.name)) : null,
+    dosesOff: o.dosesOff,
+    healthCheckNeeded: o.healthCheckNeeded,
     aiOff: v.aiOff,
   };
 }

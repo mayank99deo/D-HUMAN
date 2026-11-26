@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"cdNwipIHBusHj3TfTKBjTA\"",
+  "etag": "W/\"gRDfNV4unoi2whLpFJtCzg\"",
   "body": {
     "day": "2026-11-26",
     "totals": {
@@ -76,7 +76,7 @@
     ],
     "meals": [
       {
-        "id": "480d481d-c1f2-4808-8f9c-311c927a81a5",
+        "id": "eb287cf5-8d8d-4467-a3fd-3eff0b0c6ab7",
         "meal": "lunch",
         "title": "Dal, two rotis",
         "source": "text",
@@ -88,8 +88,8 @@
           "Dal, two rotis, 1 plate"
         ],
         "demo": true,
-        "time": "11:48 am",
-        "at": "2026-11-26T06:18:40.654Z",
+        "time": "12:25 pm",
+        "at": "2026-11-26T06:55:01.592Z",
         "lang": "en"
       }
     ],

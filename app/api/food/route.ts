@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S } from "@/lib/api/errors";
+import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S, switchedOff } from "@/lib/api/errors";
+import { switchOff } from "@/lib/api/views/app";
 import { privateJson } from "@/lib/api/respond";
 import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach } from "@/lib/api/meal-writes";
 import { mealJson } from "@/lib/api/views/parts";
@@ -115,6 +116,9 @@ export async function POST(request: Request) {
   const meal: MealInput = { ...input };
 
   if (app) {
+    // The "voice" and "snap" switches (GET /api/app/config) turn those ways in off on the server too.
+    if (input.source === "voice" && switchOff("voice")) return switchedOff("voice");
+    if (input.source === "photo" && switchOff("snap")) return switchedOff("snap");
     const extra = appFields.safeParse({ eatenAt: form.get("eatenAt") || undefined, photoAt: form.get("photoAt") || undefined, voiceEnd: form.get("voiceEnd") || undefined });
     if (!extra.success) return appRefusal("bad_time", 400);
     const now = Date.now();

@@ -1,9 +1,9 @@
 {
   "status": 200,
-  "etag": "W/\"XJBu7are_pXhAl-87swO9w\"",
+  "etag": "W/\"JuEMuQIs8VyTOXQzxwyjGQ\"",
   "body": {
     "day": "2026-11-26",
-    "greeting": "Good morning",
+    "greeting": "Good afternoon",
     "noun": "runner",
     "bib": {
       "number": "32",

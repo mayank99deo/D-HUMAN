@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"pGGprs9uQcsGaUHi6HG5hA\"",
+  "etag": "W/\"r0gkFKdQx5Su0HYCOHIs2g\"",
   "body": {
     "state": "stack",
     "stack": null,
@@ -14,6 +14,8 @@
     "flagged": [],
     "hold": null,
     "holdLine": null,
+    "dosesOff": false,
+    "healthCheckNeeded": false,
     "aiOff": false
   }
 }

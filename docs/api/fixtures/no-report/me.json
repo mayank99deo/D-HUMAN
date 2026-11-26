@@ -1,12 +1,12 @@
 {
   "status": 200,
-  "etag": "W/\"g6XWLsGQaag-lYS4s_VYzw\"",
+  "etag": "W/\"_6CqjBkEPEtA7lRqVxsbiw\"",
   "body": {
-    "id": "ac5a181e-73e6-452a-ae0d-7ae2e54a8ea2",
+    "id": "071eb343-0878-4e48-bfd6-b42724d2621c",
     "email": "noreport@demo.dhuman.local",
     "onboarded": true,
     "consent": {
-      "at": "2026-11-26T06:18:40.452Z",
+      "at": "2026-11-26T06:55:01.527Z",
       "version": "2026-11-20",
       "current": true
     },

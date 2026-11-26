@@ -139,7 +139,7 @@ describe("stackJson (the apps' Stack)", () => {
 
 describe("GET /api/stack", () => {
   it("a ready stack with its fits; an urgent result holds it with no doses; a cookie gets 403; 304 to its ETag", async () => {
-    const p = await person("stack@example.com", { supplementBudget: "1000_2000" });
+    const p = await person("stack@example.com", { supplementBudget: "1000_2000", healthCheckedAt: new Date() });
     const d = await db();
     await d.insert(schema.stacks).values({ id: randomUUID(), userId: p.id, reportId: null, status: "ready", plan: { ...PLAN, inputs: { diet: "veg", medications: null, conditions: [] } }, model: "rules" });
     const r = await call(stackRoute, { token: p.token });

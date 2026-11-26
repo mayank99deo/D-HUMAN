@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"ys8CNAbcNIoP2sGtKPtxHA\"",
+  "etag": "W/\"KQPo1UXR_l5UR6WeoF-NXQ\"",
   "body": {
     "state": "stack",
     "stack": null,
@@ -19,6 +19,8 @@
     ],
     "hold": "urgent",
     "holdLine": "Ferritin needs medical advice today, so we've held your stack until a doctor has seen it.",
+    "dosesOff": false,
+    "healthCheckNeeded": false,
     "aiOff": false
   }
 }

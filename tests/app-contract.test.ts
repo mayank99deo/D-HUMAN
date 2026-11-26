@@ -232,6 +232,9 @@ describe("the apps' contract", () => {
     await meal(t); // 503 ai_off
     g.__aiMode = "live";
     const logged = await meal(t); // 200
+    process.env.APP_SWITCHES_OFF = "voice";
+    await meal(t, { source: "voice", spoken: "en" }); // 403 switched_off
+    delete process.env.APP_SWITCHES_OFF;
     await meal(t, { source: "sms" }, true); // 400 invalid
     await meal(t, { eatenAt: new Date(Date.now() - 72 * 3_600_000).toISOString() }); // 400 bad_time
     await meal(t, { photo: new Blob([new Uint8Array(3 * 1024 * 1024 + 1)], { type: "image/jpeg" }) }); // 413

@@ -57,3 +57,7 @@ export const consentNeeded = () =>
     message: "We've updated what we ask you to agree to. Read it and agree to carry on.",
     extra: { version: CONSENT_VERSION },
   });
+
+/** 403 switched_off: a remote switch (GET /api/app/config) has turned this off for the apps. Never a reason to sign out. */
+export const switchedOff = (name: string) =>
+  appRefusal("switched_off", 403, { message: "This isn't available in the app right now. Try again later.", extra: { switch: name } });

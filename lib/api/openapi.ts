@@ -287,7 +287,7 @@ export const APP_ROUTES: AppRoute[] = [
     auth: "bearer",
     request: s.MealForm,
     form: true,
-    responses: { 200: s.AppMealAnswer, 400: refusal, 401: refusal, 402: refusal, 409: refusal, 413: refusal, 415: refusal, 422: refusal, 429: refusal, 500: refusal, 503: refusal },
+    responses: { 200: s.AppMealAnswer, 400: refusal, 401: refusal, 402: refusal, 403: refusal, 409: refusal, 413: refusal, 415: refusal, 422: refusal, 429: refusal, 500: refusal, 503: refusal },
     consent: true,
   },
   {
@@ -327,7 +327,7 @@ const STATUS_WORDS: Record<number, string> = {
   400: "Refused: the error code says why.",
   401: "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
   402: "The plan doesn't allow one more: `refusal` says which limit. Show the app's own words for it, never `message`.",
-  403: "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+  403: "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; switched_off (with switch): a remote switch has turned this off (voice, snap, again, iap); bad_origin.",
   404: "Not found (another person's id looks the same).",
   409: "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
   413: "Too large.",

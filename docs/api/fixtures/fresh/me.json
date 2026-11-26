@@ -1,12 +1,12 @@
 {
   "status": 200,
-  "etag": "W/\"r5H6bNduGzFZ1uVNNw4Auw\"",
+  "etag": "W/\"74r0aeZQo9Y_ms2wOh7z8Q\"",
   "body": {
-    "id": "75c1421b-2dc1-491c-bbed-7561101e63da",
-    "email": "fresh-f0c33c@demo.dhuman.local",
+    "id": "f12c8754-d3bb-4980-9643-7e7371473009",
+    "email": "fresh-e9ab54@demo.dhuman.local",
     "onboarded": true,
     "consent": {
-      "at": "2026-11-26T06:18:39.434Z",
+      "at": "2026-11-26T06:55:01.163Z",
       "version": "2026-11-20",
       "current": true
     },

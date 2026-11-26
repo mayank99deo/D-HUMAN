@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { appOnly, isAppRequest } from "@/lib/api/actor";
 import { appRefusal } from "@/lib/api/errors";
 import { privateJson, viewResponse } from "@/lib/api/respond";
+import { switchOff } from "@/lib/api/views/app";
 import { stackJson } from "@/lib/api/views/stack";
 import { AiUnavailableError } from "@/lib/ai/client";
 import { apiMember } from "@/lib/platform/api-member";
@@ -20,7 +21,11 @@ export const maxDuration = 300;
 export async function GET(request: Request) {
   const member = await apiMember(request);
   if (!member.ok) return member.response;
-  return viewResponse(request, stackJson(stackView(member, await stackData(member))));
+  const view = stackView(member, await stackData(member));
+  // App-only safety: no doses while the doses switch is off, or before the health question is
+  // answered (a stack built on the web, where it isn't asked).
+  const healthCheckNeeded = view.state === "stack" && !!view.stack && !member.profile.healthCheckedAt;
+  return viewResponse(request, stackJson(view, { dosesOff: switchOff("doses"), healthCheckNeeded }));
 }
 
 // Builds a stack. The web's request is resolved and answered exactly as before. An app's is

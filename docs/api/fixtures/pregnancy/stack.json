@@ -1,6 +1,6 @@
 {
   "status": 200,
-  "etag": "W/\"KrscI8txxWUaURMRxGGB_Q\"",
+  "etag": "W/\"wBViUvpgjdYQ7ENtuv-BDg\"",
   "body": {
     "state": "stack",
     "stack": null,
@@ -14,6 +14,8 @@
     "flagged": [],
     "hold": "pregnant",
     "holdLine": "You're pregnant or breastfeeding, so we've held your stack: take nothing new without your doctor.",
+    "dosesOff": false,
+    "healthCheckNeeded": false,
     "aiOff": false
   }
 }

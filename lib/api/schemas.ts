@@ -424,6 +424,8 @@ export const StackResponse = z.discriminatedUnion("state", [
     flagged: z.array(z.strictObject({ name: S, urgent: z.boolean() })).describe("Results kept out of the stack, from the newest report."),
     hold: z.enum(["urgent", "pregnant"]).nullable(),
     holdLine: S.nullable().describe("The hold's words, verbatim (G13). Show it at the top whenever hold is set."),
+    dosesOff: z.boolean().describe("The doses switch is off on the server: no plan or fits are sent. Show nutrients without amounts, or nothing."),
+    healthCheckNeeded: z.boolean().describe("A stack exists but the health question hasn't been answered (it was built on the web): no plan is sent. Ask it, then rebuild."),
     aiOff: z.boolean(),
   }),
 ]);

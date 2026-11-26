@@ -1,10 +1,10 @@
 {
   "status": 200,
-  "etag": "W/\"xlLkShcRtJFhRKTcztNSqg\"",
+  "etag": "W/\"c6TJBSR9WGqXGHvvdPRsJA\"",
   "body": {
     "state": "stack",
     "stack": {
-      "id": "8271569e-7158-472e-a3e5-2c478231cbc3",
+      "id": "e85a2132-e70d-46aa-bb9d-e720d28352b0",
       "status": "ready",
       "error": null,
       "plan": {
@@ -62,7 +62,7 @@
         }
       },
       "demo": false,
-      "made": "2026-11-26T06:18:40.990Z"
+      "made": "2026-11-26T06:55:01.749Z"
     },
     "staleReason": null,
     "basis": "meals",
@@ -194,6 +194,8 @@
     "flagged": [],
     "hold": null,
     "holdLine": null,
+    "dosesOff": false,
+    "healthCheckNeeded": false,
     "aiOff": false
   }
 }

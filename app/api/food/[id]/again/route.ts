@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
-import { appPlanLimit, appRefusal } from "@/lib/api/errors";
+import { appPlanLimit, appRefusal, switchedOff } from "@/lib/api/errors";
+import { switchOff } from "@/lib/api/views/app";
 import { eatenAtInReach, logAgain } from "@/lib/api/meal-writes";
 import { privateJson } from "@/lib/api/respond";
 import { mealJson } from "@/lib/api/views/parts";
@@ -20,6 +21,8 @@ const body = z.object({
 export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/again">) {
   const member = await appOnly(request, { write: true });
   if (!member.ok) return member.response;
+  // The "again" switch (GET /api/app/config) turns Log again off on the server too.
+  if (switchOff("again")) return switchedOff("again");
   const { user, profile } = member;
   // Shares the meal route's hourly speed bump.
   if (!allowRequest(`food:${user.id}`, 40, 60 * 60_000)) return appRefusal("rate_limited", 429, { retryAfter: secondsUntilReset(`food:${user.id}`) });

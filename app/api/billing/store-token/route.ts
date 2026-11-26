@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { appOnly } from "@/lib/api/actor";
+import { switchedOff } from "@/lib/api/errors";
 import { privateJson } from "@/lib/api/respond";
+import { switchOff } from "@/lib/api/views/app";
 import { db, schema } from "@/lib/db";
 
 // The appAccountToken for the apps' in-app purchase (gap G8; the mobile repo's docs/API.md §8): a
@@ -12,6 +14,8 @@ import { db, schema } from "@/lib/db";
 export async function POST(request: Request) {
   const member = await appOnly(request, { write: false });
   if (!member.ok) return member.response;
+  // The "iap" switch turns buying in the app off on the server too.
+  if (switchOff("iap")) return switchedOff("iap");
   const d = await db();
   const u = schema.users;
   // Set only where none is set, so two first calls at once agree on one token.
