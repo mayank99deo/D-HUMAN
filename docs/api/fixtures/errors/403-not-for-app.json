@@ -2,6 +2,6 @@
   "status": 403,
   "body": {
     "error": "not_for_app",
-    "message": "The app can't do this yet. You can do it at d-human.fit."
+    "message": "This isn't available in the app yet."
   }
 }

@@ -43,8 +43,12 @@ export function fromBrowser(request: Request): boolean {
  */
 export const carriesAppToken = (request: Request) => /^\s*bearer\s+dht_/i.test(request.headers.get("authorization") ?? "");
 
-/** What the apps read when a route isn't theirs. */
-export const NOT_FOR_APP_WORDS = "The app can't do this yet. You can do it at d-human.fit.";
+/**
+ * What the apps read when a route isn't theirs. Generic on purpose, with no web address: under
+ * App Store guideline 3.1.1 the app must never steer people to the website, least of all for
+ * anything to do with paying (tests/qa-app-backend.test.ts checks every word the apps get).
+ */
+export const NOT_FOR_APP_WORDS = "This isn't available in the app yet.";
 
 /**
  * The refusal for an app token where apps don't belong, or don't yet: 403 not_for_app, and
