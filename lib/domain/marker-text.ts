@@ -4,6 +4,20 @@ import type { Marker } from "@/lib/db/schema";
 // Plain functions, so the server's view builders (lib/platform/views) give the apps the same
 // words the web's marker tiles show. Markers.tsx re-exports them unchanged.
 
+/** One point of the contour fingerprint (components/platform/Contour.tsx draws them). */
+export type ContourMarker = {
+  id: string;
+  short: string;
+  name: string;
+  value: number | null;
+  valueText: string | null;
+  unit: string | null;
+  low: number | null;
+  high: number | null;
+  status: string;
+  range: string;
+};
+
 export const fmt = (n: number | null | undefined) =>
   n == null ? "" : Math.abs(n) >= 100 ? Math.round(n).toLocaleString("en-IN") : String(+n.toFixed(n % 1 === 0 ? 0 : Math.abs(n) < 10 ? 2 : 1));
 

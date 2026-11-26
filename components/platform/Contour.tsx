@@ -1,24 +1,15 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { ContourMarker } from "@/lib/domain/marker-text";
 
 // "Your contour": every marker on the report becomes a direction on a
 // topographic fingerprint. In range, the lines run calm; a marker below range
 // pulls them in, one above pushes them out. The same contour language as the
 // site's hero, drawn from your own blood.
 
-export type ContourMarker = {
-  id: string;
-  short: string;
-  name: string;
-  value: number | null;
-  valueText: string | null;
-  unit: string | null;
-  low: number | null;
-  high: number | null;
-  status: string;
-  range: string;
-};
+// The point's shape lives in lib, where the apps' Home builder makes the same points.
+export type { ContourMarker };
 
 const RINGS = 9;
 const SIZE = 340;

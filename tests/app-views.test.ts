@@ -299,6 +299,15 @@ describe("GET /api/home", () => {
     }
   });
 
+  it("the view builders import only from lib, never from the web's components", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const dir = new URL("../lib/platform/views/", import.meta.url);
+    for (const f of readdirSync(dir)) {
+      const src = readFileSync(new URL(f, dir), "utf8");
+      assert.doesNotMatch(src, /from ["']@\/components\//, f);
+    }
+  });
+
   it("the contract's enums are the lists they mirror", () => {
     assert.deepEqual([...contract.VERDICT_LEVELS], [...VERDICT_LEVELS]);
   });
