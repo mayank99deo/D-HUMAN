@@ -230,3 +230,18 @@ describe("DELETE /api/food/[id] from an app", () => {
     assert.equal((await call(del, { method: "DELETE", params: { id: mine } })).status, 401);
   });
 });
+
+describe("a queued meal sent again after its window (QA finding 3)", () => {
+  it("finds its key's meal first and answers as the first send did, before judging eatenAt", async () => {
+    const p = await person("queued-resend@example.com");
+    const k = key();
+    const first = await send(p, { text: "khichdi", source: "text", key: k, eatenAt: new Date(Date.now() - 47 * 3_600_000).toISOString() });
+    assert.equal(first.status, 200);
+    // The same try, sent once more after it turned 48 hours old.
+    const again = await send(p, { text: "khichdi", source: "text", key: k, eatenAt: new Date(Date.now() - 49 * 3_600_000).toISOString() });
+    assert.deepEqual([again.status, (again.body!.meal as { id: string }).id, again.body!.repeat], [200, (first.body!.meal as { id: string }).id, true]);
+    assert.equal((await rows(p)).length, 1);
+    // A new try with that old time is still refused.
+    assert.equal((await send(p, { text: "khichdi", source: "text", key: key(), eatenAt: new Date(Date.now() - 49 * 3_600_000).toISOString() })).body!.error, "bad_time");
+  });
+});

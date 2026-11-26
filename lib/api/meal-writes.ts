@@ -21,6 +21,17 @@ export function eatenAtInReach(at: Date, now = Date.now()): boolean {
   return now - at.getTime() <= EATEN_AT_MAX_AGE_MS && at.getTime() - now <= EATEN_AT_MAX_AHEAD_MS;
 }
 
+/**
+ * The meal a try's key already logged, if any. Looked up before anything else about a resend, so
+ * a queued meal sent again after its 48 hours (or after the plan's limit) answers as its first
+ * send did, with that meal, instead of being judged afresh (QA's review, finding 3).
+ */
+export async function mealForKey(userId: string, key: string): Promise<FoodLog | null> {
+  const d = await db();
+  const [row] = await d.select().from(schema.foodLogs).where(and(eq(schema.foodLogs.id, mealIdFor(userId, key)), eq(schema.foodLogs.userId, userId))).limit(1);
+  return row ?? null;
+}
+
 export type Again = { log: FoodLog; repeat: boolean } | { notFound: true } | { refusal: Refusal };
 
 /**

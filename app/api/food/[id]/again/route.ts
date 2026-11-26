@@ -2,7 +2,7 @@ import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
 import { appPlanLimit, appRefusal, switchedOff } from "@/lib/api/errors";
 import { switchOff } from "@/lib/api/views/app";
-import { eatenAtInReach, logAgain } from "@/lib/api/meal-writes";
+import { eatenAtInReach, logAgain, mealForKey } from "@/lib/api/meal-writes";
 import { privateJson } from "@/lib/api/respond";
 import { mealJson } from "@/lib/api/views/parts";
 import { MEAL_KEY } from "@/lib/platform/food";
@@ -28,6 +28,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/a
   if (!allowRequest(`food:${user.id}`, 40, 60 * 60_000)) return appRefusal("rate_limited", 429, { retryAfter: secondsUntilReset(`food:${user.id}`) });
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return appRefusal("invalid", 400);
+  // A resend of a repeat already logged answers with it, before its eatenAt is judged again.
+  const had = await mealForKey(user.id, parsed.data.key);
+  if (had) return privateJson({ meal: mealJson(had, profile.timezone), repeat: true });
   const eatenAt = parsed.data.eatenAt ? new Date(parsed.data.eatenAt) : undefined;
   if (eatenAt && !eatenAtInReach(eatenAt)) return appRefusal("bad_time", 400);
   const { id } = await ctx.params;

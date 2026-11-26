@@ -2,7 +2,7 @@ import { z } from "zod";
 import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S, switchedOff } from "@/lib/api/errors";
 import { switchOff } from "@/lib/api/views/app";
 import { privateJson } from "@/lib/api/respond";
-import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach } from "@/lib/api/meal-writes";
+import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach, mealForKey } from "@/lib/api/meal-writes";
 import { mealJson } from "@/lib/api/views/parts";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { appActor, isAppRequest } from "@/lib/api/actor";
@@ -115,6 +115,12 @@ export async function POST(request: Request) {
   const { key, ...input } = parsed.data;
   const meal: MealInput = { ...input };
 
+  if (app && key) {
+    // A resend of a try that already logged its meal answers as the first send did, whatever
+    // its eatenAt says now (a queued meal can be sent again after its 48 hours).
+    const had = await mealForKey(user.id, key);
+    if (had) return privateJson({ meal: mealJson(had, profile.timezone), repeat: true });
+  }
   if (app) {
     // The "voice" and "snap" switches (GET /api/app/config) turn those ways in off on the server too.
     if (input.source === "voice" && switchOff("voice")) return switchedOff("voice");

@@ -146,3 +146,14 @@ describe("POST /api/food/[id]/slot", () => {
     assert.equal((await call(slot, { cookie: p.cookie, body: { meal: "dinner" }, params: { id: theirs } })).status, 403);
   });
 });
+
+describe("a queued Log again sent after its window (QA finding 3)", () => {
+  it("answers with the repeat it already logged, before judging eatenAt", async () => {
+    const p = await person("again-queued-resend@example.com");
+    const source = await meal(p);
+    const k = key();
+    const first = await send(p, source, { key: k, eatenAt: new Date(Date.now() - 47 * 3_600_000).toISOString() });
+    const again = await send(p, source, { key: k, eatenAt: new Date(Date.now() - 50 * 3_600_000).toISOString() });
+    assert.deepEqual([again.status, (again.body!.meal as { id: string }).id, again.body!.repeat], [200, (first.body!.meal as { id: string }).id, true]);
+  });
+});
