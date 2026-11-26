@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   customType,
   date,
   doublePrecision,
@@ -72,7 +73,12 @@ export const sessions = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }), // apps only, written at most once an hour
     absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }), // apps only: the 365-day cap
   },
-  (t) => [index("sessions_user_idx").on(t.userId), uniqueIndex("sessions_public_id_idx").on(t.publicId)],
+  (t) => [
+    index("sessions_user_idx").on(t.userId),
+    uniqueIndex("sessions_public_id_idx").on(t.publicId),
+    // Only the two kinds the code knows; a typo can never make a third that some lookup misses.
+    check("sessions_kind_check", sql`${t.kind} in ('cookie', 'bearer')`),
+  ],
 ).enableRLS();
 
 export const profiles = pgTable("profiles", {

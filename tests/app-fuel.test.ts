@@ -77,12 +77,12 @@ describe("GET /api/fuel", () => {
     assert.ok(!plan.includes("₹") && !plan.includes("30 days"), plan);
   });
 
-  it("refuses without a valid token, with a page's Origin, and before onboarding; the web's cookie works", async () => {
+  it("refuses without a valid token, with a page's Origin, and before onboarding; a web cookie gets 403 bearer_required", async () => {
     const p = await person("refuse@example.com");
     for (const h of [fuel, past, facts]) {
       assert.equal((await call(h)).status, 401);
       assert.equal((await call(h, { token: p.token, origin: "https://www.d-human.fit" })).status, 401);
-      assert.equal((await call(h, { cookie: p.cookie })).status, 200);
+      assert.deepEqual((await call(h, { cookie: p.cookie })).body, { error: "bearer_required" });
     }
     const fresh = await person("notyet@example.com", { name: null }, false);
     for (const h of [fuel, past, facts]) assert.deepEqual((await call(h, { token: fresh.token })).body, { error: "not_onboarded", message: "Finish setting up first." });

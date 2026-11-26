@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { BUDGET_IDS } from "@/lib/domain/budget";
@@ -51,6 +52,8 @@ const BEFORE_CONSENT = new Set(["language", "timezone"]);
 const sameList = (a: readonly string[] | null | undefined, b: readonly string[] | null | undefined) => (a ?? []).join(",") === (b ?? []).join(",");
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   // Onboarding saves once per step; 30 an hour leaves room for that and for Settings.

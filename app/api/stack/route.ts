@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { AiUnavailableError } from "@/lib/ai/client";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { json, unauthorized } from "@/lib/platform/http";
 import { STACK_MESSAGES, startStack } from "@/lib/platform/stack";
@@ -7,7 +8,9 @@ import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 300;
 
-export async function POST() {
+export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   // A first speed bump per server; the daily cap is counted in the database by startStack.

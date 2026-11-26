@@ -4,7 +4,7 @@
 // the names are QA's must-pass test numbers for the native apps.
 // The web's own sign-in, cookie and origin rule are checked unchanged alongside.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -34,9 +34,9 @@ allowAppImports({
       delete: (...a) => { globalThis.__cookieWrites.push(["delete", ...a]); },
     });`,
   "next/server": "export const after = (fn) => { globalThis.__after.push(fn); }; export const connection = async () => {};",
-  "@/lib/email/send": "export const sendFounderAlert = async (a) => { globalThis.__alerts.push(a); return { status: 'sent' }; };",
+  "@/lib/email/send": "export const sendFounderAlert = async (a) => { globalThis.__alerts.push(a); return { status: 'sent' }; }; export const recordTap = async () => {}; export const sendReviewRequest = async () => {};",
   // The daily job itself is tested elsewhere; here only whether the cron's own call gets through.
-  "@/lib/email/jobs": "export const runDaily = async () => { globalThis.__cronRuns = (globalThis.__cronRuns ?? 0) + 1; return { status: 'ok' }; };",
+  "@/lib/email/jobs": "export const runDaily = async () => { globalThis.__cronRuns = (globalThis.__cronRuns ?? 0) + 1; return { status: 'ok' }; }; export const sendWelcome = async () => {};",
 });
 const removeDatabase = tempDatabase();
 
@@ -57,12 +57,11 @@ const { sha256 } = await import("../lib/auth/crypto.ts");
 const { authenticate } = await import("../lib/auth/authenticate.ts");
 const { apiUser } = await import("../lib/auth/session.ts");
 const { writeGuard, isFresh } = await import("../lib/auth/author.ts");
-const { APP_SESSION, carriesAppToken } = await import("../lib/auth/app-token.ts");
+const { APP_SESSION, carriesAppToken, NOT_FOR_APP_WORDS } = await import("../lib/auth/app-token.ts");
 const { reviewAccount } = await import("../lib/auth/review.ts");
 const { SIGN_IN_WORDS } = await import("../lib/auth/sign-in-words.ts");
-const { installLogScrubber, scrubTokens } = await import("../lib/auth/scrub.ts");
+const { scrubTokens } = await import("../lib/auth/scrub.ts");
 const token = (await import("../app/api/auth/token/route.ts")).POST as Handler;
-const apple = (await import("../app/api/auth/apple/route.ts")).POST as Handler;
 const verify = (await import("../app/api/auth/verify/route.ts")).POST as Handler;
 const signout = (await import("../app/api/auth/signout/route.ts")).POST as Handler;
 const deleteAccount = (await import("../app/api/account/delete/route.ts")).POST as Handler;
@@ -102,6 +101,19 @@ async function call(route: string, handler: Handler, r: Request, ctx?: unknown) 
   return { res, status: res.status, body: body ? (JSON.parse(body) as Record<string, unknown>) : null };
 }
 const bearer = (t: string) => `Bearer ${t}`;
+// The web routes that read no session at all: an app token is nobody there (A6 by construction).
+const SESSIONLESS = [
+  "app/api/billing/webhook/route.ts",
+  "app/api/cron/daily/route.ts",
+  "app/api/dev/session/route.ts",
+  "app/api/email-preview/route.ts",
+  "app/api/email/unsubscribe/route.ts",
+  "app/api/email/webhook/route.ts",
+  "app/api/waitlist/details/route.ts",
+  "app/api/waitlist/form/route.ts",
+  "app/api/waitlist/route.ts",
+];
+const SESSION_READ = /\b(apiUser|getSessionUser|requireUser|requireMember|authenticate|apiMember|apiSignedIn|writeGuard|writerAccess|notForApp)\(|cookies\(\)/;
 const params = (publicId: string) => ({ params: Promise.resolve({ publicId }) });
 async function runAfter() {
   const queued = g.__after.splice(0);
@@ -330,11 +342,6 @@ describe("the token route's own rules", () => {
     }
   });
 
-  it("Sign in with Apple says plainly it isn't on yet (501), and never answers a browser", async () => {
-    const r = await call("apple", apple, request("POST", "/api/auth/apple", { body: { identityToken: "x" } }));
-    assert.deepEqual([r.status, r.body], [501, { error: "apple_unavailable", message: SIGN_IN_WORDS.apple_unavailable }]);
-    assert.equal((await call("apple", apple, request("POST", "/api/auth/apple", { origin: SITE, body: {} }))).status, 400);
-  });
 });
 
 describe("using tokens (A3, A4)", () => {
@@ -395,7 +402,7 @@ describe("using tokens (A3, A4)", () => {
     delete process.env.BLOG_OWNER_EMAILS;
   });
 
-  it("a route not yet open to the apps treats a request with a token as signed out, never by its cookie (A4)", async () => {
+  it("apiUser, under every route not yet open to the apps, never reads the cookie of a request with a token (A4)", async () => {
     const web = await webSignIn("unconverted@example.com");
     g.__cookie = web.cookie;
     g.__headers = new Headers({ authorization: bearer(good) });
@@ -535,7 +542,7 @@ describe("revoking (A9)", () => {
 });
 
 describe("where app tokens are refused (A6)", () => {
-  it("17: the blog's writer, cron, dev routes, both webhooks, unsubscribe and the waitlist answer 401 before anything runs", async () => {
+  it("17: cron, dev routes, both webhooks, unsubscribe and the waitlist read no session, so an app token gets nothing there; /write refuses it", async () => {
     const t = (await appSignIn("refused@example.com")).token;
     process.env.CRON_SECRET = "cron-secret-for-tests";
     const routes: [string, Handler, string][] = [
@@ -550,12 +557,20 @@ describe("where app tokens are refused (A6)", () => {
       ["/api/waitlist/details", (await import("../app/api/waitlist/details/route.ts")).POST as Handler, "POST"],
       ["/api/waitlist/form", (await import("../app/api/waitlist/form/route.ts")).POST as Handler, "POST"],
     ];
+    // Their files are the web's, untouched; none reads a session, so a token can't be anyone there.
+    for (const f of SESSIONLESS) assert.doesNotMatch(readFileSync(path.join(ROOT, f), "utf8"), SESSION_READ, f);
+    const env = process.env as Record<string, string | undefined>;
+    const nodeEnv = env.NODE_ENV;
     for (const [url, handler, method] of routes) {
-      for (const auth of [bearer(t), "bearer dht_whatever"]) {
+      // The dev routes answer 404 in production, token or none; here they'd mint a demo session.
+      if (url === "/api/dev/session" || url === "/api/email-preview") env.NODE_ENV = "production";
+      const answer = async (auth?: string) => {
         const r = await handler(request(method, `${url}?t=x`, { auth, body: method === "POST" ? {} : undefined }));
-        assert.equal(r.status, 401, `${method} ${url}`);
-        assert.deepEqual(await r.json(), { error: "app_token_refused" }, `${method} ${url}`);
-      }
+        return [r.status, await r.text()];
+      };
+      const plain = await answer();
+      for (const auth of [bearer(t), "bearer dht_whatever"]) assert.deepEqual(await answer(auth), plain, `${method} ${url}: the same answer as with no token`);
+      env.NODE_ENV = nodeEnv;
     }
     // Their own secrets are not app tokens: the cron still checks its own, and Vercel Cron's call gets through.
     const cron = routes[0][1];
@@ -572,7 +587,8 @@ describe("where app tokens are refused (A6)", () => {
     g.__cookie = web.cookie;
     for (const mutation of [true, false]) {
       const guard = await writeGuard(request("POST", "/api/write/posts", { auth: bearer(t), cookie: web.cookie, origin: SITE }), { mutation });
-      assert.ok(!guard.ok && guard.response.status === 401);
+      assert.ok(!guard.ok && guard.response.status === 403, "403 not_for_app: the token is fine, /write isn't the app's");
+      assert.deepEqual(await guard.response.json(), { error: "not_for_app", message: NOT_FOR_APP_WORDS });
     }
     const plain = await writeGuard(request("POST", "/api/write/posts", { cookie: web.cookie, origin: SITE }));
     assert.ok(plain.ok, "the writer's own cookie request is unchanged");
@@ -600,13 +616,92 @@ describe("where app tokens are refused (A6)", () => {
   });
 });
 
+// QA's call (2026-11-26): a route the apps can't use yet answers a live token 403 not_for_app,
+// never 401, because a 401 makes the app wipe a sign-in that's fine. Only a missing, malformed,
+// expired or revoked token gets 401. The web never sends Authorization, so it never meets this.
+describe("routes not open to the apps yet (not_for_app)", () => {
+  // Sign-in itself: no session is read, so an app token changes nothing there.
+  const SIGN_IN = ["app/api/auth/code/route.ts", "app/api/auth/verify/route.ts"];
+  const HANDLER = /export async function (GET|POST|PUT|PATCH|DELETE)\(/g;
+  const GUARDED = /export async function (GET|POST|PUT|PATCH|DELETE)\((\w+)[^)]*\)[^{]*\{\s*const refused = await notForApp\(\2\);[^\n]*\n\s*if \(refused\) return refused;/g;
+
+  async function notOpen() {
+    const { APP_ROUTES } = await import("../lib/api/openapi.ts");
+    const open = new Set(APP_ROUTES.map((r) => r.file));
+    return readdirRecursive(path.join(ROOT, "app/api"))
+      .filter((f) => f.endsWith("route.ts"))
+      .map((f) => path.relative(ROOT, f))
+      .filter((f) => !open.has(f) && !SIGN_IN.includes(f) && !SESSIONLESS.includes(f))
+      .filter((f) => !/writeGuard\(request/.test(readFileSync(path.join(ROOT, f), "utf8")));
+  }
+
+  it("every /api route is open to the apps, reads no session, is sign-in itself or /write, or checks notForApp first in every handler", async () => {
+    const rest = await notOpen();
+    assert.ok(rest.length >= 19, `${rest.length} routes`); // lower it as routes open to the apps
+    for (const f of rest) {
+      const src = readFileSync(path.join(ROOT, f), "utf8");
+      const handlers = src.match(HANDLER)?.length ?? 0;
+      assert.ok(handlers > 0, f);
+      assert.equal(src.match(GUARDED)?.length ?? 0, handlers, `${f}: every handler must start with notForApp(request)`);
+    }
+    for (const f of SIGN_IN) assert.doesNotMatch(readFileSync(path.join(ROOT, f), "utf8"), /apiUser|getSessionUser|cookies\(\)/, `${f} reads no session`);
+  });
+
+  it("each answers a live token 403 not_for_app and does nothing; a dead, malformed or page-sent token 401; the web's request never meets it", async () => {
+    const email = "notyet@example.com";
+    const live = (await appSignIn(email)).token;
+    const dead = (await appSignIn(email)).token;
+    const d = await db();
+    await d.delete(schema.sessions).where(eq(schema.sessions.id, sha256(dead)));
+    const uid = (await userId(email))!;
+    const before = JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid)));
+    const ctx = { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }) };
+    let checked = 0;
+    for (const f of await notOpen()) {
+      const mod = (await import(`../${f}`)) as Record<string, Handler>;
+      for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((m) => typeof mod[m] === "function")) {
+        const url = `/${f.replace(/^app\//, "").replace(/\/route\.ts$/, "")}`;
+        const body = method === "GET" ? undefined : { name: "CHANGED", confirm: "DELETE", eventId: "x", text: "dal" };
+        const sent = async (o: Opts) => {
+          g.__after = [];
+          return call(`not-open ${method} ${url}`, mod[method], request(method, url, { body, ...o }), ctx);
+        };
+        const ok = await sent({ auth: bearer(live) });
+        assert.deepEqual([ok.status, ok.body], [403, { error: "not_for_app", message: NOT_FOR_APP_WORDS }], `${method} ${url}`);
+        assert.equal(ok.res.headers.get("cache-control"), "private, no-store", `${method} ${url}`);
+        assert.equal(ok.res.headers.get("set-cookie"), null, `${method} ${url}`);
+        for (const auth of [bearer(dead), "Bearer dht_x", `Basic ${Buffer.from("a:b").toString("base64")}`]) {
+          const r = await sent({ auth });
+          assert.deepEqual([r.status, r.body], [401, { error: "signed_out" }], `${method} ${url} ${auth.slice(0, 12)}`);
+        }
+        const page = await sent({ auth: bearer(live), origin: SITE });
+        assert.equal(page.status, 401, `${method} ${url}: a token with a page's Origin`);
+        checked++;
+      }
+    }
+    assert.ok(checked >= 24, `${checked} handlers`); // lower it as routes open to the apps
+    assert.equal(JSON.stringify(await d.select().from(schema.profiles).where(eq(schema.profiles.userId, uid))), before, "nothing ran");
+
+    // Without Authorization it's nothing at all, cookie or none, and the route runs as before.
+    const { notForApp: check } = await import("../lib/auth/authenticate.ts");
+    const web = await webSignIn(email);
+    for (const o of [{}, { cookie: web.cookie }, { cookie: web.cookie, origin: SITE }, { cookie: dead }]) assert.equal(await check(request("POST", "/api/profile", o)), null);
+    const tour = (await import("../app/api/profile/tour/route.ts")).POST as Handler;
+    const r = await call("tour-web", tour, request("POST", "/api/profile/tour", { cookie: web.cookie, body: {} }));
+    assert.notEqual(r.body?.error, "not_for_app");
+    assert.equal(r.res.headers.get("cache-control"), null, "the web's answers keep their own headers");
+  });
+});
+
 describe("the App Review account (19)", () => {
   const REVIEW = "review@example.com";
-  const CODE = "48201937465012983746"; // digits only, 12 or more, so the number pad can type it (G4)
+  const CODE = "48201937465012983746"; // digits only, 20 or more, so the number pad can type it (G4)
+  // REVIEW_CODE_HASH is the code's HMAC under AUTH_SECRET, as scripts/review-code.mjs makes it.
+  const keyed = (code: string) => createHmac("sha256", process.env.AUTH_SECRET ?? "d-human-local-dev-secret").update(`review-code\u0000${code}`).digest("base64url");
   const on = () => {
     process.env.REVIEW_SIGNIN_ON = "1";
     process.env.REVIEW_ACCOUNT_EMAIL = REVIEW;
-    process.env.REVIEW_CODE_HASH = createHash("sha256").update(CODE).digest("hex");
+    process.env.REVIEW_CODE_HASH = keyed(CODE);
   };
   const off = () => {
     delete process.env.REVIEW_SIGNIN_ON;
@@ -642,6 +737,8 @@ describe("the App Review account (19)", () => {
     off();
     assert.equal((await tryCode(REVIEW, CODE)).status, 400, "switched off");
     assert.equal(reviewAccount({ REVIEW_SIGNIN_ON: "1", REVIEW_ACCOUNT_EMAIL: REVIEW, REVIEW_CODE_HASH: "abc" }), null, "a malformed hash is off");
+    const unkeyed = createHash("sha256").update(CODE).digest("hex");
+    assert.equal(reviewAccount({ REVIEW_SIGNIN_ON: "1", REVIEW_ACCOUNT_EMAIL: REVIEW, REVIEW_CODE_HASH: unkeyed }), null, "an unkeyed SHA-256, the old form, is off");
     assert.equal(reviewAccount({ REVIEW_ACCOUNT_EMAIL: REVIEW, REVIEW_CODE_HASH: process.env.REVIEW_CODE_HASH }), null, "off by default");
   });
 
@@ -675,12 +772,12 @@ describe("the App Review account (19)", () => {
     off();
   });
 
-  it("G4: the code is digits, 12 or more, spaces allowed; anything shorter or with letters isn't a review code", async () => {
+  it("G4: the code is digits, 20 or more, spaces allowed; anything shorter or with letters isn't a review code", async () => {
     on();
     const d = await db();
     await d.delete(schema.loginCodes).where(eq(schema.loginCodes.email, REVIEW));
     assert.equal((await tryCode(REVIEW, CODE.replace(/(\d{4})/g, "$1 ").trim())).status, 200, "as typed in groups of four");
-    for (const bad of [CODE.slice(0, 11), `${CODE.slice(0, 12)}a`, "1".repeat(65)]) assert.deepEqual((await tryCode(REVIEW, bad)).body?.error, "invalid", bad);
+    for (const bad of [CODE.slice(0, 12), CODE.slice(0, 19), `${CODE.slice(0, 19)}a`, "1".repeat(65)]) assert.deepEqual((await tryCode(REVIEW, bad)).body?.error, "invalid", bad);
     // With a resend key, a resend gets the same token and uses no try.
     const key = "review-resend-key-0123456789";
     const first = await call("token", token, request("POST", "/api/auth/token", { body: { email: REVIEW, code: CODE, key } }));
@@ -732,14 +829,14 @@ describe("caching, cookies, CORS and logs", () => {
 
   it("22: no source sends an Access-Control-Allow-* header", () => {
     const files = [...readdirRecursive(path.join(ROOT, "app")), ...readdirRecursive(path.join(ROOT, "lib")), ...readdirRecursive(path.join(ROOT, "components"))]
-      .concat(["next.config.ts", "proxy.ts", "vercel.json", "instrumentation.ts"].map((f) => path.join(ROOT, f)))
+      .concat(["next.config.ts", "proxy.ts", "vercel.json"].map((f) => path.join(ROOT, f)))
       .filter((f) => /\.(ts|tsx|mjs|js|json)$/.test(f));
     const offenders = files.filter((f) => /access-control-allow/i.test(readFileSync(f, "utf8")));
     assert.deepEqual(offenders, []);
   });
 
   it("35: nothing the new routes load caches across requests", () => {
-    const entries = ["app/api/auth/token/route.ts", "app/api/auth/apple/route.ts", "app/api/auth/signout/route.ts", "app/api/account/delete/route.ts", "app/api/me/sessions/route.ts", "app/api/me/sessions/[publicId]/route.ts"];
+    const entries = ["app/api/auth/token/route.ts", "app/api/auth/signout/route.ts", "app/api/account/delete/route.ts", "app/api/me/sessions/route.ts", "app/api/me/sessions/[publicId]/route.ts"];
     const seen = importGraph(entries);
     assert.ok(seen.size > 10, `walked ${seen.size} files`);
     const offenders = [...seen].filter((f) => /["']use cache["']|unstable_cache|cacheLife\(/.test(readFileSync(f, "utf8")));
@@ -747,15 +844,15 @@ describe("caching, cookies, CORS and logs", () => {
   });
 
   it("34, 36: every answer of the new routes is private, no-store, and none sets a cookie", () => {
-    // The web's own calls (its verify, sign-out and delete) are checked unchanged in their tests.
-    const fresh = answers.filter((a) => !["verify", "signout-web", "delete-web"].includes(a.route));
+    // The web's own calls (its verify, sign-out, delete and a tour save) are checked unchanged in their tests.
+    const fresh = answers.filter((a) => !["verify", "signout-web", "delete-web", "tour-web"].includes(a.route));
     assert.ok(fresh.length > 50, `${fresh.length} answers checked`);
     for (const a of fresh) {
       assert.equal(a.headers.get("cache-control"), "private, no-store", `${a.route} ${a.status}`);
       assert.equal(a.headers.get("set-cookie"), null, `${a.route} ${a.status}`);
     }
     const statuses = new Set(fresh.map((a) => a.status));
-    for (const s of [200, 304, 400, 401, 403, 404, 429, 501]) assert.ok(statuses.has(s), `a ${s} was checked`);
+    for (const s of [200, 304, 400, 401, 403, 404, 429]) assert.ok(statuses.has(s), `a ${s} was checked`);
   });
 
   it("37: no answer but a sign-in, and no log line, holds a token", () => {
@@ -766,21 +863,13 @@ describe("caching, cookies, CORS and logs", () => {
     assert.deepEqual(logged.filter((l) => l.includes("dht_")), []);
   });
 
-  it("37: the log scrubber redacts tokens in text, errors and objects, and leaves every other line alone", () => {
-    const seen: unknown[][] = [];
-    const fake = { log: (...a: unknown[]) => seen.push(a), info: () => {}, warn: () => {}, error: (...a: unknown[]) => seen.push(a), debug: () => {}, trace: () => {} } as unknown as Console;
-    installLogScrubber(fake);
-    installLogScrubber(fake); // once only
+  it("37: our log lines scrub tokens, and nothing wraps the runtime's console (the web runs as before)", () => {
     const t = `dht_${"a".repeat(43)}`;
-    const plain = { n: 1 };
-    fake.log("plain line", plain, 3);
-    fake.log(`got ${t}`);
-    fake.error(new Error(`bad ${t}`));
-    fake.log(new Headers({ authorization: `Bearer ${t}` }));
-    assert.equal(seen[0][1], plain, "untouched objects pass through as themselves");
-    assert.deepEqual(seen[0], ["plain line", plain, 3]);
-    for (const line of seen.slice(1)) assert.ok(!String(line[0]).includes(t), String(line[0]));
     assert.equal(scrubTokens(`a ${t} b`), "a dht_[redacted] b");
+    assert.equal(scrubTokens("plain line"), "plain line");
+    assert.equal(statSync(path.join(ROOT, "instrumentation.ts"), { throwIfNoEntry: false }), undefined, "no instrumentation file");
+    const wrapping = readdirRecursive(path.join(ROOT, "lib")).concat(readdirRecursive(path.join(ROOT, "app"))).filter((f) => /\.(ts|tsx)$/.test(f) && /console\[[^\]]+\]\s*=|console\.\w+\s*=[^=]/.test(readFileSync(f, "utf8")));
+    assert.deepEqual(wrapping.map((f) => path.relative(ROOT, f)), []);
   });
 });
 

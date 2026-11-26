@@ -1,5 +1,5 @@
 {
-  "id": "42f40e1c-7299-493d-accb-a3fc7eedd74a",
+  "id": "c6fd9395-2bbc-485b-9546-4ed8d52d1506",
   "prevId": "b2a96dc6-baf0-4a8d-b52c-1d54c91ad94f",
   "version": "7",
   "dialect": "postgresql",
@@ -3075,7 +3075,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "sessions_kind_check": {
+          "name": "sessions_kind_check",
+          "value": "\"sessions\".\"kind\" in ('cookie', 'bearer')"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.stacks": {

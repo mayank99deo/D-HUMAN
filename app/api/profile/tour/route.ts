@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TOUR } from "@/components/platform/tour-stops";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -12,6 +13,8 @@ const bodySchema = z.object({ outcome: z.enum(["finished", "skipped"]), stop: z.
 // The first-run tour shows once per person, on any device: finishing or skipping
 // it lands here. Only the first time is kept; calling again changes nothing.
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`tour:${user.id}`, 20, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

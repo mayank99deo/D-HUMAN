@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { RazorpayError } from "@/lib/billing/razorpay";
 import { confirmCheckout } from "@/lib/platform/billing";
@@ -14,6 +15,8 @@ const body = z.object({
 // Checkout's success callback lands here. The pass is granted only once the
 // signature matches the order we stored and Razorpay's own record shows the payment captured.
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   if (!allowRequest(`verify:${user.id}`, 20, 60 * 60_000)) return json({ error: "rate_limited" }, 429);

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { newId } from "@/lib/auth/crypto";
 import { db, schema } from "@/lib/db";
@@ -18,6 +19,8 @@ const MAX_TOTAL = 4 * 1024 * 1024;
 const MAX_FILES = 6;
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   const profile = await getProfile(user.id);
@@ -70,7 +73,9 @@ export async function POST(request: Request) {
 
 // "Start fresh": every report goes, with its markers, reads and stacks, so home is back
 // to how it was before the first upload. Reads already used still count.
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   const deleted = await deleteReports(user.id, "all");

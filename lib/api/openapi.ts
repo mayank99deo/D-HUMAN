@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.2.0";
+export const CONTRACT_VERSION = "0.3.0";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {
@@ -21,6 +21,8 @@ export type AppRoute = {
   summary: string;
   /** bearer: the app's token; open: no sign-in (sign-in itself). */
   auth: "bearer" | "open";
+  /** The web's own route, used by the apps as it is: its answers keep the web's headers (no Cache-Control). */
+  web?: true;
   request?: z.ZodType;
   /** The request is multipart/form-data, with these fields, rather than JSON. */
   form?: true;
@@ -36,21 +38,22 @@ const refusal = s.ErrorResponse;
 export const APP_ROUTES: AppRoute[] = [
   {
     method: "post",
+    path: "/api/auth/code",
+    file: "app/api/auth/code/route.ts",
+    summary: "Email a 6-digit sign-in code, then exchange it at POST /api/auth/token. The web's own route, unchanged: no token needed, and its answers carry no Cache-Control.",
+    auth: "open",
+    web: true,
+    request: s.CodeRequest,
+    responses: { 200: s.CodeResponse, 400: refusal, 429: refusal, 503: refusal },
+  },
+  {
+    method: "post",
     path: "/api/auth/token",
     file: "app/api/auth/token/route.ts",
     summary: "Sign in with the emailed code (sent by POST /api/auth/code) and get a token. Never for a browser.",
     auth: "open",
     request: s.TokenRequest,
     responses: { 200: s.TokenResponse, 400: refusal, 429: refusal },
-  },
-  {
-    method: "post",
-    path: "/api/auth/apple",
-    file: "app/api/auth/apple/route.ts",
-    summary: "Sign in with Apple. Not on yet: 501 until Apple enrolment.",
-    auth: "open",
-    request: s.AppleSignInRequest,
-    responses: { 400: refusal, 501: refusal },
   },
   {
     method: "post",
@@ -93,7 +96,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/me/route.ts",
     summary: "Who is signed in: onboarding, consent, persona and the whole profile. Works before onboarding.",
     auth: "bearer",
-    responses: { 200: s.MeResponse, 304: null, 401: refusal },
+    responses: { 200: s.MeResponse, 304: null, 401: refusal, 403: refusal },
     etag: true,
   },
   {
@@ -102,7 +105,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/home/route.ts",
     summary: "Home, as the web's /home shows it: bib, verdict, markers that matter, today's fuel, events, the stack line.",
     auth: "bearer",
-    responses: { 200: s.HomeResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.HomeResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -111,7 +114,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/fuel/route.ts",
     summary: "Fuel, as the web's /fuel shows it: today's totals against targets, today's meals, the usual day, food gaps and the plan.",
     auth: "bearer",
-    responses: { 200: s.FuelResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.FuelResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -120,7 +123,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/fuel/past/route.ts",
     summary: "Past meals: the 28 days before today that have meals, newest first, labelled as the web labels them.",
     auth: "bearer",
-    responses: { 200: s.PastMealsResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.PastMealsResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -129,7 +132,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/fuel/facts/route.ts",
     summary: "Facts for the meal wait screen, picked for this person. Rarely change: keep them with their ETag.",
     auth: "bearer",
-    responses: { 200: s.FactsResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.FactsResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -138,7 +141,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/plan/route.ts",
     summary: "The plan: reads and meal logs used and allowed, the pass and when it ends, and why one more isn't allowed now. No words or price.",
     auth: "bearer",
-    responses: { 200: s.PlanJson, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.PlanJson, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -147,7 +150,7 @@ export const APP_ROUTES: AppRoute[] = [
     file: "app/api/upload/route.ts",
     summary: "The Upload screen: the plan, the event the read aims at, facts for the wait, and the upload limits.",
     auth: "bearer",
-    responses: { 200: s.UploadResponse, 304: null, 401: refusal, 409: refusal },
+    responses: { 200: s.UploadResponse, 304: null, 401: refusal, 403: refusal, 409: refusal },
     etag: true,
   },
   {
@@ -199,16 +202,16 @@ const STATUS_WORDS: Record<number, string> = {
   400: "Refused: the error code says why.",
   401: "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
   402: "The plan doesn't allow one more: `refusal` says which limit. Show the app's own words for it, never `message`.",
-  403: "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
+  403: "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
   404: "Not found (another person's id looks the same).",
   409: "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
   413: "Too large.",
   415: "Not a file type we read.",
   422: "Read, but refused: `message` says what to try.",
-  429: "Too many tries. Retry-After says when to come back.",
+  429: "Too many tries. Retry-After says when to come back, when it's sent.",
   500: "Something failed on our side. Try again with the same key.",
   501: "Not available yet.",
-  503: "AI is switched off on this server (ai_off): show `message`.",
+  503: "Not available just now: ai_off (AI is switched off on this server), or a sign-in code couldn't be sent. Show `message`.",
 };
 
 const CONSENT_NOTE =
@@ -231,9 +234,11 @@ export function openapi() {
     const responses: Record<string, unknown> = {};
     for (const [status, schema] of Object.entries(r.responses)) {
       const headers = {
-        "Cache-Control": { schema: { type: "string", const: "private, no-store" } },
+        ...(r.web ? {} : { "Cache-Control": { schema: { type: "string", const: "private, no-store" } } }),
         ...(r.etag && (status === "200" || status === "304") ? { ETag: { schema: { type: "string" } } } : {}),
-        ...(status === "429" || (status === "409" && r.method !== "get") ? { "Retry-After": { schema: { type: "integer" }, description: "Seconds. Sent with 429, and with 409 in_progress." } } : {}),
+        ...((status === "429" || (status === "409" && r.method !== "get")) && !r.web
+          ? { "Retry-After": { schema: { type: "integer" }, description: "Seconds. Sent with 429, and with 409 in_progress." } }
+          : {}),
       };
       responses[status] = { description: STATUS_WORDS[Number(status)] ?? "", headers, ...(schema ? { content: { "application/json": { schema: json(schema, "output") } } } : {}) };
     }
@@ -260,7 +265,7 @@ export function openapi() {
       title: "D-Human app API",
       version: CONTRACT_VERSION,
       description:
-        "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
+        "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
     },
     servers: [{ url: "https://www.d-human.fit" }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "dht_ followed by 43 base64url characters." } } },

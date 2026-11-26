@@ -227,6 +227,9 @@ describe("the day's budget", () => {
       Array.from({ length: 19 }, (_, i) => ({ id: `old-${i}`, userId: filler.id, kind: "weekly", dedupeKey: `k-${i}`, localDate: "2030-01-10", status: "sent", sentAt: at(-30) })),
     );
     assert.deepEqual(await send.budgetToday(at(0)), { left: 3, codesToday: 45, lifecycleToday: 19, otherToday: 3 });
+    // The App Review account's sign-in windows send no email, so they take no place.
+    await d.insert(schema.loginCodes).values({ id: "review-window-1", email: "review@example.com", codeHash: "review-window", expiresAt: at(10), createdAt: at(-5), consumedAt: at(-5) });
+    assert.deepEqual(await send.budgetToday(at(0)), { left: 3, codesToday: 45, lifecycleToday: 19, otherToday: 3 });
 
     // A sign-in code is asked for while the first email is going out: it takes a place.
     let first = true;

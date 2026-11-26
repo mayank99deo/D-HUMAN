@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { notForApp } from "@/lib/auth/authenticate";
 import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import { getPrefs, setPrefs, type EmailPrefs, type PrefChanges } from "@/lib/email/prefs";
@@ -42,6 +43,8 @@ async function who(t: string | null | undefined): Promise<Who> {
 }
 
 export async function GET(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const person = await who(new URL(request.url).searchParams.get("t"));
   if (person === "bad_link") return json({ error: "bad_link" }, 400);
   if (!person) return unauthorized();
@@ -49,6 +52,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const type = request.headers.get("content-type") ?? "";
   const isForm = type.startsWith("application/x-www-form-urlencoded") || type.startsWith("multipart/form-data");
 

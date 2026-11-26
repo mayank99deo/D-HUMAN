@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.2.0",
-    "description": "The routes the native apps use. Every answer is private, no-store. Only a 401 means signed out. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
+    "version": "0.3.0",
+    "description": "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers."
   },
   "servers": [
     {
@@ -20,6 +20,173 @@
     }
   },
   "paths": {
+    "/api/auth/code": {
+      "post": {
+        "summary": "Email a 6-digit sign-in code, then exchange it at POST /api/auth/token. The web's own route, unchanged: no token needed, and its answers carry no Cache-Control.",
+        "operationId": "postApiAuthCode",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-DHuman-Client",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ios/1.0.0 (42). Used only for update prompts."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                    "description": "Where the 6-digit code goes. Lower-cased and trimmed by the server."
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "sent"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "sent"
+                        },
+                        "notice": {
+                          "type": "string",
+                          "const": "suppressed"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "notice",
+                        "message"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Sent, but this address bounced or reported spam before, so it may not arrive: show the message."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused: the error code says why.",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not available just now: ai_off (AI is switched off on this server), or a sign-in code couldn't be sent. Show `message`.",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/token": {
       "post": {
         "summary": "Sign in with the emailed code (sent by POST /api/auth/code) and get a token. Never for a browser.",
@@ -50,10 +217,10 @@
                   },
                   "code": {
                     "type": "string",
-                    "description": "Six digits, or the App Review account's 12 or more. Spaces and dashes are ignored."
+                    "description": "Six digits, or the App Review account's 20 or more. Spaces and dashes are ignored."
                   },
                   "key": {
-                    "description": "A random key for this try. Send it again with a resend: the same email, code and key within 10 minutes get the same token.",
+                    "description": "A new random key for each try, at least 128 bits (a UUIDv4 is fine); never a device id, a counter or anything reused. Send it again with a resend: the same email, code and key within 10 minutes get the same token, even after the code is used, so the key must be as secret as the code.",
                     "type": "string",
                     "pattern": "^[A-Za-z0-9_-]{16,64}$"
                   },
@@ -181,7 +348,7 @@
             }
           },
           "429": {
-            "description": "Too many tries. Retry-After says when to come back.",
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -194,129 +361,6 @@
                   "type": "integer"
                 },
                 "description": "Seconds. Sent with 429, and with 409 in_progress."
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "A stable code to switch on."
-                    },
-                    "message": {
-                      "description": "Words to show, when the server has them.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "additionalProperties": {},
-                  "description": "Every refusal. Only a 401 means signed out."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/auth/apple": {
-      "post": {
-        "summary": "Sign in with Apple. Not on yet: 501 until Apple enrolment.",
-        "operationId": "postApiAuthApple",
-        "security": [],
-        "parameters": [
-          {
-            "name": "X-DHuman-Client",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "ios/1.0.0 (42). Used only for update prompts."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "identityToken": {
-                    "type": "string"
-                  },
-                  "authorizationCode": {
-                    "type": "string"
-                  },
-                  "nonce": {
-                    "type": "string"
-                  },
-                  "fullName": {
-                    "type": "object",
-                    "properties": {
-                      "givenName": {
-                        "type": "string"
-                      },
-                      "familyName": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                },
-                "required": [
-                  "identityToken",
-                  "authorizationCode",
-                  "nonce"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "400": {
-            "description": "Refused: the error code says why.",
-            "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string",
-                  "const": "private, no-store"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "A stable code to switch on."
-                    },
-                    "message": {
-                      "description": "Words to show, when the server has them.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "additionalProperties": {},
-                  "description": "Every refusal. Only a 401 means signed out."
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "Not available yet.",
-            "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string",
-                  "const": "private, no-store"
-                }
               }
             },
             "content": {
@@ -771,7 +815,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -897,7 +941,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -1318,6 +1362,39 @@
           },
           "401": {
             "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2160,6 +2237,39 @@
               }
             }
           },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
           "409": {
             "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
@@ -2782,6 +2892,39 @@
               }
             }
           },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
           "409": {
             "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
@@ -3063,6 +3206,39 @@
               }
             }
           },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
           "409": {
             "description": "not_onboarded, consent_needed (ask again, then resend with the same key), in_progress (resend the same try after Retry-After), or the route's own code.",
             "headers": {
@@ -3208,6 +3384,39 @@
           },
           "401": {
             "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3519,6 +3728,39 @@
           },
           "401": {
             "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3907,6 +4149,39 @@
           },
           "401": {
             "description": "Signed out: the token is missing, malformed, expired or revoked. Wipe the phone's copy and sign in again.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A stable code to switch on."
+                    },
+                    "message": {
+                      "description": "Words to show, when the server has them.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": {},
+                  "description": "Every refusal. Only a 401 means signed out."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4429,7 +4704,7 @@
             }
           },
           "429": {
-            "description": "Too many tries. Retry-After says when to come back.",
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4501,7 +4776,7 @@
             }
           },
           "503": {
-            "description": "AI is switched off on this server (ai_off): show `message`.",
+            "description": "Not available just now: ai_off (AI is switched off on this server), or a sign-in code couldn't be sent. Show `message`.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4911,7 +5186,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5016,7 +5291,7 @@
             }
           },
           "429": {
-            "description": "Too many tries. Retry-After says when to come back.",
+            "description": "Too many tries. Retry-After says when to come back, when it's sent.",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5294,7 +5569,7 @@
             }
           },
           "403": {
-            "description": "Not for this kind of sign-in: not_for_app (a web-only route), bearer_required, bad_origin. Never sign out on a 403.",
+            "description": "Refused, but still signed in: keep the token. not_for_app: a web-only route; bearer_required: a web cookie was sent instead of the token; bad_origin.",
             "headers": {
               "Cache-Control": {
                 "schema": {

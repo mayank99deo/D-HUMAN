@@ -117,6 +117,8 @@ async function assertCurrentShape(pg: PGlite) {
   assert.match(sessionCols.rows.find((r) => r.c === "public_id")?.d ?? "", /gen_random_uuid\(\)/);
   const publicIdx = await one<{ def: string }>(pg, `select indexdef as def from pg_indexes where indexname = 'sessions_public_id_idx'`);
   assert.ok(publicIdx?.def.includes("UNIQUE INDEX") && publicIdx.def.includes("(public_id)"), publicIdx?.def);
+  const kindCheck = await one<{ def: string }>(pg, `select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'sessions_kind_check'`);
+  assert.match(kindCheck?.def ?? "", /kind.*'cookie'.*'bearer'/, "kind is one of the two");
 
   // 0013: the apps' meals: when a queued meal was eaten, what was heard before romanizing, a repeat's source.
   const mealCols = await pg.query<{ c: string; t: string; nullable: string; d: string | null }>(`select column_name as c, data_type as t, is_nullable as nullable, column_default as d
@@ -279,8 +281,10 @@ describe("migrations", () => {
       await pg.exec(`insert into sessions (id, user_id, expires_at) values ('h4', 'u2', now() + interval '30 days')`);
       assert.deepEqual(await one(pg, `select kind, public_id is not null as handle from sessions where id = 'h4'`), { kind: "cookie", handle: true });
       await assert.rejects(pg.query(`insert into sessions (id, user_id, expires_at, public_id) values ('h5', 'u2', now(), $1)`, [rows[0].public_id]), /sessions_public_id_idx/);
+      await assert.rejects(pg.query(`insert into sessions (id, user_id, expires_at, kind) values ('h6', 'u2', now(), 'widget')`), /sessions_kind_check/);
+      await pg.exec(`insert into sessions (id, user_id, expires_at, kind) values ('h7', 'u2', now(), 'bearer')`);
       await pg.exec(`delete from users where id = 'u1'`);
-      assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from sessions`)).n, 2, "an account's sessions still go with it");
+      assert.equal((await one<{ n: number }>(pg, `select count(*)::int as n from sessions`)).n, 3, "an account's sessions still go with it");
       await pg.close();
     });
   }

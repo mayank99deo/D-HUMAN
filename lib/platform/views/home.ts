@@ -1,7 +1,6 @@
 import "server-only";
-import type { ContourMarker } from "@/components/platform/Contour";
-import { fmt, rangeText, statusWords } from "@/components/platform/marker-text";
-import { retestFrom } from "@/components/platform/retest";
+import { fmt, rangeText, statusWords, type ContourMarker } from "@/lib/domain/marker-text";
+import { retestFrom } from "@/lib/domain/retest";
 import type { HomeStackState } from "@/lib/api/schemas";
 import { askGate } from "@/lib/ask/types";
 import type { Marker, Profile } from "@/lib/db/schema";

@@ -26,7 +26,7 @@ import { allowRequest, clientIp } from "@/lib/waitlist/rate-limit";
 
 const body = z.object({
   email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
-  // Six digits, or the App Review account's 12 or more; spaces and dashes are dropped.
+  // Six digits, or the App Review account's 20 or more; spaces and dashes are dropped.
   code: z.string().max(200),
   key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional(),
   // The hardware model (iPhone18,1), never the name someone gave their phone. Optional.

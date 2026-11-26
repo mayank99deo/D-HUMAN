@@ -28,10 +28,18 @@ export const ErrorResponse = z
 // ── Sign-in ──────────────────────────────────────────────────────────────────
 
 // Requests are lenient, as the routes are: a key that isn't here is ignored, never an error.
+export const CodeRequest = z.object({ email: z.email().describe("Where the 6-digit code goes. Lower-cased and trimmed by the server.") });
+export const CodeResponse = z.union([
+  z.strictObject({ status: z.literal("sent") }),
+  z
+    .strictObject({ status: z.literal("sent"), notice: z.literal("suppressed"), message: S })
+    .describe("Sent, but this address bounced or reported spam before, so it may not arrive: show the message."),
+]);
+
 export const TokenRequest = z.object({
   email: z.email(),
-  code: S.describe("Six digits, or the App Review account's 12 or more. Spaces and dashes are ignored."),
-  key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("A random key for this try. Send it again with a resend: the same email, code and key within 10 minutes get the same token."),
+  code: S.describe("Six digits, or the App Review account's 20 or more. Spaces and dashes are ignored."),
+  key: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional().describe("A new random key for each try, at least 128 bits (a UUIDv4 is fine); never a device id, a counter or anything reused. Send it again with a resend: the same email, code and key within 10 minutes get the same token, even after the code is used, so the key must be as secret as the code."),
   device: z.object({ label: S.max(40).optional().describe("The hardware model, e.g. iPhone18,1. Never the phone's name."), os: S.max(16).optional() }).optional(),
 });
 
@@ -60,12 +68,6 @@ export const DeviceView = z.strictObject({
 });
 export const SessionsResponse = z.strictObject({ sessions: z.array(DeviceView) });
 export const EndSessionResponse = z.strictObject({ status: z.literal("signed_out") });
-export const AppleSignInRequest = z.object({
-  identityToken: S,
-  authorizationCode: S,
-  nonce: S,
-  fullName: z.object({ givenName: S.optional(), familyName: S.optional() }).optional(),
-});
 
 // ── Me ───────────────────────────────────────────────────────────────────────
 

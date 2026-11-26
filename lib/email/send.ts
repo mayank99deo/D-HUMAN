@@ -1,7 +1,8 @@
 import "server-only";
-import { and, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { CreateEmailOptions, ErrorResponse } from "resend";
 import { newId } from "@/lib/auth/crypto";
+import { REVIEW_WINDOW } from "@/lib/auth/review";
 import { db, schema, type Db } from "@/lib/db";
 import { at } from "@/lib/db/params";
 import { absoluteUrl } from "@/lib/site-url";
@@ -159,13 +160,14 @@ export type BudgetToday = { left: number; codesToday: number; lifecycleToday: nu
 
 // Three counts over the UTC day, read again before every send: email_sends by its sent_at
 // index, email_daily_counts by its key, and login_codes (no created_at index, but the jobs
-// lane's housekeeping keeps it to two days of rows).
+// lane's housekeeping keeps it to two days of rows). The App Review account's windows are
+// login_codes rows too, but no email goes out for them, so they aren't counted.
 async function countToday(d: Db, now: Date): Promise<BudgetToday> {
   const from = utcDayStart(now);
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const codes = schema.loginCodes;
   const [[c], [l], other] = await Promise.all([
-    d.select({ n: count() }).from(codes).where(and(gte(codes.createdAt, from), lt(codes.createdAt, to))),
+    d.select({ n: count() }).from(codes).where(and(gte(codes.createdAt, from), lt(codes.createdAt, to), ne(codes.codeHash, REVIEW_WINDOW))),
     d.select({ n: count() }).from(sends).where(and(gte(sends.sentAt, from), lt(sends.sentAt, to))),
     otherSentToday(d, now),
   ]);

@@ -179,7 +179,7 @@ describe("deleting reports", () => {
     await meal(me.id, "2026-11-16", "2026-11-16T03:10:00Z");
 
     g.__testUser = me;
-    const res = await deleteAllRoute();
+    const res = await deleteAllRoute(new Request("https://www.d-human.fit/api/reports", { method: "DELETE" }));
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { status: "deleted", deleted: 2 });
     assert.deepEqual(await listReports(me.id), []);
@@ -190,7 +190,7 @@ describe("deleting reports", () => {
 
   it("asks for sign-in before deleting anything", async () => {
     g.__testUser = null;
-    assert.equal((await deleteAllRoute()).status, 401);
+    assert.equal((await deleteAllRoute(new Request("https://www.d-human.fit/api/reports", { method: "DELETE" }))).status, 401);
     assert.equal((await deleteOneRoute(new Request("http://localhost/api/reports/x", { method: "DELETE" }), { params: Promise.resolve({ id: "x" }) } as never)).status, 401);
   });
 });

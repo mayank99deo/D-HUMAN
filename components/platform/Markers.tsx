@@ -3,10 +3,10 @@ import { markerDef, type MarkerStatus } from "@/lib/domain/markers";
 import { ASK_COPY } from "./ask-copy";
 import { askAboutMarker, markerPrefill } from "./ask-starters";
 import { AskAbout } from "./AskAbout";
-import { fmt, rangeText, statusGlyph, statusWords } from "./marker-text";
+import { fmt, rangeText, statusGlyph, statusWords } from "@/lib/domain/marker-text";
 
 // Range rails and marker tiles. The band is the lab's range; the pin is you. The words and
-// numbers come from marker-text.ts, which the apps' view builders use too.
+// numbers come from lib/domain/marker-text.ts, which the apps' view builders use too.
 
 export { rangeText, statusGlyph, statusWords };
 

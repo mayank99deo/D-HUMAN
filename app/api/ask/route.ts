@@ -3,6 +3,7 @@ import { z } from "zod";
 import { answerAsk, askPreCheck } from "@/lib/ai/ask";
 import { aiMode } from "@/lib/ai/client";
 import { ASK_LIMITS, ASK_TURN_KINDS, countsAgainstDay, type AskClearOk, type AskData, type AskPostOk } from "@/lib/ask/types";
+import { notForApp } from "@/lib/auth/authenticate";
 import { sameOrigin } from "@/lib/auth/origin";
 import { apiUser } from "@/lib/auth/session";
 import type { PlanView } from "@/lib/domain/plan";
@@ -92,6 +93,8 @@ const logLine = (o: { kind: string; counted: boolean; raised?: boolean; filter?:
   );
 
 export async function POST(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const started = Date.now();
   // 1–3: cheap checks before anything is read about anyone.
   if (!sameOrigin(request)) return askFail("bad_origin");
@@ -245,7 +248,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   // The session first (it reads the cookie, so this runs at request time), outside the try:
   // nothing of Next's own may be caught.
   const user = await apiUser();
@@ -269,6 +274,8 @@ export async function GET() {
 
 /** "Clear now": the person's answered questions go; one in flight stays; questions already used still count. */
 export async function DELETE(request: Request) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   if (!sameOrigin(request)) return askFail("bad_origin");
   const user = await apiUser();
   if (!user) return askFail("signed_out");

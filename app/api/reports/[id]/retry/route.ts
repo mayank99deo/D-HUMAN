@@ -1,3 +1,4 @@
+import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
 import { claimReport } from "@/lib/platform/analyze";
 import { json, unauthorized } from "@/lib/platform/http";
@@ -6,7 +7,9 @@ import { allowRequest } from "@/lib/waitlist/rate-limit";
 
 export const maxDuration = 300;
 
-export async function POST(_request: Request, ctx: RouteContext<"/api/reports/[id]/retry">) {
+export async function POST(request: Request, ctx: RouteContext<"/api/reports/[id]/retry">) {
+  const refused = await notForApp(request); // not open to the apps yet: 403 not_for_app
+  if (refused) return refused;
   const user = await apiUser();
   if (!user) return unauthorized();
   // A first speed bump per server; the real limits are counted in the database by the claim.

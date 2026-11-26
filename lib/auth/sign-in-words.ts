@@ -6,5 +6,4 @@ export const SIGN_IN_WORDS = {
   locked: "Too many wrong tries for this code. Ask for a new one.",
   rate_limited: "Too many tries. Wait a few minutes, then ask for a new code.",
   not_for_browsers: "This sign-in is for the D-Human app. On the web, sign in at d-human.fit.",
-  apple_unavailable: "Sign in with Apple isn't on yet. Sign in with the code we email you.",
 } as const;

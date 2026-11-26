@@ -25,9 +25,7 @@ const { eq } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db/index.ts");
 const { sha256 } = await import("../lib/auth/crypto.ts");
 const { startAppSession } = await import("../lib/auth/bearer.ts");
-const { dashboard } = await import("../lib/platform/dashboard.ts");
 const { localDate, personaFor, getProfile } = await import("../lib/platform/profile.ts");
-const { homeJson, homeView } = await import("../lib/platform/views/home.ts");
 const { CONSENT_VERSION, meJson, meView } = await import("../lib/platform/views/me.ts");
 const contract = await import("../lib/api/schemas.ts");
 const { VERDICT_LEVELS } = await import("../lib/ai/schemas.ts");
@@ -146,13 +144,6 @@ async function meal(p: Person, title = "Dal, two rotis") {
   });
 }
 
-/** The web page's own view of Home for this person: homeData's dashboard through homeView. */
-async function pageView(p: Person) {
-  const profile = (await getProfile(p.id))!;
-  const persona = personaFor(profile);
-  return homeJson(homeView({ user: { id: p.id, email: p.email }, profile, persona }, await dashboard(p.id, profile, persona)));
-}
-
 /** Every key anywhere in a JSON value. */
 const keysOf = (v: unknown): string[] =>
   Array.isArray(v) ? v.flatMap(keysOf) : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...keysOf(x)]) : [];
@@ -180,7 +171,11 @@ describe("GET /api/me", () => {
     const d = await db();
     await d.update(schema.profiles).set({ consentAt: new Date() }).where(eq(schema.profiles.userId, p.id));
     assert.equal(((await call(me, { token: p.token })).body!.consent as { current: boolean }).current, true);
-    assert.equal((await call(me, { cookie: p.cookie })).status, 200, "the web's cookie works too");
+    // Apps only: the web reads its own pages, so these JSON reads add nothing a cookie can reach.
+    for (const handler of [me, home]) {
+      const r = await call(handler, { cookie: p.cookie });
+      assert.deepEqual([r.status, r.body, r.res.headers.get("cache-control")], [403, { error: "bearer_required" }, "private, no-store"]);
+    }
   });
 });
 
@@ -203,23 +198,87 @@ describe("GET /api/home", () => {
     await d.insert(schema.stacks).values({ id: randomUUID(), userId: people.meals.id, reportId: null, status: "ready", plan: { items: [{ name: "Vitamin B12" }], see_doctor: [], inputs: { diet: "veg", medications: null, conditions: [] } } });
     people.building = await person("building@example.com");
     await d.insert(schema.stacks).values({ id: randomUUID(), userId: people.building.id, reportId: null, status: "building" });
+    // A stack from meals, then a report read: rebuild with the report.
+    people.rebuildReport = await person("rebuild-report@example.com");
+    await d.insert(schema.stacks).values({ id: randomUUID(), userId: people.rebuildReport.id, reportId: null, status: "ready", plan: { items: [{ name: "Vitamin B12" }], see_doctor: [] } });
+    await report(people.rebuildReport);
+    // A stack from one report, then a newer report.
+    people.rebuildNewer = await person("rebuild-newer@example.com");
+    const older = await report(people.rebuildNewer);
+    await d.update(schema.reports).set({ createdAt: new Date(Date.now() - 86_400_000) }).where(eq(schema.reports.id, older));
+    await d.insert(schema.stacks).values({ id: randomUUID(), userId: people.rebuildNewer.id, reportId: older, status: "ready", plan: { items: [{ name: "Vitamin D3" }], see_doctor: [] } });
+    await report(people.rebuildNewer);
+    // A stack built for a non-vegetarian; the person is vegetarian now.
+    people.rebuildProfile = await person("rebuild-profile@example.com");
+    const built = await report(people.rebuildProfile);
+    await d.insert(schema.stacks).values({ id: randomUUID(), userId: people.rebuildProfile.id, reportId: built, status: "ready", plan: { items: [{ name: "Vitamin D3" }], see_doctor: [], inputs: { diet: "non_veg", medications: null, conditions: [] } } });
+    // No report and no stack, but a usual day that's a full day's food.
+    people.buildMeals = await person("build-meals@example.com");
+    await d.insert(schema.dietBaselines).values({
+      userId: people.buildMeals.id,
+      description: "Poha, dal chawal, roti sabzi, curd",
+      estimate: { meals: [{ kcal: 3200, protein_g: 90, carbs_g: 420, fat_g: 90, fibre_g: 40 }], patterns: [], micros: {} },
+    });
   });
 
-  it("is the page's own view for every state, and parses strictly against the contract", async () => {
+  // What each state must show, written out here rather than worked out by the builder under
+  // test: the stack line's code and words, the verdict, and the report's own fields.
+  const STACK = {
+    start: ["Log meals on 3 days, or describe a normal day, and we'll build it. No report needed.", "Start my stack"],
+    build_meals: ["Your meals are enough to start: we build it from what you eat, measured against your body and training. No report needed.", "Build my stack"],
+    build_report: ["Built from this report and what you eat. Only what a marker or a real gap points to.", "Build my stack"],
+    building: ["Building your stack…", "See progress"],
+    ready: ["1 supplement, each tied to a gap in what you eat. A blood report adds what food can't show.", "Open my stack"],
+    rebuild_report: ["Your report is read. Rebuild your stack so it covers your markers too.", "Rebuild with my report"],
+    rebuild_newer: ["A newer report is in. Rebuild your stack from it.", "Rebuild my stack"],
+    rebuild_profile: ["Your diet, medicines or health details changed. Rebuild your stack so it fits them.", "Rebuild my stack"],
+  } as const;
+  const GO = ["go_with_tweaks", "Ready, with one fix."] as const;
+  const DOCTOR = ["doctor_first", "See a doctor before your race."] as const;
+  const EXPECT: Record<string, { stack: keyof typeof STACK; verdict: readonly [string, string] | null; printedFor?: string }> = {
+    fresh: { stack: "start", verdict: null },
+    report: { stack: "build_report", verdict: GO },
+    urgent: { stack: "build_report", verdict: DOCTOR },
+    doctor: { stack: "build_report", verdict: DOCTOR },
+    friend: { stack: "build_report", verdict: GO, printedFor: "Vikram Singh" },
+    pregnant: { stack: "start", verdict: null },
+    meals: { stack: "ready", verdict: null },
+    building: { stack: "building", verdict: null },
+    rebuildReport: { stack: "rebuild_report", verdict: GO },
+    rebuildNewer: { stack: "rebuild_newer", verdict: GO },
+    rebuildProfile: { stack: "rebuild_profile", verdict: GO },
+    buildMeals: { stack: "build_meals", verdict: null },
+  };
+
+  it("shows each state as written out, and parses strictly against the contract", async () => {
+    assert.deepEqual(Object.keys(EXPECT).sort(), Object.keys(people).sort());
+    assert.deepEqual([...new Set(Object.values(EXPECT).map((e) => e.stack))].sort(), Object.keys(STACK).sort(), "every stack state is covered");
     for (const [state, p] of Object.entries(people)) {
       const r = await call(home, { token: p.token });
       assert.equal(r.status, 200, state);
-      contract.HomeResponse.parse(r.body);
-      assert.deepEqual(r.body, JSON.parse(JSON.stringify(await pageView(p))), state);
+      const body = contract.HomeResponse.parse(r.body);
+      const want = EXPECT[state];
+      assert.deepEqual([body.stack.state, body.stack.line, body.stack.button], [want.stack, ...STACK[want.stack]], state);
+      assert.equal(body.bib.name, "Asha", state);
+      assert.equal(body.reading, null, state);
+      if (want.verdict) {
+        assert.ok(body.report, state);
+        assert.deepEqual([body.report.verdict.level, body.report.verdict.line], [...want.verdict], state);
+        assert.equal(body.report.printedFor, want.printedFor ?? null, state);
+        assert.equal(body.report.matter.length, 5, state);
+        assert.deepEqual([body.report.matter[0].status, body.report.matter[0].statusText], ["low", "Below range"], state);
+        assert.equal(body.report.contour.length, 5, state);
+        assert.equal(body.report.source, "collected 2 Nov", state);
+        assert.match(body.bib.next, /^Retest (due|was due) /, state);
+        assert.equal(body.lastFailed, null, state);
+      } else {
+        assert.equal(body.report, null, state);
+        assert.equal(body.bib.next, "Next: your first blood report", state);
+      }
       assert.ok(r.text.length < 64 * 1024, `${state}: ${r.text.length} bytes`);
       assert.equal(r.res.headers.get("cache-control"), "private, no-store");
       assert.equal(r.res.headers.get("set-cookie"), null);
     }
-    const stateOf = async (p: Person) => ((await call(home, { token: p.token })).body!.stack as { state: string }).state;
-    assert.equal(await stateOf(people.fresh), "start");
-    assert.equal(await stateOf(people.report), "build_report");
-    assert.equal(await stateOf(people.meals), "ready");
-    assert.equal(await stateOf(people.building), "building");
   });
 
   it("carries the doctor and urgent flags in the web's words, and the safety verdict as stored", async () => {
@@ -292,6 +351,15 @@ describe("GET /api/home", () => {
       const r = await call(handler, { token: people.fresh.token, cookie: p.cookie });
       assert.equal(r.res.headers.get("cache-control"), "private, no-store");
       if (handler === me) assert.equal(r.body!.email, people.fresh.email, "the token's person, not the cookie's");
+    }
+  });
+
+  it("the view builders import only from lib, never from the web's components", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const dir = new URL("../lib/platform/views/", import.meta.url);
+    for (const f of readdirSync(dir)) {
+      const src = readFileSync(new URL(f, dir), "utf8");
+      assert.doesNotMatch(src, /from ["']@\/components\//, f);
     }
   });
 

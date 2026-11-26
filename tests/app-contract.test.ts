@@ -21,6 +21,8 @@ allowAppImports({
     export const cookies = async () => ({ get: (name) => (globalThis.__cookie ? { name, value: globalThis.__cookie } : undefined), set: () => {}, delete: () => {} });`,
   "next/server": "export const after = (fn) => { globalThis.__after.push(fn); }; export const connection = async () => {};",
   "@/lib/email/send": "export const sendFounderAlert = async () => ({ status: 'sent' });",
+  // The code route's email: sent, except to down@ (Resend failing).
+  "@/lib/auth/email": "export const sendSignInCode = async (email) => !email.startsWith('down@');",
   // Claude, as each meal answer needs: off by default, as on a server with no key.
   "@/lib/ai/client": `export class AiRefusalError extends Error {}; export class AiUnavailableError extends Error {}; export const aiMode = () => globalThis.__aiMode ?? "off";`,
   "@/lib/ai/food": `
@@ -84,7 +86,8 @@ async function call(
   const schema = route.responses[res.status];
   if (schema) schema.parse(JSON.parse(text));
   else assert.equal(text, "", `${label}: no body`);
-  assert.equal(res.headers.get("cache-control"), "private, no-store", label);
+  // The apps' routes are private, no-store; the web's own route keeps the web's headers, unchanged.
+  assert.equal(res.headers.get("cache-control"), route.web ? null : "private, no-store", label);
   seen.add(`${method} ${p} ${res.status}`);
   return { status: res.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : null, etag: res.headers.get("etag") ?? "" };
 }
@@ -114,15 +117,20 @@ describe("the apps' contract", () => {
   });
 
   it("each route's answers, for every status it gives, are what the contract says", async () => {
-    // Sign-in: 200, 400 and 429; Apple: 400 and 501.
+    // The code: 200 (and the suppressed notice), 400, 429, 503.
+    await call("post", "/api/auth/code", { body: { email: "code@example.com" } });
+    const { suppress } = await import("../lib/email/suppress.ts");
+    await suppress("bounced@example.com", "bounce");
+    const suppressed = await call("post", "/api/auth/code", { body: { email: "bounced@example.com" } });
+    assert.equal(suppressed.body?.notice, "suppressed");
+    await call("post", "/api/auth/code", { body: { email: "not an email" }, bad: true });
+    await call("post", "/api/auth/code", { body: { email: "down@example.com" } });
+    for (let i = 0; i < 9; i++) await call("post", "/api/auth/code", { ip: "203.0.113.10", body: { email: `ip${i}@example.com` } });
+
+    // Sign-in: 200, 400 and 429.
     const t = await signIn("contract@example.com", { key: "contract-key-0123456789" });
     await call("post", "/api/auth/token", { body: { email: "contract@example.com", code: "000000" } });
     for (let i = 0; i < 21; i++) await call("post", "/api/auth/token", { ip: "203.0.113.9", body: { email: "x@example.com", code: "123456" } });
-    await call("post", "/api/auth/apple", { body: { identityToken: "a", authorizationCode: "b", nonce: "c" } });
-    const browser = await handlers.get("post /api/auth/apple")!(new Request(`${SITE}/api/auth/apple`, { method: "POST", headers: { origin: SITE } }));
-    assert.equal(browser.status, 400);
-    assert.ok(routeOf("post", "/api/auth/apple").responses[400]!.safeParse(await browser.json()).success);
-    seen.add("post /api/auth/apple 400");
 
     // Me and Home: 200, 304, 401; Home's 409 before onboarding.
     const meFirst = await call("get", "/api/me", { token: t });
@@ -144,6 +152,11 @@ describe("the apps' contract", () => {
       await call("get", p, { token: t, etag: first.etag });
       await call("get", p);
     }
+    // A web cookie on the apps' reads: 403, still signed in.
+    const webCookie = randomUUID();
+    await d.insert(schema.sessions).values({ id: sha256(webCookie), userId: user, expiresAt: new Date(Date.now() + 86_400_000) });
+    await call("get", "/api/me", { cookie: webCookie });
+    for (const p of screens) await call("get", p, { cookie: webCookie });
 
     // Devices: 200, 304, 401, 403 (a web cookie), 404, and ending one.
     const second = await signIn("contract@example.com");

@@ -3057,7 +3057,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "sessions_kind_check": {
+          "name": "sessions_kind_check",
+          "value": "\"sessions\".\"kind\" in ('cookie', 'bearer')"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.stacks": {
