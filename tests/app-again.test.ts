@@ -21,6 +21,7 @@ const { db, schema } = await import("../lib/db/index.ts");
 const { localDate } = await import("../lib/platform/profile.ts");
 const contract = await import("../lib/api/schemas.ts");
 const again = (await import("../app/api/food/[id]/again/route.ts")).POST as Handler;
+const slot = (await import("../app/api/food/[id]/slot/route.ts")).POST as Handler;
 
 after(async () => {
   await removeDatabase();
@@ -118,5 +119,30 @@ describe("POST /api/food/[id]/again", () => {
     const c = await send(old, mine, { key: key() });
     assert.deepEqual([c.status, c.body!.error], [409, "consent_needed"]);
     assert.equal((await meals(p)).length, 1);
+  });
+});
+
+describe("POST /api/food/[id]/slot", () => {
+  it("moves the person's own meal to another slot and changes nothing else; a resend answers the same", async () => {
+    const p = await person("slot@example.com");
+    const id = await meal(p, { slot: "lunch", kcal: 420 });
+    for (let i = 0; i < 2; i++) {
+      const r = await call(slot, { token: p.token, body: { meal: "dinner" }, params: { id } });
+      assert.equal(r.status, 200);
+      assert.deepEqual([contract.AppMealAnswer.parse(r.body).meal.meal, (r.body!.meal as { kcal: number }).kcal], ["dinner", 420]);
+    }
+    const [row] = await meals(p);
+    assert.deepEqual([row.meal, row.localDate], ["dinner", localDate("Asia/Kolkata")]);
+    assert.equal((await uses(p)).length, 0, "a move is not a log");
+  });
+
+  it("404 for someone else's meal or none; 400 for a slot that isn't one; 403 from the web", async () => {
+    const p = await person("slot-refuse@example.com");
+    const other = await person("slot-refuse-other@example.com");
+    const theirs = await meal(other, { slot: "lunch" });
+    assert.equal((await call(slot, { token: p.token, body: { meal: "dinner" }, params: { id: theirs } })).status, 404);
+    assert.equal((await meals(other))[0].meal, "lunch");
+    assert.equal((await call(slot, { token: p.token, body: { meal: "brunch" }, params: { id: theirs } })).status, 400);
+    assert.equal((await call(slot, { cookie: p.cookie, body: { meal: "dinner" }, params: { id: theirs } })).status, 403);
   });
 });

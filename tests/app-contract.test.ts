@@ -228,6 +228,15 @@ describe("the apps' contract", () => {
     for (let i = 0; i < 40; i++) allowRequest(`food:${r.id}`, 40, 60 * 60_000);
     await again({ token: r.t, body: { key: key() } }); // 429
 
+    // A slot change: 200, 400, 401, 403, 404, 409.
+    const move = (o: { token?: string; cookie?: string; body?: unknown; bad?: true }, id = first.id) => call("post", "/api/food/{id}/slot", { ...o, params: { id } });
+    await move({ token: r.t, body: { meal: "dinner" } });
+    await move({ token: r.t, body: { meal: "brunch" }, bad: true });
+    await move({ token: "dht_not-a-real-token", body: { meal: "dinner" } });
+    await move({ cookie: "web-cookie", body: { meal: "dinner" } });
+    await move({ token: r.t, body: { meal: "dinner" } }, "not-a-meal");
+    await move({ token: old.t, body: { meal: "dinner" } });
+
     await call("delete", "/api/food/{id}", { token: t, params: { id: mealId } });
     await call("delete", "/api/food/{id}", { token: "dht_not-a-real-token", params: { id: mealId } });
   });

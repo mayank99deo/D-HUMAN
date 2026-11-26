@@ -163,6 +163,16 @@ export const APP_ROUTES: AppRoute[] = [
     responses: { 200: s.AppMealAnswer, 400: refusal, 401: refusal, 402: refusal, 403: refusal, 404: refusal, 409: refusal, 429: refusal },
     consent: true,
   },
+  {
+    method: "post",
+    path: "/api/food/{id}/slot",
+    file: "app/api/food/[id]/slot/route.ts",
+    summary: "Move a logged meal to another slot. Nothing else changes: not its day, numbers or count. Safe to send again.",
+    auth: "bearer",
+    request: s.SlotRequest,
+    responses: { 200: s.AppMealAnswer, 400: refusal, 401: refusal, 403: refusal, 404: refusal, 409: refusal },
+    consent: true,
+  },
 ];
 
 const STATUS_WORDS: Record<number, string> = {
