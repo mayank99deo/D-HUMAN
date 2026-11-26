@@ -12,7 +12,7 @@ The running record of this project: where things stand, why they are the way the
   - **The emails:** a welcome when onboarding finishes, a "finish setting up" reminder, the Sunday-evening weekly wrap, and a day-10 feedback quiz whose answers go to the Sheet's Feedback tab.
   - **How they run:** two daily crons, dry until `EMAIL_WEEKLY_LIVE` / `EMAIL_LIFECYCLE_LIVE` are set. A daily budget keeps room for sign-in codes on Resend's free plan. One-click unsubscribe and Settings → Emails.
   - **Sign-in:** returns people to the page they came from (`/signin?next=`, via `proxy.ts`, signed-out app screens only).
-- **Mobile apps (started 2026-11-24):** native iPhone (SwiftUI) first, then Android (Kotlin), in the separate public repo `mayank99deo/d-human_mobile-app`, cloned at `/Users/mayanknarayan/d-human_mobile-app`. They call this repo's API; this repo gets only app-only additions, and the website stays untouched. The plan was approved on 2026-11-25 (`docs/plans/2026-11-24-ios-app.md` there). The threat model and the funnel numbers are local only, in that clone's `docs/private/`. Packd Technologies Pvt Ltd publishes; no Apple or Google developer account yet.
+- **Mobile apps (started 2026-11-24):** native iPhone (SwiftUI) first, then Android (Kotlin), in the separate public repo `mayank99deo/d-human_mobile-app`, cloned at `/Users/mayanknarayan/d-human_mobile-app`. **The app backend has been live since 2026-11-26 (`d37571a`):** bearer tokens (`dht_`), app-only read and write endpoints, `openapi.json` 0.6.0, migrations 0012–0018, and caps and switches for app requests only. The website is byte-identical. On mobile `main`: sign-in, consent, onboarding, the app shell, Home and the Log bar. The threat model and the funnel numbers are local only, in the mobile clone's `docs/private/`. Packd Technologies Pvt Ltd publishes; no Apple or Google developer account yet.
 - **What:** the D-Human waitlist landing page. Tagline: "Your body speaks data. Hack your health." (until 2026-10-30: "Hear it. Use it. Own it.") D-Human tests first (blood, gut, body), analyses the results with AI, recommends supplements only where markers point, and retests.
 - **Live:** https://www.d-human.fit, the main address since 2026-11-13 (Mayank's pick). https://www.dhuman.fit, dhuman.fit, d-human.fit and https://d-human.vercel.app serve the same deployment and send page visits there. Vercel personal account `mayank-f847`. Every push to `main` auto-deploys in about 20 seconds. The claude.ai Vercel connector is signed into a different account and cannot see this project.
 - **Repo:** https://github.com/mayank99deo/D-HUMAN, branch `main`.
@@ -447,6 +447,177 @@ Newest first. One entry per change; pushes carry their commit hash.
         - the cost doc, moved to `docs/private/cost/`: about ₹4.9 a month per active user, about ₹29 at every cap; one rare worst case passes the ₹79 pass's take.
       - `seo-lead`: ASO, moved to `docs/private/store/` because it names competitors. It recommends the name "D-Human: AI Calorie & Protein", with English (U.K.) as the primary language.
     - **Every running lane stopped at the account's 5-hour usage limit** (it reset at 3 am IST). Resumed at Mayank's "resume" at 07:46 IST on 26 Nov: QA, the endpoints lane, Brig ×3, Crag, the UX designer and the graphic designer.
+    - **Mayank's decisions, 26 Nov (later):**
+      - **Don't push the app backend yet.** It stays parked on its branch, now QA-approved:
+        - 17 QA commits up to `fc501ca` on `worktree-agent-ab2ca04cfde7e83cc`;
+        - `notForApp()` gives a live app token 403 `not_for_app` on routes not open to it;
+        - a cookie gets 403 `bearer_required` on `/api/me` and `/home`;
+        - the 9 session-less web routes are back to their base files;
+        - `instrumentation.ts` is removed;
+        - 820 of 820 pages byte-identical (with Ask open, and `/write` included);
+        - 1,611 tests pass.
+      - **No web changes at all for now,** not even new legal pages. All app work lives in the mobile repo. The app is built and tested against sample data and a local copy of the parked backend. One push, OK'd by Mayank, comes before TestFlight with real accounts.
+      - **The cost guards** (a per-person count of event searches, a cap on usual-day saves): not now.
+      - **The App Store name should lead with AI blood report analysis by the person's biomarkers,** with food tracking second. `seo-lead` and Crag are reworking the name, the listing and the screenshot order.
+      - **Risk this carries:** Apple checks Packd's website at enrolment, and submission needs Privacy, Support and Delete-account URLs. None exist while the web is frozen.
+    - **Mobile `main` now has:**
+      - `5cead5c`: DHDomain, with every web vector matching (vectors CI and iOS CI green on `main`);
+      - `1f26eeb`, `6ab35a2`, `2fbc493`: docs, specs and art.
+    - **Brig's other two branches:**
+      - `wave2/platform` (DHAPI, DHStore, CI rules, privacy manifest, 120 Hz) has a `Package.swift` conflict with `main`, resolved in the `merge/platform` worktree: 88 Swift tests pass.
+      - `wave2/design` (DHDesign: contour, orbit and tick ring byte-identical to the web; glyphs; bib; motion) merges cleanly; its CI is running.
+    - **The App Store name** (Mayank's brief: say how D-Human compounds biomarker analysis and tracked meals into a clean supplement stack meant for you; he handed the wording over):
+      - **Name:** "D-Human: AI Blood Report" (24 characters).
+      - **Subtitle:** "Markers + meals = your stack" (28).
+      - **Keywords:** 98 of 100 bytes.
+      - **Where:** mobile `d2af097`, `docs/store/LISTING.md` §2.1.
+      - **The listing and screenshots** now lead with the report read, verdict and stack (Crag).
+    - **Real-data testing of the parked backend (Mayank: "test on the real data, not an issue"):** he chose a local read-only copy.
+      - **His step:** save the Supabase Session pooler connection string to `~/.dhuman-prod-db` (mode 600) with a hidden prompt. It's never pasted in chat, and the password is never reset (that would break the live site).
+      - **The orchestrator's steps:** `pg_dump` (libpq 19, installed with brew) into a private folder outside both repos, restore locally, run migration 0012 and the parked backend on the copy, test the endpoints, then delete the copy.
+    - **Paused by Mayank (2026-11-26, afternoon IST): all agents stopped.**
+      - **Mobile `main` at `aec6c97`:** `wave2/platform` merged (`c2f89c7`), its `Package.swift` conflict resolved by keeping both test-target sets; 88 DHKit tests pass locally. Main's iOS and vectors CI runs (45748367260, 45748367272) were started at the pause; check their result on resume. Platform's iOS-only tests never ran on GitHub before this.
+      - **`wave2/design` (`804559f`), not merged:** its CI (45744105982) failed on iOS-only checks:
+        - the Dynamic Type table is off UIFontMetrics (AX5 body 5 pt off, title 2, display 1.47);
+        - three roles under 11 pt at small sizes;
+        - "Text clipped" twice in the sign-in accessibility audit.
+        - Brig was sent these and stopped before committing a fix (clean tree).
+      - **The endpoints lane** (worktree `.claude/worktrees/agent-a319b2a38aeae22ef`): 36 commits on `b714adb`, the latest `75f2a88` (G8, the store token), with G7 and wraps/settings/options before it. Clean tree; it stopped while starting a route.
+      - **Waiting on Mayank:** save the Supabase Session pooler string to `~/.dhuman-prod-db` (the command is in the chat), so the parked backend can be tested on a local read-only copy of real data.
+      - **On "resume":**
+        1. Read main's CI result.
+        2. Resume Brig's design lane (`ad6c43590a254392b`) with the CI failures.
+        3. Resume the endpoints lane (`a319b2a38aeae22ef`).
+        4. When `~/.dhuman-prod-db` exists, take the read-only copy and have QA and the systems engineer test the parked backend on it.
+        5. Then wave 3 screens (sign-in, then Home) per the plan.
+      - **Leftover worktrees** in `../d-human_mobile-app-wt/`: `platform` and `merge-platform` (both merged, removable) and `design`.
+    - **Resumed at Mayank's "resume" (26 Nov, 11:46 IST):**
+      - **Main's CI on `aec6c97`:** the vectors run is green. iOS failed only at `StoreTests.swift:195`: file protection reads nil on the Simulator, where Data Protection isn't enforced.
+      - **Resumed lanes:**
+        - Brig's platform lane fixes it forward on `fix/store-protection`: assert the requested class in the Simulator, keep the attribute check for devices.
+        - Brig's design lane fixes its CI failures, then rebases on `main`.
+        - The endpoints lane continues.
+      - `~/.dhuman-prod-db` still doesn't exist; real-data testing waits for Mayank.
+      - Disk: 50 GB free.
+    - **After the resume (26 Nov):**
+      - **The storage fix** is merged into mobile `main` as `a22148f`. It asserts the requested protection class in the Simulator, keeps the real attribute check for devices, and starts `ios/DEVICE-CHECKS.md`.
+      - **DHDesign is fixed on `wave2/design` (`1cbef13`), rebased on `aec6c97`:**
+        - UIFontMetrics is the only source of sizes;
+        - an 11 pt floor;
+        - line heights only add space, so no clipping;
+        - 150 tests pass locally.
+        - It merges after main's CI.
+      - **The endpoints lane finished every step, parked on `worktree-agent-a319b2a38aeae22ef` (`9297d7e`):**
+        - all screen GETs, meal writes, Log again, slot changes, the health question, hold, G7 and G8;
+        - migrations 0013–0015;
+        - 409 `consent_needed` on app writes;
+        - `APP_SWITCHES_OFF` (`voice`, `snap`, `again`, `reminders`, `appleSignIn`, `iap`, `doses`);
+        - demo fixtures in `docs/api/fixtures/` (7 people, 83 screens).
+        - **Checked:** 1,698 tests; 820 of 820 pages byte-identical.
+        - **Left:** G10, G14, G15, 426, and a usual-day key.
+      - **QA is attacking those endpoints,** and is making `not_for_app` generic, with no web address (guideline 3.1.1).
+      - **Open for Mayank:** keep the first consent date when the app records new consent (a new column?).
+      - **DHDesign merged into mobile `main` as `322b765`; CI is running.**
+        - **An orchestrator slip:** the local `test-dhkit.sh` run was piped through `tail`, which hid its failing exit code, so the merge was pushed with 8 StoreTests failing locally. Check exit codes (or `set -o pipefail`) before pushing.
+        - **The failures happen with or without the shell sandbox:** EPERM on atomic writes into class-A folders. They're likely lock-state dependent (macOS seals class A while the Mac is locked).
+        - **Brig is fixing it on `fix/store-tests-lock`:** a recording disk on macOS and in the Simulator, the real attribute check on devices only, and no crash on an empty array.
+        - **Fixed and merged as mobile `b961fc9`:** the cause was confirmed with a locked-device stand-in. 153 of 153 tests pass locally, with exit code 0 checked before pushing.
+      - **Wave 3 screens started, two Brig lanes:**
+        - **S1, `wave3/signin`:**
+          - first, vendor the contract and the demo fixtures from the parked backend at `9297d7e` into `shared/contract` and `shared/fixtures/api`;
+          - then sign-in, consent and onboarding (specs 01–03).
+        - **S2, `wave3/home`:** the app shell (tabs, routing, cache-first, the error contract, switches), Home in every state (spec 04) and the Log bar (spec 05).
+        - **CI:** `ios-pr` runs only on `main` and PRs, so screen branches get iOS CI when merged.
+      - **QA on the new endpoints: don't ship yet** (tip `6400837`; 3 QA commits; 18 attack tests in `tests/qa-app-backend.test.ts`).
+        - **Held:** data isolation, the meal limits, consent, the safety floor, the store token.
+        - **Fixed:** an ETag bound to the token; `not_for_app` generic.
+        - **Open, sent to the endpoints lane as the orchestrator's calls, app path only, web unchanged:**
+          - per-person database caps on event searches and usual-day saves for app tokens, plus an app-wide daily breaker;
+          - the server honouring the `doses` and `again` switches;
+          - a queued meal's key checked before `eatenAt`;
+          - no doses in the app for web-built stacks until the health question is answered.
+        - **Fixed:**
+          - `28d9670`: migration 0016 `app_rate_counts`, with event searches at 3 a week and usual-day saves at 5 a day for app tokens, plus `APP_AI_DAILY_MAX` 2000 with an alert;
+          - `4f82a60`: the switches honoured on the server, and the health gate for web-built stacks;
+          - `5ecd960`: the key checked before `eatenAt`.
+          - **Checked:** 1,729 tests; 820 of 820 pages identical; `openapi` at 0.4.0.
+          - **Next:** QA re-attacks. Mayank may change the caps.
+        - **QA round 2: "ship" from QA's side** (tip `a28035b`, still parked, not pushed). It fixed four gaps:
+          - a capped save no longer drops health answers: the save goes through and only the paid search is skipped (contract 0.4.1);
+          - onboarding's free search is claimed once;
+          - "snap off" can't be bypassed by sending the photo as text;
+          - switch names match in any case.
+          - **Checked:** 1,737 tests; 820 of 820 pages identical.
+          - **Lane S1 merged into mobile `main` as `49a3f61`:** sign-in, consent and onboarding (specs 01–03), the vendored contract 0.3.0 and demo fixtures (`ios/scripts/vendor-*.sh`), the `DHStubs` stand-in server, and the clipping fix (roles keep Archivo's own line, a 37 pt line for 34 pt type). 223 DHKit tests pass with exit 0. iOS CI is running; S2 is told to rebase onto it.
+          - **S1's spec gaps:**
+            - review codes are 20–64 digits on the server;
+            - the `app/options` language hints are null;
+            - there's no app route for `profile/tour`;
+            - `me` doesn't say which consent lines changed;
+            - G14 isn't built;
+            - the web's "a event" typo;
+            - हिंदी and Hinglish are notes only in v1.
+          - **Main's iOS CI on `49a3f61` (run 45776824205) failed:**
+            - the audits found "Hit area is too small" and "Dynamic Type font sizes are partially unsupported";
+            - UI flows couldn't find `signin.code` or `onb.choice.female` (likely the Simulator never reached the stand-in server or fixtures, read from a host path);
+            - no `screenshots` artifact was uploaded (only the 133 MB `.xcresult`).
+            - S1 is fixing all of it on `fix/signin-ci`.
+          - **S2 done on `wave3/home`** (8 commits on `49a3f61`; 300 DHKit tests; the app shell, Router, TabRoot, Home, the Log bar, and a fix for the bib label wrapping one letter a line). It merges after S1's CI fix.
+            - **The orchestrator's call on S2's question:** on a 401, keep the offline meal queue, tagged with its owner. It sends only when the same person signs in again and is deleted if another account signs in. The token and cache are still wiped. That replaces test 88's queue wipe; specs §2.2 and APP-STRUCTURE §5 win.
+            - **Contract gaps for the next backend round:** reading progress, an app `DELETE /api/reports/{id}`, an events target, G10, G14, G15, 426, and opening `POST /api/reports` to the app.
+          - **`fix/signin-ci` merged into mobile `main` as `cc2cb97`.** S1 read the `.xcresult` without Xcode, through its `database.sqlite3`:
+            - the screenshot upload failed on a file name with double quotes;
+            - the code step "vanished" because the test typed the 20-digit review code one digit at a time, so the sixth digit submitted it. Six digits now wait 0.8 s.
+            - Also fixed: 44 pt fields, the LazyVGrid hiding chips, snapshot size.
+          - **Run 45854072485:** the flows pass and 249 screenshots uploaded. Orchestrator review: the first screen is on brand.
+            - **Left:**
+              - raw keys `onb.language.ask` and `onb.health.ask` show as titles;
+              - the quiet links don't scale;
+              - the bib covers the status bar when scrolled.
+            - S1 is fixing them on `fix/signin-ci-2`.
+          - **The backend's round 3 is parked at `c0129d9`:**
+            - reading progress (counts only), app report delete, the event pick, tour;
+            - language hints;
+            - `me.consent.newLines` and `firstAt` (migration 0017);
+            - 426 `update_required`;
+            - G14/G15 (503 `unavailable_today`);
+            - G10, app uploads with a key (migration 0018);
+            - contract 0.6.0.
+            - **Checked:** 1,748 tests; 820 of 820 pages identical.
+            - **To do:**
+              - QA to review the consent-exempt writes;
+              - the AI lead to make the read prompt aware of part-read pages before app uploads go live.
+          - **Merged into mobile `main`:**
+            - **`33b62e8`, `wave3/home`:** the app shell, Home and the Log bar, plus the offline queue kept per owner on a 401 (`MealOutbox.keepOnly(owner:)` at sign-in; test 88 rewritten as 3 tests). 305 tests.
+            - **`080e467`, `fix/signin-ci-2`:**
+              - the raw ids came from `LocalizedStringKey("onb.\(step).ask")` turning the interpolation into `%@`; `KeysTests` and the UI raw-id checks now guard it;
+              - `ViewThatFits` swapped views and broke font scaling; replaced by DHDesign's `AdaptiveStack`;
+              - `inkBehindStatusBar()` keeps content from covering the status bar.
+              - 308 tests.
+          - **The AI lead's `1ec5ead` on the parked backend:** part-read app uploads add one request line and start the read with "Read from N of M pages." (code-fixed English). Web read requests are byte-identical. +$0.0003 a read. QA is reviewing round 3 and this together.
+          - **QA round 3: "ship" (`84a954e`).** The whole app backend is built and QA-approved, parked at `84a954e` on `worktree-agent-a319b2a38aeae22ef`, waiting for Mayank's push OK. Still his: the verdict cap for part-read reports.
+          - **Main's iOS run on `33b62e8` (45858168549) was cancelled at the 20-minute job limit,** after 486 screenshots uploaded.
+            - **Orchestrator review of `home-report`, `home-no-report` and `home-urgent`:** on brand; the bib, verdict glyphs and safety wording are right.
+            - **Polish:** the wordmark is wrapped in an iOS 26 glass capsule.
+            - **Brig is splitting CI into parallel jobs** (`build-for-testing`, then `test-without-building` groups) on `ci/shards`, and fixing the wordmark.
+          - **Push `d37571a` (Mayank: "ok push it", 2026-11-26): the app backend is live.**
+            - **What it is:** `worktree-agent-a319b2a38aeae22ef` (1A, 1A-next, QA rounds 1–3, the AI lead's part-read change), with `origin/main` `a53a482` merged in.
+            - **Before the push:** typecheck, lint, 1,761 of 1,761 tests, and `next build` (the second run, after the usual SecurityFatalError stop). QA's proof was 820 of 820 web pages byte-identical at `84a954e`; the merge added only `MEMORY.md`.
+            - **The deploy:** Vercel says "Deployment has completed", so migrations 0012–0018 ran on Supabase.
+            - **Checked live:**
+              - `/`, `/signin` and `/blog` give 200; `/home` signed out gives 307;
+              - `/api/me`, `/api/home` and `/api/food` with a bad bearer give 401, with `private, no-store`;
+              - `/api/app/config` and `/api/app/options` give 200;
+              - `/api/auth/token` with `Origin` or `Sec-Fetch-*` gives 400 `not_for_browsers`;
+              - `/api/cron/daily` without the secret gives 401;
+              - no `Access-Control-*` headers; served from `bom1`.
+            - **Optional env vars, all safe unset:** `APP_SWITCHES_OFF`, `APP_AI_DAILY_MAX` (default 2000), `APP_MIN_VERSION_IOS`, `APP_STORE_URL_IOS`, and `REVIEW_SIGNIN_ON`, `REVIEW_ACCOUNT_EMAIL`, `REVIEW_CODE_HASH` (App Review sign-in, off).
+          - **Still open on the web side, by Mayank's choice:** X6/T4 (unlimited event searches with a web cookie), T5 (sign-in emails used up), T6 (free-tier farming).
+      - **The type-record test no longer gates** (mobile `347bff6`). Main's iOS run is still red on the sign-in "Text clipped": the headline's descenders ("p" in "speaks") are cut by the display style's tight leading. That's sent to lane S1.
+      - **Real-data testing deferred (Mayank, 2026-11-26):** Vercel marks `DATABASE_URL` Sensitive, so it can't be read, and Mayank doesn't have the Supabase database password to hand. He'll retrieve it and say when. Until then the app and the parked backend are built and tested on demo data only.
+        - **The prepared fallback, not run:** a temporary read-only role, `create role dh_copy with login bypassrls password '…'; grant pg_read_all_data to dh_copy;`, reached through the Session pooler as `dh_copy.<ref>`, and dropped after.
+        - **Never reset the database password:** that breaks the live site until Vercel is updated.
+      - **GitHub CLI signed in (Mayank, 2026-11-26)** as `mayank99deo`, with git credentials untouched. Agents can use `gh run download <id> -R mayank99deo/d-human_mobile-app -n screenshots` and `gh run view <id> --log-failed`. CI screenshots are now readable (for example the bib and contour at AX5, 375/402/440 pt).
     - **₹79 as an App Store India price point:** not confirmed. Apple has had about 900 INR points since 2022, but no source shows ₹79. Check in App Store Connect after enrolment.
 - **No welcome emails for two new users, and the Users tab in the Sheet (Mayank), crew running:**
   - **How the welcome works:** it goes from `/api/profile` in `after()` when onboarding first finishes (`sendWelcome`), and the daily job catches up for 48 h. Dry-ledger rows only skip a send while the switch is off, so they don't block a live one.
