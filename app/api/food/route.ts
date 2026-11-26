@@ -6,6 +6,7 @@ import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach, mealForKey } from "@/lib/api/mea
 import { mealJson } from "@/lib/api/views/parts";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { appActor, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { apiUser } from "@/lib/auth/session";
 import { newId } from "@/lib/auth/crypto";
 import type { FoodLog } from "@/lib/db/schema";
@@ -90,6 +91,8 @@ export async function POST(request: Request) {
   // A request carrying Authorization is an app's: it gets the apps' answers (private, always
   // with words, Retry-After). Every other request is the web's, answered exactly as before.
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const actor = app ? await appActor(request) : null;
   const user = app ? (actor?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();

@@ -2,6 +2,7 @@ import "server-only";
 import { consentCurrent } from "@/lib/domain/consent";
 import { appRefusal, consentNeeded } from "./errors";
 import { privateJson } from "./respond";
+import { updateRequired } from "./version";
 
 // For routes the web and the apps share. A request carrying Authorization is an app's, and is
 // taken only as a valid app token (lib/auth/authenticate.ts); every other request keeps the
@@ -32,6 +33,8 @@ export async function appOnly(
 ): Promise<{ ok: true; actor: AppActor; user: AppActor["user"]; profile: NonNullable<AppActor["session"]["profile"]> } | { ok: false; response: Response }> {
   const refuse = (response: Response) => ({ ok: false as const, response });
   if (!isAppRequest(request)) return refuse(appRefusal("bearer_required", 403, { message: "This is for the D-Human app." }));
+  const outdated = updateRequired(request);
+  if (outdated) return refuse(outdated);
   const actor = await appActor(request);
   if (!actor) return refuse(privateJson({ error: "signed_out" }, 401));
   const profile = actor.session.profile;

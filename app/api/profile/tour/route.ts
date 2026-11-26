@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TOUR } from "@/components/platform/tour-stops";
 import { appActor, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -16,6 +17,8 @@ const bodySchema = z.object({ outcome: z.enum(["finished", "skipped"]), stop: z.
 // answered exactly as before; an app's is taken as its token and answered privately.
 export async function POST(request: Request) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = app ? privateJson : json;

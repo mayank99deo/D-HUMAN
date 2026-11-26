@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { claimUsualDay } from "@/lib/api/app-limits";
 import { appRefusal } from "@/lib/api/errors";
 import { privateJson } from "@/lib/api/respond";
@@ -32,6 +33,8 @@ const REFUSED = "We couldn't read that description. Try listing what you eat, me
 // no second fetch. A save sent again with the same words within 3 minutes returns that save.
 export async function POST(request: Request) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const member = app ? await appOnly(request, { write: true }) : null;
   if (member && !member.ok) return member.response;
   const user = member ? member.user : await apiUser();

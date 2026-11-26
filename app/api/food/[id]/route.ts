@@ -1,4 +1,5 @@
 import { appActor, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { deleteMeal } from "@/lib/platform/food";
@@ -9,6 +10,8 @@ import { json, unauthorized } from "@/lib/platform/http";
 // web's path and answers are as before; an app's request is taken as its token, privately.
 export async function DELETE(request: Request, ctx: RouteContext<"/api/food/[id]">) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const { id } = await ctx.params;

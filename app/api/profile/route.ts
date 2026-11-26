@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
 import { appActor, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { claimEventSearch, claimOnboardingSearch } from "@/lib/api/app-limits";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
@@ -63,6 +64,8 @@ export async function POST(request: Request) {
   // A request carrying Authorization is an app's: taken as its token, answered privately. Every
   // other request is the web's, resolved and answered exactly as before.
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) => (app ? privateJson(body, status, headers) : json(body, status));

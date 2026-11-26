@@ -1,5 +1,6 @@
 import { and, count, eq } from "drizzle-orm";
 import { appActor, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -15,6 +16,8 @@ const STEPS = ["uploaded", "reading", "interpreting", "ready"] as const;
 // how many) and how many markers have been found so far: counts only, never a name or a value.
 export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]">) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = app ? privateJson : json;
@@ -41,6 +44,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]
 // (the friend's-report box and the reports list). A report that's gone answers the same.
 export async function DELETE(request: Request, ctx: RouteContext<"/api/reports/[id]">) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const { id } = await ctx.params;

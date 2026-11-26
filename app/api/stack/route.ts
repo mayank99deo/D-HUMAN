@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { appRefusal } from "@/lib/api/errors";
 import { privateJson, viewResponse } from "@/lib/api/respond";
 import { switchOff } from "@/lib/api/views/app";
@@ -34,6 +35,8 @@ export async function GET(request: Request) {
 // health_check_needed, gap G2): conditions, pregnancy among them, and medicines.
 export async function POST(request: Request) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const member = app ? await appOnly(request, { write: true }) : null;
   if (member && !member.ok) return member.response;
   const user = member ? member.user : await apiUser();

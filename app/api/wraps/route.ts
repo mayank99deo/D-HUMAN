@@ -3,6 +3,7 @@ import { wrapsData, wrapsJson } from "@/lib/api/views/wraps";
 import { apiMember } from "@/lib/platform/api-member";
 import { AiUnavailableError } from "@/lib/ai/client";
 import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { updateRequired } from "@/lib/api/version";
 import { appRefusal } from "@/lib/api/errors";
 import { privateJson, viewResponse } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
@@ -32,6 +33,8 @@ export async function GET(request: Request) {
 // is taken as its token (409 consent_needed for old consent) and answered privately, with words.
 export async function POST(request: Request) {
   const app = isAppRequest(request);
+  const outdated = app ? updateRequired(request) : null; // 426 for an app below the oldest version served
+  if (outdated) return outdated;
   const member = app ? await appOnly(request, { write: true }) : null;
   if (member && !member.ok) return member.response;
   const user = member ? member.user : await apiUser();

@@ -424,7 +424,7 @@ export function openapi() {
       title: "D-Human app API",
       version: CONTRACT_VERSION,
       description:
-        "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers.",
+        "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers. Every signed-in route answers 426 update_required ({ error, message, minVersion, updateUrl }) when X-DHuman-Client names an iOS version below GET /api/app/config's minSupported; config and sign-out stay open.",
     },
     servers: [{ url: "https://www.d-human.fit" }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "dht_ followed by 43 base64url characters." } } },

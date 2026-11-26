@@ -1,5 +1,6 @@
 import "server-only";
 import { privateJson } from "@/lib/api/respond";
+import { updateRequired } from "@/lib/api/version";
 import { authenticate, type Actor } from "@/lib/auth/authenticate";
 import type { Profile } from "@/lib/db/schema";
 import type { Persona } from "@/lib/domain/persona";
@@ -19,6 +20,9 @@ export type ApiRefusal = { ok: false; response: Response };
  * these JSON reads add nothing the web can reach (only additions the apps use).
  */
 export async function apiSignedIn(request: Request): Promise<{ ok: true; actor: Actor & { via: "bearer" }; profile: Profile | null } | ApiRefusal> {
+  // An app below the oldest version still served is told to update (lib/api/version.ts).
+  const outdated = request.headers.has("authorization") ? updateRequired(request) : null;
+  if (outdated) return { ok: false, response: outdated };
   const actor = await authenticate(request);
   if (!actor) return { ok: false, response: privateJson({ error: "signed_out" }, 401) };
   if (actor.via !== "bearer") return { ok: false, response: privateJson({ error: "bearer_required" }, 403) };
