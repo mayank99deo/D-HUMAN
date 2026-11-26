@@ -82,6 +82,8 @@ export const MeResponse = z.strictObject({
   }),
   tourDone: z.boolean(),
   healthCheckedAt: IsoTime.nullable().describe("When the health question was answered (G2). Null: ask it before the first stack build, which otherwise answers 409 health_check_needed."),
+  hold: z.enum(["urgent", "pregnant"]).nullable().describe("G1. urgent: the newest read report has a result needing advice today; drop every nudge, reminder and chip (logging works as normal). pregnant: the stack only."),
+  reportsVersion: S.describe("G11. Changes whenever a report is uploaded, read or deleted on any device: drop cached Home and Stack when it differs from theirs."),
   persona: z
     .strictObject({ firstName: S, initial: S, bib: S, label: S, archetype: S, noun: S, level: S, age: Int.nullable() })
     .nullable()

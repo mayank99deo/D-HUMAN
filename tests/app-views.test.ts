@@ -27,7 +27,7 @@ const { sha256 } = await import("../lib/auth/crypto.ts");
 const { startAppSession } = await import("../lib/auth/bearer.ts");
 const { localDate, personaFor, getProfile } = await import("../lib/platform/profile.ts");
 const { meView } = await import("../lib/platform/views/me.ts");
-const { meJson } = await import("../lib/api/views/me.ts");
+const { meJson, meReports } = await import("../lib/api/views/me.ts");
 const { CONSENT_VERSION } = await import("../lib/domain/consent.ts");
 const contract = await import("../lib/api/schemas.ts");
 const { VERDICT_LEVELS } = await import("../lib/ai/schemas.ts");
@@ -166,7 +166,7 @@ describe("GET /api/me", () => {
     const p = await person("me@example.com", { medications: "Thyroxine 50", conditions: ["thyroid", "pregnant"], consentAt: new Date("2026-11-15T10:00:00Z") });
     const r = await call(me, { token: p.token });
     const parsed = contract.MeResponse.parse(r.body);
-    assert.deepEqual(r.body, meJson(meView({ id: p.id, email: p.email }, await getProfile(p.id))));
+    assert.deepEqual(r.body, meJson(meView({ id: p.id, email: p.email }, await getProfile(p.id)), await meReports(p.id, await getProfile(p.id))));
     assert.equal(parsed.profile.medications, "Thyroxine 50");
     assert.deepEqual(parsed.profile.conditions, ["thyroid", "pregnant"]);
     assert.deepEqual([parsed.consent.version, parsed.consent.current], [CONSENT_VERSION, false]);

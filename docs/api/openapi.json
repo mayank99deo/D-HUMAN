@@ -1118,6 +1118,25 @@
                       ],
                       "description": "When the health question was answered (G2). Null: ask it before the first stack build, which otherwise answers 409 health_check_needed."
                     },
+                    "hold": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "urgent",
+                            "pregnant"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "G1. urgent: the newest read report has a result needing advice today; drop every nudge, reminder and chip (logging works as normal). pregnant: the stack only."
+                    },
+                    "reportsVersion": {
+                      "type": "string",
+                      "description": "G11. Changes whenever a report is uploaded, read or deleted on any device: drop cached Home and Stack when it differs from theirs."
+                    },
                     "persona": {
                       "anyOf": [
                         {
@@ -1349,6 +1368,8 @@
                     "consent",
                     "tourDone",
                     "healthCheckedAt",
+                    "hold",
+                    "reportsVersion",
                     "persona",
                     "founder",
                     "aiOff",
