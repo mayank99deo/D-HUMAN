@@ -1,6 +1,7 @@
 import { viewResponse } from "@/lib/api/respond";
 import { apiSignedIn } from "@/lib/platform/api-member";
-import { meJson, meView } from "@/lib/platform/views/me";
+import { meJson } from "@/lib/api/views/me";
+import { meView } from "@/lib/platform/views/me";
 
 // The apps' "who am I": onboarding state, consent, persona and the whole profile, from the
 // same builder as the web's app layout (lib/platform/views/me.ts). Works before onboarding.

@@ -1,7 +1,8 @@
 import { viewResponse } from "@/lib/api/respond";
 import { apiMember } from "@/lib/platform/api-member";
 import { dashboard } from "@/lib/platform/dashboard";
-import { homeJson, homeView } from "@/lib/platform/views/home";
+import { homeJson } from "@/lib/api/views/home";
+import { homeView } from "@/lib/platform/views/home";
 
 // The apps' Home, from the same data and the same builder as the web's /home page
 // (lib/platform/views/home.ts), so every verdict, doctor flag and stack line is the web's.
