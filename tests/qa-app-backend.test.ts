@@ -390,8 +390,13 @@ describe("the safety floor", () => {
 describe("consent_needed can't be gone around", () => {
   // App writes that don't ask for current consent, each for a reason: signing out, deleting the
   // account or a meal or a device (always allowed), saving the profile (the consent step itself),
-  // and the store token (it sends nothing to an AI and writes no health data).
-  const EXEMPT = new Set(["post /api/auth/signout", "post /api/account/delete", "delete /api/me/sessions/{publicId}", "post /api/profile", "delete /api/food/{id}", "post /api/billing/store-token"]);
+  // and the store token (it sends nothing to an AI and writes no health data). Round 3 added, for
+  // the same reasons: deleting a report (always allowed), picking an event from the person's own
+  // list (no AI, no search) and marking the tour done (no health data).
+  const EXEMPT = new Set([
+    "post /api/auth/signout", "post /api/account/delete", "delete /api/me/sessions/{publicId}", "post /api/profile", "delete /api/food/{id}", "post /api/billing/store-token",
+    "delete /api/reports/{id}", "post /api/events/target", "post /api/profile/tour",
+  ]);
 
   it("every app write is either consent-gated or on the reviewed exempt list", () => {
     const writes = APP_ROUTES.filter((r) => r.method !== "get" && r.auth === "bearer");
@@ -413,6 +418,7 @@ describe("consent_needed can't be gone around", () => {
       "post /api/food/typical": { body: { description: "Poha for breakfast, dal rice for lunch, roti sabzi for dinner." } },
       "post /api/stack": { body: {} },
       "post /api/wraps": { body: { period: "week", offset: 0 } },
+      "post /api/reports": { form: form({ files: new Blob([Buffer.from("%PDF-1.4\n% demo\n")], { type: "application/pdf" }), key: key() }) },
     };
     for (const r of APP_ROUTES.filter((x) => x.consent)) {
       const k = `${r.method} ${r.path}`;
@@ -438,8 +444,9 @@ describe("the words the apps get (App Store guideline 3.1.1)", () => {
 
   it("not_for_app says only that the app can't do it yet", async () => {
     assert.equal(NOT_FOR_APP_WORDS, "This isn't available in the app yet.");
-    const tour = (await import("../app/api/profile/tour/route.ts")).POST as Handler;
-    const r = await call(tour, { token: A.token, body: {} });
+    // A route still not open to the apps (the tour opened in round 3).
+    const finished = (await import("../app/api/wraps/finished/route.ts")).POST as Handler;
+    const r = await call(finished, { token: A.token, body: {} });
     assert.deepEqual([r.status, r.body], [403, { error: "not_for_app", message: NOT_FOR_APP_WORDS }]);
   });
 
