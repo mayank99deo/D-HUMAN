@@ -120,6 +120,12 @@ export type MealInput = {
   photoAt?: Date;
   /** The apps only: what a Latin-letter pick heard in Devanagari, kept when the words were romanized on arrival. */
   inputRaw?: string;
+  /**
+   * The apps only: the day the meal was counted on, worked out once before the AI read. Without it
+   * the day is worked out again after the read, and a read that runs past midnight would show the
+   * meal on one day while it counts against the other's 5 (backend test engineer, hunt 1).
+   */
+  day?: string;
 };
 
 /** The day a meal counts on: the day it was eaten, in the person's time zone. */
@@ -158,7 +164,7 @@ export async function logMeal(userId: string, profile: Profile, input: MealInput
     // The caller's id when given: it is also the meal's entry in the usage ledger.
     id: input.id ?? newId(),
     userId,
-    localDate: mealDay(profile.timezone, input),
+    localDate: input.day ?? mealDay(profile.timezone, input),
     // Said, else a gallery photo's own time, else the model's guess, else the clock when it was eaten.
     meal: input.meal ?? (input.photoAt ? mealFromClock(profile.timezone, input.photoAt) : undefined) ?? data.meal_guess ?? mealFromClock(profile.timezone, input.eatenAt),
     source: input.source,

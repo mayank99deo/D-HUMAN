@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
+import { impossibleId } from "@/lib/api/clean";
 import { appPlanLimit, appRefusal, switchedOff } from "@/lib/api/errors";
 import { switchOff } from "@/lib/api/views/app";
 import { eatenAtInReach, logAgain, mealForKey } from "@/lib/api/meal-writes";
@@ -35,6 +36,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/a
   const eatenAt = parsed.data.eatenAt ? new Date(parsed.data.eatenAt) : undefined;
   if (eatenAt && !eatenAtInReach(eatenAt)) return appRefusal("bad_time", 400);
   const { id } = await ctx.params;
+  if (impossibleId(id)) return appRefusal("not_found", 404);
   const result = await logAgain(user.id, profile, id, { key: parsed.data.key, eatenAt, meal: parsed.data.meal });
   if ("notFound" in result) return appRefusal("not_found", 404);
   if ("refusal" in result) return appPlanLimit(result.refusal);

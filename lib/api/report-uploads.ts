@@ -12,6 +12,7 @@ import { streamAnalysis } from "@/lib/platform/report-stream";
 import { currentPlan } from "@/lib/platform/plan-state";
 import { allowRequest, secondsUntilReset } from "@/lib/waitlist/rate-limit";
 import type { appOnly } from "./actor";
+import { withoutNul } from "./clean";
 import { appPlanLimit, appRefusal } from "./errors";
 import { privateJson } from "./respond";
 
@@ -81,7 +82,6 @@ export async function appUpload(request: Request, member: Member): Promise<Respo
     parts.push({ mime, bytes });
   }
   if (parts.some((p) => p.mime === "application/pdf") && parts.length > 1) return refuse("one_pdf", 400);
-  if (!allowRequest(`report:${user.id}`, 6, 60 * 60_000)) return appRefusal("rate_limited", 429, { message: "That's a lot of uploads in an hour. Try again a bit later.", retryAfter: secondsUntilReset(`report:${user.id}`) });
 
   const d = await db();
   const reportId = newId();
@@ -89,7 +89,7 @@ export async function appUpload(request: Request, member: Member): Promise<Respo
   const made = await d.transaction(async (tx) => {
     const [row] = await tx
       .insert(schema.reports)
-      .values({ id: reportId, userId: user.id, fileName: files[0].name.slice(0, 200), fileCount: parts.length, totalBytes: total, uploadKey: key ?? null, pages })
+      .values({ id: reportId, userId: user.id, fileName: withoutNul(files[0].name).slice(0, 200), fileCount: parts.length, totalBytes: total, uploadKey: key ?? null, pages })
       .onConflictDoNothing()
       .returning({ id: schema.reports.id });
     if (!row) return false;
@@ -100,6 +100,13 @@ export async function appUpload(request: Request, member: Member): Promise<Respo
   if (!made) {
     const had = key ? await byKey(user.id, key) : null;
     return had ? accepted(had, true) : refuse("invalid", 400);
+  }
+  // The hour's 6 count new tries only. Checked once this request has made its report, so the same
+  // try sent several times at once (each past the key lookup above before any had made it) is one
+  // report, never a 429 (backend test engineer, hunt 1: 4 of 10 such sends were 429 on Postgres).
+  if (!allowRequest(`report:${user.id}`, 6, 60 * 60_000)) {
+    await d.delete(schema.reports).where(eq(schema.reports.id, reportId));
+    return appRefusal("rate_limited", 429, { message: "That's a lot of uploads in an hour. Try again a bit later.", retryAfter: secondsUntilReset(`report:${user.id}`) });
   }
   const claim = await claimReport(reportId, user.id);
   if (!claim.ok) {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appOnly } from "@/lib/api/actor";
+import { impossibleId } from "@/lib/api/clean";
 import { appRefusal } from "@/lib/api/errors";
 import { changeSlot } from "@/lib/api/meal-writes";
 import { privateJson } from "@/lib/api/respond";
@@ -16,7 +17,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/food/[id]/s
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return appRefusal("invalid", 400, { message: "Pick breakfast, lunch, dinner or a snack." });
   const { id } = await ctx.params;
-  const log = await changeSlot(member.user.id, id, parsed.data.meal);
+  const log = impossibleId(id) ? null : await changeSlot(member.user.id, id, parsed.data.meal);
   if (!log) return appRefusal("not_found", 404, { message: "That meal is gone." });
   return privateJson({ meal: mealJson(log, member.profile.timezone) });
 }

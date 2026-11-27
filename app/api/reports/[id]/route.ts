@@ -1,6 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
 import { appActor, isAppRequest } from "@/lib/api/actor";
 import { updateRequired } from "@/lib/api/version";
+import { impossibleId } from "@/lib/api/clean";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -22,6 +23,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = app ? privateJson : json;
   const { id } = await ctx.params;
+  // An app's id that can name nothing (lib/api/clean.ts) is missing; the web's request is as before.
+  if (app && impossibleId(id)) return reply({ error: "not_found" }, 404);
   const d = await db();
   const [r] = await d
     .select({ status: schema.reports.status, stage: schema.reports.stage, error: schema.reports.error, startedAt: schema.reports.startedAt })
@@ -49,6 +52,8 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/reports/[
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const { id } = await ctx.params;
+  // One that can name nothing is already gone, as the contract answers for any missing report.
+  if (app && impossibleId(id)) return privateJson({ status: "deleted" });
   await deleteReports(user.id, [id]);
   return app ? privateJson({ status: "deleted" }) : json({ status: "deleted" });
 }

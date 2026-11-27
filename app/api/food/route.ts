@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { withoutNul } from "@/lib/api/clean";
 import { appPlanLimit, appRefusal, consentNeeded, IN_PROGRESS_RETRY_S, switchedOff } from "@/lib/api/errors";
 import { switchOff } from "@/lib/api/views/app";
 import { privateJson } from "@/lib/api/respond";
-import { EATEN_AT_MAX_AHEAD_MS, eatenAtInReach, mealForKey } from "@/lib/api/meal-writes";
+import { EATEN_AT_MAX_AHEAD_MS, accountGone, eatenAtInReach, mealForKey } from "@/lib/api/meal-writes";
 import { mealJson } from "@/lib/api/views/parts";
 import { AiRefusalError, AiUnavailableError } from "@/lib/ai/client";
 import { appActor, isAppRequest } from "@/lib/api/actor";
@@ -106,9 +107,14 @@ export async function POST(request: Request) {
 
   const form = await request.formData().catch(() => null);
   if (!form) return refuse("invalid", 400);
+  // An app's words lose any U+0000, which Postgres can't store, before the AI reads them (lib/api/clean.ts).
+  const words = (name: string) => {
+    const v = form.get(name);
+    return (app && typeof v === "string" ? withoutNul(v) : v) || undefined;
+  };
   const parsed = fields.safeParse({
-    text: form.get("text") || undefined,
-    original: form.get("original") || undefined,
+    text: words("text"),
+    original: words("original"),
     spoken: form.get("spoken") || undefined,
     source: form.get("source"),
     meal: form.get("meal") || undefined,
@@ -165,18 +171,22 @@ export async function POST(request: Request) {
     image = { mime, bytes };
   }
   if (!image && !input.text && !input.original) return refuse("empty", 400);
+  // Words that romanized to nothing (a lone sign such as ं): nothing left to read, so no AI call.
+  if (app && !image && !meal.text?.trim() && !meal.original?.trim()) return refuse("empty", 400);
 
   // Counts against the plan (lib/domain/plan.ts) under the meal's own id, on the day it was
   // eaten; handed back if the meal isn't logged.
   const use = key ? mealIdFor(user.id, key) : newId();
-  const taken = await takeTry(user.id, use, mealDay(profile.timezone, meal));
+  // The day it counts on, once: an app's meal is stored on this day even when its read runs past midnight.
+  const day = mealDay(profile.timezone, meal);
+  const taken = await takeTry(user.id, use, day);
   if ("refusal" in taken) return app ? appPlanLimit(taken.refusal) : planLimit(taken.refusal);
   if ("busy" in taken)
     return app ? appRefusal("in_progress", 409, { retryAfter: IN_PROGRESS_RETRY_S }) : json({ error: "in_progress", message: STILL_READING }, 409);
   if ("log" in taken) return app ? privateJson({ meal: mealJson(taken.log, profile.timezone), repeat: true }) : json({ log: taken.log, repeat: true });
   let logged = false;
   try {
-    const result = await logMeal(user.id, profile, { ...meal, image, id: use });
+    const result = await logMeal(user.id, profile, { ...meal, image, id: use, ...(app ? { day } : {}) });
     if ("notFood" in result) return refuse("not_food", 422);
     logged = true;
     return app ? privateJson({ meal: mealJson(result.log, profile.timezone) }) : json({ log: result.log });
@@ -187,6 +197,8 @@ export async function POST(request: Request) {
       const message = image ? "We couldn't log this photo. Try telling us what you ate in a few words." : "We couldn't log that. Try describing the meal differently.";
       return app ? appRefusal("refused", 422, { message }) : json({ error: "refused", message }, 422);
     }
+    // The account was deleted while the meal was read: the app is signed out, and nothing is left to send again.
+    if (app && (await accountGone(user.id).catch(() => false))) return privateJson({ error: "signed_out" }, 401);
     console.error("[food]", error);
     return refuse("failed", 500);
   } finally {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "D-Human app API",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "description": "The routes the native apps use. Every answer is private, no-store, except POST /api/auth/code's (the web's route, unchanged). Only a 401 means signed out: a missing, malformed, expired or revoked token. Every other /api route answers a live token with 403 not_for_app (it isn't open to the apps yet): keep the sign-in. Errors are { error, message? }. Requests with Authorization must not carry Origin or Sec-Fetch-* headers. Every signed-in route answers 426 update_required ({ error, message, minVersion, updateUrl }) when X-DHuman-Client names an iOS version below GET /api/app/config's minSupported; config and sign-out stay open."
   },
   "servers": [
@@ -9529,9 +9529,9 @@
                 "type": "object",
                 "properties": {
                   "text": {
-                    "description": "The words to read. Up to 1000 characters of the person's own words.",
+                    "description": "The words to read: up to 1000 characters of the person's own words, or, beside `original`, its translation of up to 2000. Counted in UTF-16 code units after trimming; past either, 400 invalid.",
                     "type": "string",
-                    "maxLength": 3000
+                    "maxLength": 2000
                   },
                   "original": {
                     "description": "The person's own words, only when `text` is a translation of them.",

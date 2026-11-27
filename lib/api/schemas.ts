@@ -282,7 +282,7 @@ const MealKey = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).describe("A random ke
 
 export const MealForm = z
   .object({
-    text: S.max(3000).optional().describe("The words to read. Up to 1000 characters of the person's own words."),
+    text: S.max(2000).optional().describe("The words to read: up to 1000 characters of the person's own words, or, beside `original`, its translation of up to 2000. Counted in UTF-16 code units after trimming; past either, 400 invalid."),
     original: S.max(1000).optional().describe("The person's own words, only when `text` is a translation of them."),
     spoken: S.optional().describe("The language picked for speaking, for meals logged by voice (en, hinglish, hi, bn, …)."),
     source: z.enum(MEAL_SOURCES),

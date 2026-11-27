@@ -1,3 +1,4 @@
+import { impossibleId } from "@/lib/api/clean";
 import { privateJson } from "@/lib/api/respond";
 import { authenticate } from "@/lib/auth/authenticate";
 import { endSessionByPublicId } from "@/lib/auth/bearer";
@@ -9,6 +10,6 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/me/sessio
   if (!actor) return privateJson({ error: "signed_out" }, 401);
   if (actor.via !== "bearer") return privateJson({ error: "bearer_required" }, 403);
   const { publicId } = await ctx.params;
-  if (!(await endSessionByPublicId(actor.user.id, publicId))) return privateJson({ error: "not_found" }, 404);
+  if (impossibleId(publicId) || !(await endSessionByPublicId(actor.user.id, publicId))) return privateJson({ error: "not_found" }, 404);
   return privateJson({ status: "signed_out" });
 }

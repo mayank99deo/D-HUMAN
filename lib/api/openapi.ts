@@ -10,7 +10,7 @@ import * as s from "./schemas.ts";
 // The version changes with every change a client can see: a new route or field is a minor
 // step; renaming or removing anything is a new route instead (docs/API.md §3.7).
 
-export const CONTRACT_VERSION = "0.6.0";
+export const CONTRACT_VERSION = "0.6.1";
 
 type Method = "get" | "post" | "delete";
 export type AppRoute = {

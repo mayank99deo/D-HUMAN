@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { impossibleId } from "@/lib/api/clean";
 import { viewResponse, privateJson } from "@/lib/api/respond";
 import { readJson } from "@/lib/api/views/reports";
 import { apiMember } from "@/lib/platform/api-member";
@@ -15,6 +16,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/reports/[id]
   const member = await apiMember(request);
   if (!member.ok) return member.response;
   const { id } = await ctx.params;
+  if (impossibleId(id)) return privateJson({ error: "not_found", message: "That report is gone, or it hasn't been read yet." }, 404);
   const d = await db();
   const [view, [row]] = await Promise.all([
     reportView(member.user.id, id),

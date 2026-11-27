@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { appActor, isAppRequest } from "@/lib/api/actor";
 import { updateRequired } from "@/lib/api/version";
+import { impossibleId } from "@/lib/api/clean";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -18,6 +19,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/stack/[id]">
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = app ? privateJson : json;
   const { id } = await ctx.params;
+  // An app's id that can name nothing (lib/api/clean.ts) is missing; the web's request is as before.
+  if (app && impossibleId(id)) return reply({ error: "not_found" }, 404);
   const d = await db();
   const [s] = await d
     .select({ status: schema.stacks.status, error: schema.stacks.error, createdAt: schema.stacks.createdAt })

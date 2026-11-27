@@ -5,6 +5,7 @@ import { MAX_AGE, MIN_AGE } from "@/components/platform/age";
 import { appActor, isAppRequest } from "@/lib/api/actor";
 import { updateRequired } from "@/lib/api/version";
 import { claimEventSearch, claimOnboardingSearch } from "@/lib/api/app-limits";
+import { withoutNulDeep } from "@/lib/api/clean";
 import { privateJson } from "@/lib/api/respond";
 import { apiUser } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db";
@@ -71,7 +72,8 @@ export async function POST(request: Request) {
   const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) => (app ? privateJson(body, status, headers) : json(body, status));
   // Onboarding saves once per step; 30 an hour leaves room for that and for Settings.
   if (!allowRequest(`profile:${user.id}`, 30, 60 * 60_000)) return reply({ error: "rate_limited" }, 429, app ? { "retry-after": String(secondsUntilReset(`profile:${user.id}`) || 60) } : {});
-  const raw = await request.json().catch(() => null);
+  // An app's words lose any U+0000, which Postgres can't store (lib/api/clean.ts).
+  const raw = app ? withoutNulDeep(await request.json().catch(() => null)) : await request.json().catch(() => null);
   const parsed = patchSchema(new Date().getFullYear()).safeParse(raw);
   if (!parsed.success) return reply({ error: "invalid", issues: parsed.error.issues.map((i) => i.path.join(".")) }, 400);
   const extra = app ? appExtra.safeParse(raw) : null;

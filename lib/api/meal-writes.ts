@@ -98,6 +98,17 @@ export async function logAgain(
   });
 }
 
+/**
+ * Whether the person still has an account. A meal whose account was deleted (on another device)
+ * while it was being read fails on its write; that's a sign-out to report, not a failure for the
+ * app's queue to send again (backend test engineer, hunt 1).
+ */
+export async function accountGone(userId: string): Promise<boolean> {
+  const d = await db();
+  const [row] = await d.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+  return !row;
+}
+
 /** Moves one of the person's own meals to another slot. Null when it's gone or someone else's. */
 export async function changeSlot(userId: string, id: string, meal: MealKind): Promise<FoodLog | null> {
   const d = await db();
