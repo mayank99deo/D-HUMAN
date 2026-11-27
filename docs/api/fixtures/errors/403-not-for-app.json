@@ -1,6 +1,7 @@
 {
-  "status": 200,
+  "status": 403,
   "body": {
-    "status": "done"
+    "error": "not_for_app",
+    "message": "This isn't available in the app yet."
   }
 }

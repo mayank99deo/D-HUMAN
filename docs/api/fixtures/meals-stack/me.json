@@ -1,19 +1,19 @@
 {
   "status": 200,
-  "etag": "W/\"vMVwBhBctZcyq13uyHjhdg\"",
+  "etag": "W/\"-r4NH9psz7pQzWpnKrajAg\"",
   "body": {
-    "id": "b41f0756-5909-4b70-99ac-0b566761f6b6",
+    "id": "71e0e6ae-6ca2-4488-bf5a-8a45e387b798",
     "email": "mealstack@demo.dhuman.local",
     "onboarded": true,
     "consent": {
-      "at": "2026-11-26T15:57:47.132Z",
-      "firstAt": "2026-11-26T15:57:47.132Z",
+      "at": "2026-11-27T05:59:11.782Z",
+      "firstAt": "2026-11-27T05:59:11.782Z",
       "version": "2026-11-20",
       "current": true,
       "newLines": []
     },
     "tourDone": true,
-    "healthCheckedAt": "2026-11-26T15:57:47.132Z",
+    "healthCheckedAt": "2026-11-27T05:59:11.781Z",
     "hold": null,
     "reportsVersion": "0.47DEQpj8HBSa-_TI",
     "persona": {

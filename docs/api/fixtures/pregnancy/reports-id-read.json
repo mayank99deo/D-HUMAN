@@ -1,11 +1,11 @@
 {
   "status": 200,
-  "etag": "W/\"X2raC1EkgPldx3iRPWmE4A\"",
+  "etag": "W/\"Ti-SGLyO7NEBCvXdwG2qng\"",
   "body": {
-    "id": "763410ca-df54-4e2f-883c-7705b695516d",
+    "id": "354370e8-254e-4d1d-9ba7-548758a6e0e4",
     "lab": "Demo Labs",
     "collectedOn": "2026-11-02",
-    "uploadedOn": "2026-11-26",
+    "uploadedOn": "2026-11-27",
     "demo": true,
     "aiNote": "Demo read, written from a template",
     "printedFor": null,
@@ -36,7 +36,7 @@
         "panel": "Blood count",
         "markers": [
           {
-            "id": "d168f849-72b2-4094-b04f-0b068030c1f3",
+            "id": "aae22d32-7e0a-42df-b1b6-926aa515b693",
             "key": "hemoglobin",
             "name": "Haemoglobin",
             "short": "Hb",
@@ -62,7 +62,7 @@
         "panel": "Iron",
         "markers": [
           {
-            "id": "e443b342-1a00-4a08-9c8c-d96404564aaf",
+            "id": "9d52459a-c276-47d2-ba63-0dfd084f7e0c",
             "key": "ferritin",
             "name": "Ferritin",
             "short": "Ferritin",
@@ -88,7 +88,7 @@
         "panel": "Vitamins",
         "markers": [
           {
-            "id": "64e58172-d6f9-44a3-b53a-837ec36d453f",
+            "id": "d1110816-a1a5-4c5b-bbc0-7439e6b9ec20",
             "key": "vitamin_d",
             "name": "Vitamin D (25-OH)",
             "short": "Vit D",
@@ -109,7 +109,7 @@
             "derived": false
           },
           {
-            "id": "e4653820-eb73-45a8-b360-af1b26e1fce7",
+            "id": "7ab4e9d2-18bc-4ad8-a049-06b19ceace75",
             "key": "b12",
             "name": "Vitamin B12",
             "short": "B12",
@@ -135,7 +135,7 @@
         "panel": "Thyroid",
         "markers": [
           {
-            "id": "d575c6c8-0b6a-4121-a928-22d1ba71f164",
+            "id": "e064f866-9f82-4f8b-a95d-0b427340b96e",
             "key": "tsh",
             "name": "Thyroid-stimulating hormone",
             "short": "TSH",
@@ -161,8 +161,8 @@
     "doctorQuestions": [],
     "retest": {
       "dueOn": "2027-01-25",
-      "days": 60,
-      "label": "Retest due 25 Jan, in 9 weeks",
+      "days": 59,
+      "label": "Retest due 25 Jan, in 8 weeks",
       "weeks": 12,
       "from": "collected",
       "why": "To see it move.",
