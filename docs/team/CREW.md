@@ -1,6 +1,6 @@
 # The D-Human crew
 
-Sixteen AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
+Seventeen AI agents, each set up as a specialist with the working standards of a senior person in that role. They live in `.claude/agents/` and are available in every Claude Code session in this repo. They are roles, not people: they never claim real credentials or employers, and anything that needs a human (a doctor's sign-off, a legal check) stays with a human.
 
 | Agent | Role | Call them for |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ Sixteen AI agents, each set up as a specialist with the working standards of a s
 | `graphic-designer` | Visual and graphic designer | Tokens, type, icons, pictograms, data visuals, share cards, visual QA |
 | `qa-security-engineer` | QA and security test engineer | End-to-end testing, automated tests, security and privacy holes, fixes |
 | `seo-lead` | Principal SEO and organic growth lead | Search strategy and keyword research (India first), site architecture, technical SEO, structured data, health content that meets Google's bar, organic growth |
+| `backend-bug-hunter` | Principal backend engineer and bug hunter (web app and pipelines; the `backend-test-engineer` covers the apps' API) | Tracing bugs to the root, loopholes end to end (access control, auth, money and limits, uploads and AI, data leaks, caching, jobs and webhooks), each fixed with a test that fails on the old code |
 | `mobile-architect` (Andrew) | Senior mobile app architect | The iOS and Android apps' architecture: framework choice, auth for native clients, offline and retries, push, deep links, store review rules, release pipeline |
 | `mobile-engineer` (Brig) | Senior staff mobile engineer | Building the apps in Dart/Flutter, Swift or Kotlin: screens, native speech, camera and gallery, payments, tests, performance, mobile code review |
 | `mobile-product-lead` (Crag) | Mobile product, design and growth lead | What the apps are and how they feel: mobile design system, onboarding and activation funnels, ethical notifications, store listings and store search, app metrics |
@@ -29,7 +30,7 @@ Sixteen AI agents, each set up as a specialist with the working standards of a s
 4. **`seo-lead` shapes anything public** (pages, URLs, titles, copy meant to be found) before it's built.
 5. **Engineers build:** `staff-engineer` leads; `systems-data-engineer` owns data and infrastructure; `ai-efficiency-lead` signs off on any Claude call.
    For the mobile apps (since 2026-11-24): `mobile-architect` sets the architecture, `mobile-product-lead` owns design and the funnel, `mobile-engineer` builds the SwiftUI app and `flutter-engineer` the Flutter app (since 2026-11-26); API changes go through `systems-data-engineer`, `backend-test-engineer` hunts backend bugs, and `mobile-security-engineer` owns mobile security and store release.
-6. **`qa-security-engineer` tests and attacks it.**
+6. **`qa-security-engineer` tests and attacks it;** `backend-bug-hunter` traces reported bugs and hunts backend loopholes (since 2026-11-27).
 7. **`svp-product` reviews the integrated result** against the acceptance criteria, and `chief-of-staff` checks it's ready for users.
 8. **The main session (the orchestrator) logs it in `MEMORY.md`,** and commits and pushes only after Mayank agrees.
 
