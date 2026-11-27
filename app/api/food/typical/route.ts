@@ -44,9 +44,8 @@ export async function POST(request: Request) {
     return app ? appRefusal("rate_limited", 429, { message: "That's a lot of saves in an hour. Try again a bit later.", retryAfter: secondsUntilReset(`typical:${user.id}`) }) : json({ error: "rate_limited" }, 429);
   const profile = member ? member.profile : await getProfile(user.id);
   if (!profile) return json({ error: "not_onboarded" }, 409);
-  // An app's words lose any U+0000 before anything counts them (lib/api/clean.ts).
-  const sent = await request.json().catch(() => null);
-  const parsed = body.safeParse(app ? withoutNulDeep(sent) : sent);
+  // Words lose any U+0000 before anything counts them (lib/api/clean.ts).
+  const parsed = body.safeParse(withoutNulDeep(await request.json().catch(() => null)));
   if (!parsed.success) return app ? appRefusal("too_short", 400, { message: "Describe a whole day, meal by meal, in a few more words." }) : json({ error: "too_short" }, 400);
   // Apps only: a save that will call the AI counts against the day's few (lib/api/app-limits.ts).
   // A resend of the words just saved reads that save instead, so it isn't counted.

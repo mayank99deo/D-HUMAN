@@ -19,8 +19,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/stack/[id]">
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const reply = app ? privateJson : json;
   const { id } = await ctx.params;
-  // An app's id that can name nothing (lib/api/clean.ts) is missing; the web's request is as before.
-  if (app && impossibleId(id)) return reply({ error: "not_found" }, 404);
+  // An id that can name nothing (lib/api/clean.ts), which Postgres can't even compare, is missing.
+  if (impossibleId(id)) return reply({ error: "not_found" }, 404);
   const d = await db();
   const [s] = await d
     .select({ status: schema.stacks.status, error: schema.stacks.error, createdAt: schema.stacks.createdAt })

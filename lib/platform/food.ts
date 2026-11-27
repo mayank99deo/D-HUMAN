@@ -121,9 +121,9 @@ export type MealInput = {
   /** The apps only: what a Latin-letter pick heard in Devanagari, kept when the words were romanized on arrival. */
   inputRaw?: string;
   /**
-   * The apps only: the day the meal was counted on, worked out once before the AI read. Without it
-   * the day is worked out again after the read, and a read that runs past midnight would show the
-   * meal on one day while it counts against the other's 5 (backend test engineer, hunt 1).
+   * The day the meal was counted on, worked out once before the AI read. Without it the day is
+   * worked out again after the read, and a read that runs past midnight would show the meal on one
+   * day while it counts against the other's 5 (backend test engineer, hunt 1).
    */
   day?: string;
 };

@@ -107,10 +107,10 @@ export async function POST(request: Request) {
 
   const form = await request.formData().catch(() => null);
   if (!form) return refuse("invalid", 400);
-  // An app's words lose any U+0000, which Postgres can't store, before the AI reads them (lib/api/clean.ts).
+  // Words lose any U+0000, which Postgres can't store, before the AI reads them (lib/api/clean.ts).
   const words = (name: string) => {
     const v = form.get(name);
-    return (app && typeof v === "string" ? withoutNul(v) : v) || undefined;
+    return (typeof v === "string" ? withoutNul(v) : v) || undefined;
   };
   const parsed = fields.safeParse({
     text: words("text"),
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
   // Counts against the plan (lib/domain/plan.ts) under the meal's own id, on the day it was
   // eaten; handed back if the meal isn't logged.
   const use = key ? mealIdFor(user.id, key) : newId();
-  // The day it counts on, once: an app's meal is stored on this day even when its read runs past midnight.
+  // The day it counts on, once: the meal is stored on this day even when its read runs past midnight.
   const day = mealDay(profile.timezone, meal);
   const taken = await takeTry(user.id, use, day);
   if ("refusal" in taken) return app ? appPlanLimit(taken.refusal) : planLimit(taken.refusal);
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
   if ("log" in taken) return app ? privateJson({ meal: mealJson(taken.log, profile.timezone), repeat: true }) : json({ log: taken.log, repeat: true });
   let logged = false;
   try {
-    const result = await logMeal(user.id, profile, { ...meal, image, id: use, ...(app ? { day } : {}) });
+    const result = await logMeal(user.id, profile, { ...meal, image, id: use, day });
     if ("notFood" in result) return refuse("not_food", 422);
     logged = true;
     return app ? privateJson({ meal: mealJson(result.log, profile.timezone) }) : json({ log: result.log });

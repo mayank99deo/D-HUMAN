@@ -16,8 +16,8 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/food/[id]
   const user = app ? ((await appActor(request))?.user ?? null) : await apiUser();
   if (!user) return app ? privateJson({ error: "signed_out" }, 401) : unauthorized();
   const { id } = await ctx.params;
-  // An app's id that can name nothing (lib/api/clean.ts) is a meal already gone; the web's request is as before.
-  if (app && impossibleId(id)) return privateJson({ status: "deleted" });
+  // An id that can name nothing (lib/api/clean.ts) is a meal already gone.
+  if (impossibleId(id)) return app ? privateJson({ status: "deleted" }) : json({ status: "deleted" });
   await deleteMeal(user.id, id);
   return app ? privateJson({ status: "deleted" }) : json({ status: "deleted" });
 }

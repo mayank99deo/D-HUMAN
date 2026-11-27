@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { viewResponse } from "@/lib/api/respond";
 import { reportsJson } from "@/lib/api/views/reports";
 import { appOnly, isAppRequest } from "@/lib/api/actor";
+import { withoutNul } from "@/lib/api/clean";
 import { appUpload } from "@/lib/api/report-uploads";
 import { notForApp } from "@/lib/auth/authenticate";
 import { apiUser } from "@/lib/auth/session";
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
     await tx.insert(schema.reports).values({
       id: reportId,
       userId: user.id,
-      fileName: files[0].name.slice(0, 200),
+      fileName: withoutNul(files[0].name).slice(0, 200),
       fileCount: parts.length,
       totalBytes: total,
     });

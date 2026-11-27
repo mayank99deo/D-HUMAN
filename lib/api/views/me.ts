@@ -42,19 +42,6 @@ export async function meReports(userId: string, profile: Pick<Profile, "conditio
   return { hold, reportsVersion: `${rows.length}.${digest}` };
 }
 
-/**
- * The persona's initial, whole. The web's (meView) is the name's first UTF-16 unit, which for a name
- * that starts with an emoji or another character outside the BMP is half of one: a lone surrogate,
- * which Swift's JSONDecoder refuses, taking the whole of GET /api/me with it. Then the first
- * grapheme instead ("👍🏽", "🇮🇳"); every other name keeps the web's initial exactly.
- */
-export function wholeInitial(v: Pick<MeView, "initial" | "profile" | "user">): string {
-  if (!/[\ud800-\udfff]/.test(v.initial)) return v.initial;
-  const name = v.profile?.name?.trim() ?? "";
-  const first = new Intl.Segmenter("en", { granularity: "grapheme" }).segment(name)[Symbol.iterator]().next().value?.segment;
-  return (first ?? v.user.email[0] ?? "D").toUpperCase();
-}
-
 /** GET /api/me's answer (lib/api/schemas.ts, MeResponse). Ask isn't in the apps (plan §2 row 5), so its gate isn't sent. */
 export function meJson(v: MeView, reports: MeReports) {
   const p = v.profile;
@@ -77,7 +64,7 @@ export function meJson(v: MeView, reports: MeReports) {
     hold: reports.hold,
     reportsVersion: reports.reportsVersion,
     persona: v.persona
-      ? { firstName: v.persona.firstName, initial: wholeInitial(v), bib: v.persona.bib, label: v.persona.label, archetype: v.persona.archetype, noun: v.persona.noun, level: v.persona.level, age: v.persona.age }
+      ? { firstName: v.persona.firstName, initial: v.initial, bib: v.persona.bib, label: v.persona.label, archetype: v.persona.archetype, noun: v.persona.noun, level: v.persona.level, age: v.persona.age }
       : null,
     founder: isOwnerEmail(v.user.email),
     aiOff: aiMode() === "off",
