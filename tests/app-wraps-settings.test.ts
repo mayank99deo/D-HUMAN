@@ -102,7 +102,9 @@ describe("GET /api/settings", () => {
     const r = await call(settings, { token: p.token });
     const body = contract.SettingsResponse.parse(r.body);
     assert.equal(body.passes.length, 1);
-    assert.ok(!r.text.includes("₹") && !r.text.includes("4900") && !r.text.includes("49"), "no amount or price anywhere");
+    // Times and ids can hold "49" by chance (…T17:49:…, or an id's digits): look past them.
+    const words = r.text.replace(/"\d{4}-\d{2}-\d{2}T[^"]*"/g, '""').replace(/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/gi, "");
+    assert.ok(!words.includes("₹") && !/(^|\D)49(00)?(\D|$)/.test(words), `no amount or price anywhere: ${words}`);
     assert.deepEqual([body.weekly.channel, body.emails.weekly, body.email], ["email", true, p.email]);
     assert.ok(body.plan.pass);
   });
