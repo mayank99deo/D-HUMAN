@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import { privateJson } from "@/lib/api/respond";
@@ -51,6 +51,29 @@ function digitsOf(raw: string): string | null {
   return digits.length === 6 || LONG_CODE.test(digits) ? digits : null;
 }
 
+/**
+ * A resend that crossed its first try (backend test engineer, hunt 1). The first try can still be
+ * between using the code and making its session when the resend's own check fails (the code is
+ * used, or the resends used its tries); then the resend waits for that session, a moment, instead
+ * of answering expired or locked while a sign-in for it is being made. Only while a code for this
+ * email was used in the last 10 seconds, so a plain wrong or old code is answered at once.
+ */
+async function crossedSignIn(email: string, code: string, key: string): Promise<SignIn | null> {
+  const d = await db();
+  const started = Date.now();
+  for (;;) {
+    const s = await resentSignIn(email, code, key);
+    if (s || Date.now() - started >= 3000) return s;
+    const [inFlight] = await d
+      .select({ id: schema.loginCodes.id })
+      .from(schema.loginCodes)
+      .where(and(eq(schema.loginCodes.email, email), gt(schema.loginCodes.consumedAt, new Date(Date.now() - 10_000))))
+      .limit(1);
+    if (!inFlight) return null;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 /** Checks the code. A long one is only ever right for the review account; anywhere else it's a wrong code and uses a try. */
 async function check(email: string, code: string): Promise<{ result: VerifyResult; review: boolean }> {
   const review = code.length > 6 ? reviewAccount() : null;
@@ -75,8 +98,8 @@ export async function POST(request: Request) {
 
   const { result, review } = await check(email, code);
   if (!result.ok) {
-    // The first try may have finished while this one waited: a resend that crossed it gets its answer.
-    const crossed = key ? await resentSignIn(email, code, key) : null;
+    // The first try may have finished, or be finishing, while this one waited: a resend that crossed it gets its answer.
+    const crossed = key ? await crossedSignIn(email, code, key) : null;
     return crossed ? answer(crossed) : refuse(result.reason);
   }
 
