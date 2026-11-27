@@ -150,7 +150,14 @@ try {
   const home = await handler("/api/home");
   const errors = path.join(out, "errors");
   mkdirSync(errors, { recursive: true });
-  const keep = (n: string, r: { status: number; body: unknown }) => writeFileSync(path.join(errors, `${n}.json`), `${JSON.stringify({ status: r.status, body: r.body }, null, 2)}\n`);
+  // A refusal fixture holds the refusal its name says, or the script fails: a route opened to the
+  // apps since would otherwise leave a 200 under a refusal's name (as 403-not-for-app did, 2026-11-27).
+  const keep = (n: string, r: { status: number; body: unknown }) => {
+    const [code, ...words] = n.split("-");
+    const error = (r.body as { error?: unknown } | null)?.error;
+    if (r.status !== Number(code) || r.status < 400 || error !== words.join("_")) throw new Error(`errors/${n}: got ${r.status} ${JSON.stringify(r.body)}, not a ${code} ${words.join("_")}`);
+    writeFileSync(path.join(errors, `${n}.json`), `${JSON.stringify({ status: r.status, body: r.body }, null, 2)}\n`);
+  };
   keep("401-signed-out", await call(home.fn, { token: "dht_not-a-real-token" }));
   keep("409-not-onboarded", await call(home.fn, { token: fresh.token }));
   keep("403-bearer-required", await call(home.fn, { cookie: fresh.cookie }));
@@ -162,8 +169,10 @@ try {
   for (let i = 0; i < 5; i++) await call(food, { token: busy.token, form: form({ text: `meal ${i}`, source: "text" }) });
   keep("402-plan-limit", await call(food, { token: busy.token, form: form({ text: "one more", source: "text" }) }));
   keep("400-bad-time", await call(food, { token: busy.token, form: form({ text: "dal", source: "text", eatenAt: new Date(Date.now() - 72 * 3_600_000).toISOString() }) }));
-  const tour = (await import("../app/api/profile/tour/route.ts")).POST as Handler;
-  keep("403-not-for-app", await call(tour, { token: busy.token, body: {} }));
+  // A route still closed to app tokens: deleting every report at once is the web's only (notForApp),
+  // and with a live token nothing in it runs.
+  const deleteAll = (await import("../app/api/reports/route.ts")).DELETE as Handler;
+  keep("403-not-for-app", await call(deleteAll, { token: busy.token, method: "DELETE" }));
   let commit = "unknown";
   try {
     commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();

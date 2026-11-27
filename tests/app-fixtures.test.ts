@@ -10,7 +10,23 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Every errors/<status>-<code>.json holds that refusal: its status, at least 400, and that error code. */
+function refusalsAre(dir: string) {
+  const names = readdirSync(dir);
+  assert.ok(names.includes("403-not-for-app.json"), "the not_for_app refusal is kept");
+  for (const name of names) {
+    const [code, ...words] = name.replace(/\.json$/, "").split("-");
+    const f = JSON.parse(readFileSync(path.join(dir, name), "utf8")) as { status: number; body: { error?: string } };
+    assert.ok(f.status >= 400, `${name} records a ${f.status}, not a refusal`);
+    assert.deepEqual([f.status, f.body.error], [Number(code), words.join("_")], name);
+  }
+}
+
 describe("the apps' demo fixtures", () => {
+  it("the committed refusals are refusals: each file's status and error code are the ones its name says", () => {
+    refusalsAre(path.join(ROOT, "docs/api/fixtures/errors"));
+  });
+
   it("are made for every demo person and screen, parse against the contract, and hold no real address", () => {
     const out = path.join(mkdtempSync(path.join(tmpdir(), "dhuman-fixtures-")), "api");
     try {
@@ -23,6 +39,7 @@ describe("the apps' demo fixtures", () => {
       for (const m of all.match(/[\w.+-]+@[\w.-]+/g) ?? []) assert.match(m, /@demo\.dhuman\.local$/, m);
       const urgent = JSON.parse(readFileSync(path.join(out, "urgent/stack.json"), "utf8"));
       assert.equal(urgent.body.hold, "urgent");
+      refusalsAre(path.join(out, "errors"));
     } finally {
       rmSync(path.dirname(out), { recursive: true, force: true });
     }
